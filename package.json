@@ -1,4 +1,13 @@
 {
+  "name": "dragobot",
+  "version": "1.0.0",
+  "description": "A Wikipedia bot.",
+  "main": "test.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "author": "Dragoniez",
+  "license": "MIT",
   "dependencies": {
     "is-cidr": "^4.0.2",
     "mwbot": "^2.0.0",
