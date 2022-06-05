@@ -18,7 +18,7 @@ console.log('The bot started running.');
 
 // Login to the Japanese Wikipedia
 const login = await api.loginGetEditToken({
-    username: credentials.username,
+    username: 'DragoBot',
     password: credentials.password
 }).then(res => {
     if (!res) return console.log('An unexpected error occurred on login attempt.');
