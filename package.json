@@ -4,7 +4,7 @@
   "description": "A Wikipedia bot.",
   "main": "test.js",
   "scripts": {
-    "test": "node test.js"
+    "start": "node test.js"
   },
   "author": "Dragoniez",
   "license": "MIT",
