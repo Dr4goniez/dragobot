@@ -398,7 +398,7 @@ async function checkBlockStatus(pagename) {
                 userlinksArr.push(userlink);
             }
         });
-        summary = `/*${Object.keys(replacerCnt)[0]}*/ bot (試運転中): ` + summary + ` (残${openReportsCnt[Object.keys(replacerCnt)[0]]})`;
+        summary = `/*${Object.keys(replacerCnt)[0]}*/ bot: ` + summary + ` (残${openReportsCnt[Object.keys(replacerCnt)[0]]})`;
     }
 
     // Edit the relevant page
