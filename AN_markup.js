@@ -129,7 +129,7 @@ async function checkBlockStatus(pagename) {
         'bot': new RegExp('^\\s*bot\\s*='), // bot=
         'botOptedOut': new RegExp('\\s*bot\\s*=\\s*no\\s*'), // bot=no
         'section': new RegExp('={2,5}[^\\S\\r\\n]*.+[^\\S\\r\\n]*={2,5}', 'g') // == sectiontitle == (2-5 levels)
-    }
+    };
     const ignoreThese = [ // Commented out UserANs in the instruction on WP:AN/I
         '{{UserAN|type=IPuser2|111.222.333.444}}',
         '{{UserAN|type=IP2|111.222.333.444}}',
@@ -143,7 +143,7 @@ async function checkBlockStatus(pagename) {
             'old': tl,
             'new': '',
             'closed': true,
-            'ignore': false, // If true, ignore the relevant report
+            'ignore': false, // If true, ignore the relevant report as though it's not there
             'markup': true, // If false (bot=no), don't mark up the report
             'timestamp': '',
             'section': '',
@@ -218,7 +218,7 @@ async function checkBlockStatus(pagename) {
                 if (params.filter(item => item.match(paramsRegExp.type) && item.match(paramsRegExp.status)).length > 0) obj.closed = false;
         }
 
-    }); // At this point 'templates' should only contain UserANs that are still open
+    }); // At this point each object in the array UserAN has either obj.closed = false or obj.closed = true
 
     // Set the 'type', 'user', and 'timestamp' properties of the object
     UserAN.filter(obj => !obj.closed).forEach(obj => { // Only look at open ones (or the code would be unnecessarily complex)
@@ -251,17 +251,16 @@ async function checkBlockStatus(pagename) {
                     break;
                 case 'log':
                 case 'logid':
-                    obj.logid = userParam;
+                    if (userParam.match(/^\d+$/)) obj.logid = userParam; // Make sure that the user param is only of numerals
                     break;
                 case 'dif':
                 case 'diff':
-                    obj.diff = userParam;
+                    if (userParam.match(/^\d+$/)) obj.diff = userParam;
                     break;
                 case 'none': // UserANs with this type param have a random string in the username param (the block status can't be checked)
                     obj.none = userParam;
                     break;
                 default: // Invalid type
-                    obj.ignore = true;
             }
         }
 
@@ -279,16 +278,16 @@ async function checkBlockStatus(pagename) {
 
     // Get an array of logids and diff numbers (these need to be converted to usernames through API requests before block check)
     const needBlockCheck = obj => !obj.closed && !obj.ignore && obj.markup;
-    const isObjectEmpty = obj => Object.keys(obj).length === 0
+    const isEmptyObject = obj => Object.keys(obj).length === 0;
     const logids = UserAN.filter(obj => needBlockCheck(obj) && obj.logid && !Logids[obj.logid]).map(obj => obj.logid);
-    if (!isObjectEmpty(Logids)) {
+    if (!isEmptyObject(Logids)) {
         UserAN.forEach(obj => { // Set the empty 'user' property if possible
             if (obj.logid && !obj.user && Logids[obj.logid]) obj.user = Logids[obj.logid];
         });
     }
     const diffs = UserAN.filter(obj => needBlockCheck(obj) && obj.diff && !Diffs[obj.diff]).map(obj => obj.diff);
-    if (!isObjectEmpty(Diffs)) {
-        UserAN.forEach(obj => { // Set the empty 'user' property if possible
+    if (!isEmptyObject(Diffs)) {
+        UserAN.forEach(obj => {
             if (obj.diff && !obj.user && Diffs[obj.diff]) obj.user = Diffs[obj.diff];
         });
     }
@@ -305,9 +304,8 @@ async function checkBlockStatus(pagename) {
     // Sort registered users and IPs
     const isIPAddress = ip => net.isIP(ip) || isCidr(ip);
     var users = UserAN.filter(obj => needBlockCheck(obj) && obj.user).map(obj => obj.user);
-    var ips = UserAN.filter(obj => needBlockCheck(obj) && obj.user && obj.type.match(/^(?:ip2|ipuser2)$/)).map(obj => obj.user); // An array of IPs
-    users = users.filter(username => !ips.includes(username)); // An array of registered users
-    ips = ips.filter(ip => isIPAddress(ip)); // Just in case; non-IPs might be reported as IPs
+    const ips = users.filter(username => isIPAddress(username)); // An array of IPs
+    users = users.filter(username => !isIPAddress(username)); // An array of registered users
 
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
@@ -349,12 +347,11 @@ async function checkBlockStatus(pagename) {
     // Get summary
     const getUserLink = (obj) => {
         if (obj.type.match(/^(?:user2|unl|usernolink)$/)) {
-            const parenthetical = (obj.domain === 'グローバルロック' ? obj.domain : obj.duration);
             const maxLetterCnt = containsJapaneseCharacter(obj.user) ? 10 : 20;
             if (obj.user.length > maxLetterCnt) {
-                return `${obj.user.substring(0, maxLetterCnt)}.. (${parenthetical})`;
+                return `${obj.user.substring(0, maxLetterCnt)}.. (${obj.domain}${obj.duration})`;
             } else {
-                return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${parenthetical})`;
+                return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${obj.domain}${obj.duration})`;
             }
         } else if (obj.type.match(/^(?:ip2|ipuser2)$/)) {
             return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${obj.domain}${obj.duration})`;
@@ -413,7 +410,6 @@ async function checkBlockStatus(pagename) {
         default:
             console.log('Edit failed: ' + result);
     }
-    return;
 
 }
 
@@ -465,7 +461,7 @@ function findTemplates(wikitext, templateName) {
     var templates = [];
     const nest = []; // Stores the element number of tempInnerContent if the element involves nested templates
 
-    // Extract templates from the wikitext    
+    // Extract templates from the wikitext
     for (let i = 1; i < tempInnerContent.length; i++) {
 
         let tempTailCnt = (tempInnerContent[i].match(/\}\}/g) || []).length; // The number of '}}' in the split segment
@@ -659,7 +655,7 @@ async function getBlockedIps(ipsArr) {
                 if (!res || !res.query) return resolve();
                 if ((resBlck = res.query.blocks).length === 0) return resolve();
                 resBlck = resBlck[0];
-                const rangeBlocked = (resBlck.user !== ip);
+                const rangeBlocked = (resBlck.user !== ip && resBlck.user.substring(resBlck.user.length - 3) !== ip.substring(ip.length - 3));
                 const partial = resBlck.restrictions && !Array.isArray(resBlck.restrictions);
                 const indef = (resBlck.expiry === 'infinity');
                 UserAN.forEach(obj => {
