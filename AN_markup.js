@@ -1,9 +1,9 @@
 /********************** DEPENDENCIES **********************/
 
-const credentials = require('./credentials');
+const my = require('./my');
 const MWBot = require('mwbot');
 const api = new MWBot({
-    apiUrl: 'https://ja.wikipedia.org/w/api.php'
+    apiUrl: my.apiUrl
 });
 const net = require('net');
 const isCidr = require('is-cidr');
@@ -16,16 +16,16 @@ console.log('The bot started running.');
 
 /********************** STARTUP FUNCTION **********************/
 
-// Login to the Japanese Wikipedia
-const login = await api.loginGetEditToken({
-    username: 'DragoBot',
-    password: credentials.password
+// Login
+const token = await api.loginGetEditToken({
+    username: my.username,
+    password: my.password
 }).then(res => {
     if (!res) return console.log('An unexpected error occurred on login attempt.');
-    return res.result === 'Success';
+    return res.csrftoken;
 }).catch((err) => console.log(err.login.reason));
 
-if (!login) return;
+if (!token) return;
 
 // Pages to maintain
 const ANI = 'Wikipedia:管理者伝言板/投稿ブロック';
@@ -49,7 +49,7 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
         api.request({
             'action': 'query',
             'list': 'blocks',
-            'bklimit': 20,
+            'bklimit': 30,
             'bkprop': 'timestamp|reason',
             'formatversion': 2
         }).then(res => {
@@ -89,10 +89,6 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
         } else {
             checkGlobal = false;
         }
-        if (runCnt = 6) {
-            runCnt = 0;
-            console.log('Counter has been reset.');
-        }
 
         for (let i = 0; i < pages.length; i++) {
             if (i !== 0) await delay(); // Intentional 5-sec delay in accordance with the local bot policy
@@ -103,7 +99,7 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
 
         lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
 
-    }
+    };
 
     // Run the bot
     bot();
@@ -370,7 +366,7 @@ async function checkBlockStatus(pagename) {
     };
     var summary = '';
     if (Object.keys(replacerCnt).length > 1) { // If the bot is to mark up UserANs in multiple sections
-        summary += 'bot (試運転中):';
+        summary += 'bot:';
         const reportsBySection = UserAN.filter(obj => obj.new).reduce((acc, obj, i) => { // {section1: [{ user: username, ...}],
             if (!acc[obj.section]) acc[obj.section] = [{...obj}];                        //  section2: [{ user: username, ...}],
             if (i !== 0 && acc[obj.section].every(obj2 => obj2.user !== obj.user)) {     //  ... } ### UserANs to update in each section
@@ -433,14 +429,16 @@ async function edit(pagename, summary) {
 
     // Edit the page
     return new Promise(resolve => {
-        api.edit(
-            pagename,
-            wikitext,
-            summary, {
+        api.request({
+            'action': 'edit',
+            'title': pagename,
+            'text': wikitext,
+            'summary': summary,
             'minor': true,
             //'bot': true,
             'basetimestamp': parsed.basetimestamp,
-            'starttimestamp': parsed.curtimestamp,            
+            'starttimestamp': parsed.curtimestamp,
+            'token': token
         }).then(res => {
             if (res && res.edit) {
                 if (res.edit.result === 'Success') return resolve(true);
