@@ -278,19 +278,8 @@ async function checkBlockStatus(pagename) {
 
     // Get an array of logids and diff numbers (these need to be converted to usernames through API requests before block check)
     const needBlockCheck = obj => !obj.closed && !obj.ignore && obj.markup;
-    const isEmptyObject = obj => Object.keys(obj).length === 0;
     const logids = UserAN.filter(obj => needBlockCheck(obj) && obj.logid && !Logids[obj.logid]).map(obj => obj.logid);
-    if (!isEmptyObject(Logids)) {
-        UserAN.forEach(obj => { // Set the empty 'user' property if possible
-            if (obj.logid && !obj.user && Logids[obj.logid]) obj.user = Logids[obj.logid];
-        });
-    }
     const diffs = UserAN.filter(obj => needBlockCheck(obj) && obj.diff && !Diffs[obj.diff]).map(obj => obj.diff);
-    if (!isEmptyObject(Diffs)) {
-        UserAN.forEach(obj => {
-            if (obj.diff && !obj.user && Diffs[obj.diff]) obj.user = Diffs[obj.diff];
-        });
-    }
 
     // Convert logids and diffids to usernames through API queries (for logids, only search for the latest 5000 logevents)
     var queries = [];
