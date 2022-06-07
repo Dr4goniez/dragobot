@@ -9,6 +9,7 @@
   "author": "Dragoniez",
   "license": "MIT",
   "dependencies": {
+    "express": "^4.18.1",
     "is-cidr": "^4.0.2",
     "mwbot": "^2.0.0",
     "net": "^1.0.2"
