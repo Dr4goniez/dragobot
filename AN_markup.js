@@ -1,6 +1,5 @@
 /********************** DEPENDENCIES **********************/
 
-const landingpage = require('./index.js');
 const my = require('./my');
 const MWBot = require('mwbot');
 const api = new MWBot({
