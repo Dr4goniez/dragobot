@@ -372,7 +372,7 @@ async function checkBlockStatus(pagename) {
                     return false; // Exit the loop
                 }
             });
-            summary += ` (残${openReportsCnt[key]})`;
+            summary += ` (未${openReportsCnt[key]})`;
             if (!bool) break; // array.every() returned false, which means the summary reached the word count limit
         }
     } else { // If the bot is to mark up UserANs in one section
@@ -384,7 +384,7 @@ async function checkBlockStatus(pagename) {
                 userlinksArr.push(userlink);
             }
         });
-        summary = `/*${Object.keys(replacerCnt)[0]}*/ bot: ` + summary + ` (残${openReportsCnt[Object.keys(replacerCnt)[0]]})`;
+        summary = `/*${Object.keys(replacerCnt)[0]}*/ bot: ` + summary + ` (未${openReportsCnt[Object.keys(replacerCnt)[0]]})`;
     }
 
     // Edit the relevant page
