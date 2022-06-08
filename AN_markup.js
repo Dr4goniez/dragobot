@@ -5,6 +5,7 @@ const MWBot = require('mwbot');
 const api = new MWBot({
     apiUrl: my.apiUrl
 });
+const lib = require('./lib');
 const net = require('net');
 const isCidr = require('is-cidr');
 
@@ -57,7 +58,7 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
             if (!res || !res.query) return resolve();
             if ((resBlck = res.query.blocks).length === 0) return resolve();
             for (const blck of resBlck) {
-                if (blck.reason.indexOf('最近使用したため、自動ブロック') === -1 && compareTimestamps(ts, blck.timestamp)) {
+                if (blck.reason.indexOf('最近使用したため、自動ブロック') === -1 && lib.compareTimestamps(ts, blck.timestamp)) {
                     return resolve(true); // Returns true if someone has been manually blocked since the last run
                 }
             }
@@ -112,10 +113,10 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
 async function checkBlockStatus(pagename) {
 
     // Get page content
-    const parsed = await getLatestRevision(pagename);
+    const parsed = await lib.getLatestRevision(pagename);
     if (!parsed) return console.log('Failed to parse the page.');
     const wikitext = parsed.content;
-    const templates = findTemplates(wikitext, 'UserAN'); // Extract all UserAN occurrences from the page content
+    const templates = lib.findTemplates(wikitext, 'UserAN'); // Extract all UserAN occurrences from the page content
 
     // RegExps to evaluate the templates' parameters
     const paramsRegExp = {
@@ -405,7 +406,7 @@ async function checkBlockStatus(pagename) {
 async function edit(pagename, summary) {
 
     // Get the latest revision and its timestamp(s)
-    const parsed = await getLatestRevision(pagename);
+    const parsed = await lib.getLatestRevision(pagename);
     if (!parsed) return 'Failed to get the latest revision.';
     var wikitext = parsed.content;
 
@@ -435,75 +436,6 @@ async function edit(pagename, summary) {
 }
 
 //********************** UTILITY FUNCTIONS **********************/
-
-/** 
- * Extract templates from wikitext
- * @param {string} wikitext
- * @param {string} [templateName] The first letter is case-insensitive
- * @returns {Array}
- */
-function findTemplates(wikitext, templateName) {
-
-    // Split the wikitext with '{{', the head delimiter of templates
-    const tempInnerContent = wikitext.split('{{'); // Note: tempInnerContent[0] has always nothing to do with templates
-    if (tempInnerContent.length === 0) return [];
-    var templates = [];
-    const nest = []; // Stores the element number of tempInnerContent if the element involves nested templates
-
-    // Extract templates from the wikitext
-    for (let i = 1; i < tempInnerContent.length; i++) {
-
-        let tempTailCnt = (tempInnerContent[i].match(/\}\}/g) || []).length; // The number of '}}' in the split segment
-        let temp = ''; // Temporary escape hatch
-
-        // The split segment not having any '}}' (= it nests another template)
-        if (tempTailCnt === 0) {
-
-            nest.push(i); // Push the element number into the array
-
-        // The split segment itself is the whole inner content of one template
-        } else if (tempTailCnt === 1) {
-
-            temp = '{{' + tempInnerContent[i].split('}}')[0] + '}}';
-            if (!templates.includes(temp)) templates.push(temp);
-
-        // The split segment is part of more than one template (e.g. TL2|...}}...}} )
-        } else {
-
-            for (let j = 0; j < tempTailCnt; j++) { // Loop through all the nests
-
-                if (j === 0) { // The innermost template
-
-                    temp = '{{' + tempInnerContent[i].split('}}')[j] + '}}'; // Same as when tempTailCnt === 1
-                    if (!templates.includes(temp)) templates.push(temp);
-
-                } else { // Nesting templates
-
-                    const elNum = nest[nest.length -1]; // The start of the nesting template
-                    nest.pop();
-                    const nestedTempInnerContent = tempInnerContent[i].split('}}');
-
-                    temp = '{{' + tempInnerContent.slice(elNum, i).join('{{') + '{{' + nestedTempInnerContent.slice(0, j + 1).join('}}') + '}}';
-                    if (!templates.includes(temp)) templates.push(temp);
-
-                }
-
-            }
-
-        }
-
-    }
-
-    // Check if the optional parameter is specified
-    if (templateName && templates.length !== 0) {
-        const caseInsensitiveFirstLetter = str => '[' + str.substring(0, 1).toUpperCase() + str.substring(0, 1).toLowerCase() + ']';
-        const templateRegExp = new RegExp('^\\s*\{\{\\s*' + caseInsensitiveFirstLetter(templateName) + templateName.substring(1));
-        templates = templates.filter(item => item.match(templateRegExp)); // Only leave the specified template in the array
-    }
-
-    return templates;
-
-}
 
 /**
  * Split a string into two
@@ -605,10 +537,10 @@ async function getBlockedUsers(usersArr) {
                     const indef = (blck.expiry === 'infinity');
                     UserAN.forEach(obj => {
                         if (obj.user === blck.user) {
-                            const newlyReported = compareTimestamps(obj.timestamp, blck.timestamp);
+                            const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp);
                             let duration;
                             if (newlyReported) {
-                                if (!indef) duration = getDuration(blck.timestamp, blck.expiry);
+                                if (!indef) duration = lib.getDuration(blck.timestamp, blck.expiry);
                                 obj.duration = indef ? '無期限' : duration;
                                 obj.date = getBlockedDate(blck.timestamp);
                                 obj.domain = partial ? '部分ブロック ' : '';
@@ -649,10 +581,10 @@ async function getBlockedIps(ipsArr) {
                 const indef = (resBlck.expiry === 'infinity');
                 UserAN.forEach(obj => {
                     if (obj.user === ip) {
-                        const newlyReported = compareTimestamps(obj.timestamp, resBlck.timestamp);
+                        const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp);
                         let duration;
                         if (newlyReported) {
-                            if (!indef) duration = getDuration(resBlck.timestamp, resBlck.expiry);
+                            if (!indef) duration = lib.getDuration(resBlck.timestamp, resBlck.expiry);
                             obj.duration = indef ? '無期限' : duration;
                             if (rangeBlocked) obj.duration = resBlck.user.substring(resBlck.user.length - 3) + 'で' + obj.duration;
                             obj.date = getBlockedDate(resBlck.timestamp);
@@ -728,10 +660,10 @@ async function getGloballyBlockedIps(arr) {
                 const indef = (resGblck.expiry === 'infinity');
                 UserAN.forEach(obj => {
                     if (obj.user === ip) {
-                        const newlyReported = compareTimestamps(obj.timestamp, resGblck.timestamp);
+                        const newlyReported = lib.compareTimestamps(obj.timestamp, resGblck.timestamp);
                         let duration;
                         if (newlyReported) {
-                            if (!indef) duration = getDuration(resGblck.timestamp, resGblck.expiry);
+                            if (!indef) duration = lib.getDuration(resGblck.timestamp, resGblck.expiry);
                             obj.duration = indef ? '無期限' : duration;
                             obj.date = getBlockedDate(resGblck.timestamp);
                             obj.domain = 'グローバルブロック ';
@@ -746,84 +678,6 @@ async function getGloballyBlockedIps(arr) {
     const queries = [];
     for (const ip of arr) queries.push(gblockQuery(ip));
     await Promise.all(queries);
-
-}
-
-/**
- * @param {string} pagename
- * @returns {Promise<{basetimestamp: string, curtimestamp: string, content: string}>}
- */
-function getLatestRevision(pagename) {
-    return new Promise(resolve => {
-        api.request({
-            action: 'query',
-            titles: pagename,
-            prop: 'revisions',
-            rvprop: 'timestamp|content',
-            rvslots: 'main',
-            curtimestamp: 1,
-            formatversion: 2
-        }).then(res => {
-            if (!res || !res.query) return resolve();
-            const resRev = res.query.pages[0].revisions[0];
-            resolve({
-                basetimestamp: resRev.timestamp,
-                curtimestamp: res.curtimestamp,
-                content: resRev.slots.main.content
-            });
-        }).catch(() => resolve());
-    });
-}
-
-/**
- * @returns {boolean} true if positive, false if negative
- */
-function compareTimestamps(timestamp1, timestamp2) {
-    if (typeof timestamp1 === 'undefined' || typeof timestamp2 === 'undefined') return;
-    const ts1 = new Date(timestamp1);
-    const ts2 = new Date(timestamp2);
-    const diff = ts2.getTime() - ts1.getTime();
-    return diff > 0;
-}
-
-function getDuration(timestamp1, timestamp2) {
-
-    const ts1 = new Date(timestamp1);
-    const ts2 = new Date(timestamp2);
-    const diff = ts2.getTime() - ts1.getTime();
-    if (diff < 0) return;
-
-    var seconds = Math.floor(diff / 1000),
-        minutes = Math.floor(seconds / 60),
-        hours = Math.floor(minutes / 60),
-        days = Math.floor(hours / 24),
-        weeks = Math.floor(days / 7),
-        months = Math.floor(days / 30),
-        years = Math.floor(days / 365);
-
-    seconds %= 60;
-    minutes %= 60;
-    hours %= 24;
-    days %= 30;
-    weeks %= 7;
-    months %= 30;
-    years %= 365;
-
-    if (years) {
-        return years + '年';
-    } else if (months) {
-        return months + 'か月';
-    } else if (weeks) {
-        return weeks + '週間';
-    } else if (days) {
-        return days + '日';
-    } else if (hours) {
-        return hours + '時間';
-    } else if (minutes) {
-        return minutes + '分';
-    } else if (seconds) {
-        return seconds + '秒';
-    }
 
 }
 
