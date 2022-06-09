@@ -4,7 +4,8 @@
   "description": "A Wikipedia bot.",
   "main": "AN_markup.js",
   "scripts": {
-    "start": "node AN_markup.js"
+    "start": "node AN_markup.js",
+    "dev": "node archive.js"
   },
   "author": "Dragoniez",
   "license": "MIT",
