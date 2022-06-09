@@ -164,7 +164,7 @@ async function checkBlockStatus(pagename) {
     UserAN.forEach(obj => {
 
         // Get the names of the sections that the UserAN belongs to
-        const mtch = lib.splitInto2(wikitext, obj.old)[0].match(paramsRegExp.section, true); // Split the srctxt at tpl and get the last section title in arr[0]
+        const mtch = lib.splitInto2(wikitext, obj.old, true)[0].match(paramsRegExp.section); // Split the srctxt at tpl and get the last section title in arr[0]
         if (mtch) obj.section = mtch[mtch.length - 1].replace(/^={2,5}[^\S\r\n]*/, '').replace(/[^\S\r\n]*={2,5}$/, ''); // .replace removes '='s
 
         // Ignore UserANs that are ungrammatical or for instructions
