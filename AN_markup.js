@@ -164,7 +164,7 @@ async function checkBlockStatus(pagename) {
     UserAN.forEach(obj => {
 
         // Get the names of the sections that the UserAN belongs to
-        const mtch = splitInto2(wikitext, obj.old)[0].match(paramsRegExp.section); // Split the srctxt at tpl and get the last section title in arr[0]
+        const mtch = lib.splitInto2(wikitext, obj.old)[0].match(paramsRegExp.section, true); // Split the srctxt at tpl and get the last section title in arr[0]
         if (mtch) obj.section = mtch[mtch.length - 1].replace(/^={2,5}[^\S\r\n]*/, '').replace(/[^\S\r\n]*={2,5}$/, ''); // .replace removes '='s
 
         // Ignore UserANs that are ungrammatical or for instructions
@@ -266,7 +266,7 @@ async function checkBlockStatus(pagename) {
         }
 
         // Get a timestamp for obj
-        const wtSplit = splitInto2(wikitext, obj.old); // Split the source text at the template and find the first signature following it
+        const wtSplit = lib.splitInto2(wikitext, obj.old, true); // Split the source text at the template and find the first signature following it
         var ts = wtSplit[1].match(/(\d{4})年(\d{1,2})月(\d{1,2})日 \((?:日|月|火|水|木|金|土)\) (\d{2}:\d{2}) \(UTC\)/); // YYYY年MM月DD日 (日) hh:mm (UTC)
         if (!ts) return;
         for (let i = 2; i <= 3; i++) {
@@ -436,20 +436,6 @@ async function edit(pagename, summary) {
 }
 
 //********************** UTILITY FUNCTIONS **********************/
-
-/**
- * Split a string into two
- * @param {string} str 
- * @param {string} delimiter 
- * @returns {Array}
- */
-function splitInto2(str, delimiter) {
-    const index = str.lastIndexOf(delimiter);
-    if (index === -1) return;
-    const firstPart = str.substring(0, index);
-    const secondPart = str.substring(index + 1);
-    return [firstPart, secondPart];
-}
 
 async function convertLogidsToUsernames(arr) {
 

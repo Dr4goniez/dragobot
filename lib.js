@@ -74,6 +74,21 @@ module.exports.findTemplates = (wikitext, templateName) => {
 };
 
 /**
+ * Split a string into two
+ * @param {string} str 
+ * @param {string} delimiter 
+ * @param {boolean} lastindex If true, search the delimiter from the bottom of the string
+ * @returns {Array}
+ */
+module.exports.splitInto2 = (str, delimiter, lastindex) => {
+    const index = lastindex ? str.lastIndexOf(delimiter) : str.indexOf(delimiter);
+    if (index === -1) return;
+    const firstPart = str.substring(0, index);
+    const secondPart = str.substring(index + 1);
+    return [firstPart, secondPart];
+};
+
+/**
  * @param {string} pagename
  * @returns {Promise<{basetimestamp: string, curtimestamp: string, content: string}>}
  */
