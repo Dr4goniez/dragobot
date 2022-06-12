@@ -50,7 +50,7 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
         api.request({
             'action': 'query',
             'list': 'blocks',
-            'bklimit': 30,
+            'bklimit': 50,
             'bkprop': 'timestamp|reason',
             'formatversion': 2
         }).then(res => {
@@ -477,7 +477,7 @@ async function convertDiffidsToUsernames(arr) {
     return new Promise(resolve => {
         api.request({
             'action': 'query',
-            'revids': arr.slice(0, 50).join('|'),
+            'revids': arr.slice(0, 500).join('|'),
             'prop': 'revisions',
             'formatversion': 2
         }).then(res => {
@@ -499,8 +499,8 @@ async function getBlockedUsers(usersArr) {
     const users = JSON.parse(JSON.stringify(usersArr));
     const queries = [];
     while (users.length !== 0) {
-        queries.push(blockQuery(users.slice(0, 50)));
-        users.splice(0, 50);
+        queries.push(blockQuery(users.slice(0, 500)));
+        users.splice(0, 500);
     }
     await Promise.all(queries);
     return;
@@ -510,7 +510,7 @@ async function getBlockedUsers(usersArr) {
             api.request({
                 'action': 'query',
                 'list': 'blocks',
-                'bklimit': 50,
+                'bklimit': 'max',
                 'bkusers': arr.join('|'),
                 'bkprop': 'user|timestamp|expiry|restrictions',
                 'formatversion': 2
