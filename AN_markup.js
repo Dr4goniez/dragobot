@@ -85,6 +85,8 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
             }
         }
 
+        lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
+
         if (runCnt % 6 === 0) {
             checkGlobal = true; // Check global block/lock status every 6 runs (1 hour)
         } else {
@@ -97,8 +99,6 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
             UserAN = []; // Reset
             await checkBlockStatus(pages[i]);
         }
-
-        lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
 
     };
 
@@ -523,7 +523,7 @@ async function getBlockedUsers(usersArr) {
                     const indef = (blck.expiry === 'infinity');
                     UserAN.forEach(obj => {
                         if (obj.user === blck.user) {
-                            const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp);
+                            const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true);
                             let duration;
                             if (newlyReported) {
                                 if (!indef) duration = lib.getDuration(blck.timestamp, blck.expiry);
@@ -567,7 +567,7 @@ async function getBlockedIps(ipsArr) {
                 const indef = (resBlck.expiry === 'infinity');
                 UserAN.forEach(obj => {
                     if (obj.user === ip) {
-                        const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp);
+                        const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true);
                         let duration;
                         if (newlyReported) {
                             if (!indef) duration = lib.getDuration(resBlck.timestamp, resBlck.expiry);
@@ -646,7 +646,7 @@ async function getGloballyBlockedIps(arr) {
                 const indef = (resGblck.expiry === 'infinity');
                 UserAN.forEach(obj => {
                     if (obj.user === ip) {
-                        const newlyReported = lib.compareTimestamps(obj.timestamp, resGblck.timestamp);
+                        const newlyReported = lib.compareTimestamps(obj.timestamp, resGblck.timestamp, true);
                         let duration;
                         if (newlyReported) {
                             if (!indef) duration = lib.getDuration(resGblck.timestamp, resGblck.expiry);

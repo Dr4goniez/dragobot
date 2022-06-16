@@ -117,11 +117,13 @@ module.exports.getLatestRevision = pagename => {
 /**
  * @param {string} timestamp1 
  * @param {string} timestamp2 
+ * @param {boolean} [rewind5minutes] if true, rewind timestamp1 by 5 minutes
  * @returns {boolean} true if positive, false if negative
  */
-module.exports.compareTimestamps = (timestamp1, timestamp2) => {
+module.exports.compareTimestamps = (timestamp1, timestamp2, rewind5minutes) => {
     if (typeof timestamp1 === 'undefined' || typeof timestamp2 === 'undefined') return;
     const ts1 = new Date(timestamp1);
+    if (rewind5minutes) ts1.setMinutes(ts1.getMinutes - 5);
     const ts2 = new Date(timestamp2);
     const diff = ts2.getTime() - ts1.getTime();
     return diff > 0;
