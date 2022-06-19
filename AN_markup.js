@@ -66,9 +66,6 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
         }).catch(() => resolve());
     });
 
-    // Function to make an intentional 5-second delay between each edit
-    const delay = () => new Promise(resolve =>  setTimeout(resolve, 5000));
-
     // The procedure to loop
     const pages = [ANI, ANS, AN3RR, Iccic, ISECHIKA, KAGE, KIYOSHIMA, SHINJU];
     var runCnt = 0, lastRunTs;
@@ -94,7 +91,7 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
         }
 
         for (let i = 0; i < pages.length; i++) {
-            if (i !== 0) await delay(); // Intentional 5-sec delay in accordance with the local bot policy
+            if (i !== 0) await lib.delay(5*1000); // Intentional 5-sec delay in accordance with the local bot policy
             console.log('Checking ' + pages[i] + '...');
             UserAN = []; // Reset
             await checkBlockStatus(pages[i]);

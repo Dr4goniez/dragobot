@@ -174,3 +174,10 @@ module.exports.getDuration = (timestamp1, timestamp2) => {
     }
 
 };
+
+/**
+ * Make an intentional N-millisecond delay (must be awaited)
+ * @param {number} milliseconds
+ * @returns 
+ */
+module.exports.delay = milliseconds => new Promise(resolve =>  setTimeout(resolve, milliseconds));
