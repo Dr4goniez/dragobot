@@ -5,6 +5,7 @@
   "main": "AN_markup.js",
   "scripts": {
     "start": "node AN_markup.js",
+    "cat": "syntaxError.js",
     "dev": "node archive.js"
   },
   "author": "Dragoniez",
