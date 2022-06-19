@@ -156,6 +156,7 @@ async function checkBlockStatus(pagename) {
             // The following gets a value if the user reported by the UserAN has been blocked
             'domain': '', // Like partial block, global block, and global lock
             'duration': '',
+            'flags': '',
             'date': '',
         });
     }
@@ -319,7 +320,7 @@ async function checkBlockStatus(pagename) {
     // Final check before edit
     if (UserAN.filter(obj => obj.domain || obj.duration).length === 0) return console.log('Procedure cancelled: There\'s no UserAN to update.');
     UserAN.filter(obj => obj.domain || obj.duration).forEach(obj => { // Get new UserANs to replace old ones with
-        obj.new = obj.old.replace(/\|*\}{2}$/, '') + '|' + obj.domain + obj.duration + obj.date + '}}';
+        obj.new = obj.old.replace(/\|*\}{2}$/, '') + '|' + obj.domain + obj.duration + obj.flags + obj.date + '}}';
     });
 
     // Check how many UserANs are in each section
@@ -512,24 +513,31 @@ async function getBlockedUsers(usersArr) {
                 'list': 'blocks',
                 'bklimit': 'max',
                 'bkusers': arr.join('|'),
-                'bkprop': 'user|timestamp|expiry|restrictions',
+                'bkprop': 'user|timestamp|expiry|restrictions|flags',
                 'formatversion': 2
             }).then(res => {
                 var resBlck;
                 if (!res || !res.query) return resolve();
                 if ((resBlck = res.query.blocks).length === 0) return resolve();
                 for (const blck of resBlck) {
-                    const partial = blck.restrictions && !Array.isArray(blck.restrictions);
-                    const indef = (blck.expiry === 'infinity');
+                    const nousertalk = !blck.allowusertalk,
+                          noemail = blck.noemail,
+                          partial = blck.restrictions && !Array.isArray(blck.restrictions),
+                          indef = blck.expiry === 'infinity';
                     UserAN.forEach(obj => {
                         if (obj.user === blck.user) {
                             const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true);
-                            let duration;
                             if (newlyReported) {
-                                if (!indef) duration = lib.getDuration(blck.timestamp, blck.expiry);
-                                obj.duration = indef ? '無期限' : duration;
+                                obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry);
                                 obj.date = getBlockedDate(blck.timestamp);
                                 obj.domain = partial ? '部分ブロック ' : '';
+                                if (nousertalk && noemail) {
+                                    obj.flags = ' 会話×・メール×';
+                                } else if (nousertalk) {
+                                    obj.flags = ' 会話×';
+                                } else if (noemail) {
+                                    obj.flags = ' メール×';
+                                }
                             }
                         }
                     });
@@ -555,26 +563,35 @@ async function getBlockedIps(ipsArr) {
                 'list': 'blocks',
                 'bklimit': 1,
                 'bkip': ip,
-                'bkprop': 'user|timestamp|expiry|restrictions',
+                'bkprop': 'user|timestamp|expiry|restrictions|flags',
                 'formatversion': 2
             }).then(res => {
                 var resBlck;
                 if (!res || !res.query) return resolve();
                 if ((resBlck = res.query.blocks).length === 0) return resolve();
                 resBlck = resBlck[0];
-                const rangeBlocked = (resBlck.user !== ip && resBlck.user.substring(resBlck.user.length - 3) !== ip.substring(ip.length - 3));
-                const partial = resBlck.restrictions && !Array.isArray(resBlck.restrictions);
-                const indef = (resBlck.expiry === 'infinity');
+                const nousertalk = !resBlck.allowusertalk,
+                      noemail = resBlck.noemail,
+                      hardblock = !resBlck.anononly,
+                      partial = resBlck.restrictions && !Array.isArray(resBlck.restrictions),
+                      indef = resBlck.expiry === 'infinity',
+                      rangeBlocked = resBlck.user !== ip && resBlck.user.substring(resBlck.user.length - 3) !== ip.substring(ip.length - 3);
                 UserAN.forEach(obj => {
                     if (obj.user === ip) {
                         const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true);
-                        let duration;
                         if (newlyReported) {
-                            if (!indef) duration = lib.getDuration(resBlck.timestamp, resBlck.expiry);
-                            obj.duration = indef ? '無期限' : duration;
+                            obj.duration = indef ? '無期限' : lib.getDuration(resBlck.timestamp, resBlck.expiry);
                             if (rangeBlocked) obj.duration = resBlck.user.substring(resBlck.user.length - 3) + 'で' + obj.duration;
                             obj.date = getBlockedDate(resBlck.timestamp);
                             obj.domain = partial ? '部分ブロック ' : '';
+                            if (nousertalk && noemail) {
+                                obj.flags = ' 会話×・メール×';
+                            } else if (nousertalk) {
+                                obj.flags = ' 会話×';
+                            } else if (noemail) {
+                                obj.flags = ' メール×';
+                            }
+                            if (hardblock) obj.flags = 'ハードブロック' + (obj.flags ? obj.flags.replace(/^ /, '・') : '');
                         }
                     }
                 });
