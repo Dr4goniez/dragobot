@@ -2,5 +2,5 @@ my.js
 service.template
 archive.js
 newScripts.js
-syntaxError.js
+fixSyntaxError.js
 removeRFP.js
