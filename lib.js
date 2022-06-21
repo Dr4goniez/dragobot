@@ -181,3 +181,19 @@ module.exports.getDuration = (timestamp1, timestamp2) => {
  * @returns 
  */
 module.exports.delay = milliseconds => new Promise(resolve =>  setTimeout(resolve, milliseconds));
+
+/**
+ * Login and get edit token
+ * @returns {Promise<string>}
+ */
+module.exports.getToken = () => {
+    return new Promise(resolve => {
+        api.loginGetEditToken({
+            username: my.username,
+            password: my.password
+        }).then(res => {
+            if (!res) return resolve(console.log('An unexpected error occurred on login attempt.'));
+            resolve(res.csrftoken);
+        }).catch((err) => resolve(console.log(err.login.reason)));
+    });
+};
