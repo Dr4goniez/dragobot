@@ -120,8 +120,8 @@ async function checkBlockStatus(pagename) {
         'useran': new RegExp('[Uu]serAN'), // Template name: The 1st letter is case-insensitive
         'user': new RegExp('^\\s*(?:1|[Uu]ser)\\s*='), // Template param: 1=, user=, or User=
         'type': new RegExp('^\\s*(?:t|[Tt]ype)\\s*='), // Template param: t=, type=, or Type=
-        'status': new RegExp('^\\s*(?:状態|[Ss]tatus)\\s*='), // Template param: 状態=, status=, or Status=. ⇓ Closed verson
-        'statusFilled': new RegExp('^\\s*(?:状態|[Ss]tatus)\\s*=\\s*(?:(?:not )?done|済(?:み)?|却下|非対処|取り下げ)\\s*$'),
+        'status': new RegExp('^\\s*(?:状態|s|[Ss]tatus)\\s*='), // Template param: 状態=, s=, status=, or Status=. ⇓ Closed verson
+        'statusFilled': new RegExp('^\\s*(?:状態|s|[Ss]tatus)\\s*=\\s*(?:(?:not )?done|済(?:み)?|却下|非対処|取り下げ)\\s*$'),
         'status2': new RegExp('^\\s*2\\s*='), // Template param: 2=
         'status2Filled': new RegExp('^\\s*2\\s*=(?=.+)'), // 2=USERNAME (closed)
         'bot': new RegExp('^\\s*bot\\s*='), // bot=
@@ -588,7 +588,7 @@ async function getBlockedIps(ipsArr) {
                             } else if (noemail) {
                                 obj.flags = ' メール×';
                             }
-                            if (hardblock) obj.flags = 'ハードブロック' + (obj.flags ? obj.flags.replace(/^ /, '・') : '');
+                            if (hardblock) obj.flags = ' ハードブロック' + (obj.flags ? obj.flags.replace(/^ /, '・') : '');
                         }
                     }
                 });
