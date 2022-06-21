@@ -26,9 +26,10 @@ const token = await api.loginGetEditToken({
 
 if (!token) return;
 
-const categoryMembers = await getCategoryMembers('Category:構文ハイライトエラーがあるページ');
+var categoryMembers = await getCategoryMembers('Category:構文ハイライトエラーがあるページ');
 if (!categoryMembers) return console.log('Failed to get category members.');
 if (categoryMembers.length === 0) return console.log('No page is in this category.');
+categoryMembers = categoryMembers.filter(page => !page.match(/^利用者:/));
 
 var edited = false;
 for (const page of categoryMembers) {
@@ -44,9 +45,18 @@ for (const page of categoryMembers) {
  
     let content = parsed.content;
     const len = JSON.parse(JSON.stringify(content)).length;
-    if (content.indexOf('<syntaxhighlight>') !== -1 || content.indexOf('<source>') !== -1) {
+    if (content.indexOf('<syntaxhighlight') !== -1 || content.indexOf('<source') !== -1) {
 
         content = content.replaceAll('<syntaxhighlight>', '<syntaxhighlight lang="text">').replaceAll('<source>', '<source lang="text">');
+        content = content.replaceAll('<syntaxhighlight lang="mion"', '<syntaxhighlight lang="text"').replaceAll('<source lang="mion"', '<source lang="text"');
+        content = content.replaceAll('<syntaxhighlight lang="syntaxhighlight">', '<syntaxhighlight lang="text">').replaceAll('<source lang="syntaxhighlight">', '<source lang="text">');
+        content = content.replaceAll('<syntaxhighlight language', '<syntaxhighlight lang').replaceAll('<source language', '<source lang');
+        content = content.replaceAll('<syntaxhighlight code', '<syntaxhighlight lang').replaceAll('<source code', '<source lang');
+
+        if (content.length === len) {
+            console.log(page + ': Cancelled.');
+            continue;
+        }
 
         const result = await api.request({
             'action': 'edit',
