@@ -98,7 +98,7 @@ module.exports.getLatestRevision = pagename => {
             action: 'query',
             titles: pagename,
             prop: 'revisions',
-            rvprop: 'timestamp|content',
+            rvprop: 'ids|timestamp|content',
             rvslots: 'main',
             curtimestamp: 1,
             formatversion: 2
@@ -106,9 +106,10 @@ module.exports.getLatestRevision = pagename => {
             if (!res || !res.query) return resolve();
             const resRev = res.query.pages[0].revisions[0];
             resolve({
-                basetimestamp: resRev.timestamp,
-                curtimestamp: res.curtimestamp,
-                content: resRev.slots.main.content
+                'basetimestamp': resRev.timestamp,
+                'curtimestamp': res.curtimestamp,
+                'content': resRev.slots.main.content,
+                'revid': resRev.revid
             });
         }).catch(() => resolve());
     });
