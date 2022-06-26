@@ -4,5 +4,5 @@ archive.js
 newScripts.js
 fixSyntaxError.js
 removeRFP.js
-clearConsole.js
+clear.js
 test.js
