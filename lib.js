@@ -127,7 +127,7 @@ module.exports.compareTimestamps = (timestamp1, timestamp2, rewind5minutes) => {
     if (rewind5minutes) ts1.setMinutes(ts1.getMinutes() - 5);
     const ts2 = new Date(timestamp2);
     const diff = ts2.getTime() - ts1.getTime();
-    return diff > 0;
+    return diff;
 };
 
 /**

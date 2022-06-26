@@ -57,7 +57,7 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
             if (!res || !res.query) return resolve();
             if ((resBlck = res.query.blocks).length === 0) return resolve();
             for (const blck of resBlck) {
-                if (blck.reason.indexOf('最近使用したため、自動ブロック') === -1 && lib.compareTimestamps(ts, blck.timestamp)) {
+                if (blck.reason.indexOf('最近使用したため、自動ブロック') === -1 && lib.compareTimestamps(ts, blck.timestamp) >= 0) {
                     return resolve(true); // Returns true if someone has been manually blocked since the last run
                 }
             }
@@ -350,7 +350,7 @@ async function checkBlockStatus(pagename) {
     };
     var summary = '';
     if (Object.keys(replacerCnt).length > 1) { // If the bot is to mark up UserANs in multiple sections
-        summary += 'bot:';
+        summary += 'Bot:';
         const reportsBySection = UserAN.filter(obj => obj.new).reduce((acc, obj, i) => { // {section1: [{ user: username, ...}],
             if (!acc[obj.section]) acc[obj.section] = [{...obj}];                        //  section2: [{ user: username, ...}],
             if (i !== 0 && acc[obj.section].every(obj2 => obj2.user !== obj.user)) {     //  ... } ### UserANs to update in each section
@@ -382,9 +382,10 @@ async function checkBlockStatus(pagename) {
                 userlinksArr.push(userlink);
             }
         });
-        summary = `/*${Object.keys(replacerCnt)[0]}*/ bot: ` + summary;// + ` (未${openReportsCnt[Object.keys(replacerCnt)[0]]})`;
+        summary = `/*${Object.keys(replacerCnt)[0]}*/ Bot: ` + summary;// + ` (未${openReportsCnt[Object.keys(replacerCnt)[0]]})`;
     }
-
+    console.log(summary);
+    return;
     // Edit the relevant page
     const result = await edit(pagename, summary);
     switch(result) {
@@ -522,7 +523,7 @@ async function getBlockedUsers(usersArr) {
                           indef = blck.expiry === 'infinity';
                     UserAN.forEach(obj => {
                         if (obj.user === blck.user) {
-                            const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true);
+                            const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true) >= 0;
                             if (newlyReported) {
                                 obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry);
                                 obj.date = getBlockedDate(blck.timestamp);
@@ -574,7 +575,7 @@ async function getBlockedIps(ipsArr) {
                       rangeBlocked = resBlck.user !== ip && resBlck.user.substring(resBlck.user.length - 3) !== ip.substring(ip.length - 3);
                 UserAN.forEach(obj => {
                     if (obj.user === ip) {
-                        const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true);
+                        const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true) >= 0;
                         if (newlyReported) {
                             obj.duration = indef ? '無期限' : lib.getDuration(resBlck.timestamp, resBlck.expiry);
                             if (rangeBlocked) obj.duration = resBlck.user.substring(resBlck.user.length - 3) + 'で' + obj.duration;
@@ -659,7 +660,7 @@ async function getGloballyBlockedIps(arr) {
                 const indef = (resGblck.expiry === 'infinity');
                 UserAN.forEach(obj => {
                     if (obj.user === ip) {
-                        const newlyReported = lib.compareTimestamps(obj.timestamp, resGblck.timestamp, true);
+                        const newlyReported = lib.compareTimestamps(obj.timestamp, resGblck.timestamp, true) >= 0;
                         let duration;
                         if (newlyReported) {
                             if (!indef) duration = lib.getDuration(resGblck.timestamp, resGblck.expiry);
