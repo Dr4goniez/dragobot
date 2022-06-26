@@ -384,8 +384,7 @@ async function checkBlockStatus(pagename) {
         });
         summary = `/*${Object.keys(replacerCnt)[0]}*/ Bot: ` + summary;// + ` (未${openReportsCnt[Object.keys(replacerCnt)[0]]})`;
     }
-    console.log(summary);
-    return;
+
     // Edit the relevant page
     const result = await edit(pagename, summary);
     switch(result) {
