@@ -90,7 +90,7 @@ module.exports.splitInto2 = (str, delimiter, lastindex) => {
 
 /**
  * @param {string} pagename
- * @returns {Promise<{basetimestamp: string, curtimestamp: string, content: string}>}
+ * @returns {Promise<boolean|{basetimestamp: string, curtimestamp: string, content: string, revid: string}>} False if page doesn't exit, or else an object
  */
 module.exports.getLatestRevision = pagename => {
     return new Promise(resolve => {
@@ -104,12 +104,16 @@ module.exports.getLatestRevision = pagename => {
             formatversion: 2
         }).then(res => {
             if (!res || !res.query) return resolve();
-            const resRev = res.query.pages[0].revisions[0];
+            const resPages = res.query.pages;
+            if (resPages.length === 0) return resolve();
+            if (resPages[0].missing) return resolve(false);
+            const resRev = resPages[0].revisions[0];
             resolve({
                 'basetimestamp': resRev.timestamp,
                 'curtimestamp': res.curtimestamp,
                 'content': resRev.slots.main.content,
-                'revid': resRev.revid
+                'originalContent': JSON.parse(JSON.stringify(resRev.slots.main.content)),
+                'revid': resRev.revid.toString()
             });
         }).catch(() => resolve());
     });
@@ -179,14 +183,31 @@ module.exports.getDuration = (timestamp1, timestamp2) => {
 /**
  * Make an intentional N-millisecond delay (must be awaited)
  * @param {number} milliseconds
- * @returns 
+ * @returns {Promise}
  */
 module.exports.delay = milliseconds => new Promise(resolve =>  setTimeout(resolve, milliseconds));
 
-module.exports.escapeRegExp = str => {
-    const rep = ['\\', '(', ')', '{', '}', '.', '?', '!', '*', '+', '-', '^', '$', '[', ']', '|'];
-    rep.forEach(item => {
-        str = str.split(item).join('\\' + item);
-    });
-    return str;
+/**
+ * Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!')
+ * @param {string} str 
+ * @returns 
+ */
+module.exports.escapeRegExp = str => str.replace(/[\\{}().?*+\-^$[\]|]/g, '\\$&');
+
+/**
+ * Get the last day of a given month
+ * @param {number|string} year
+ * @param {number|string} month 1-12
+ * @returns {number}
+ */
+module.exports.lastDay = (year, month) => new Date(year, month, 0).getDate();
+
+/**
+ * Get the Japanese name of a day of the week from JSON timestamp
+ * @param {string} timestamp 
+ * @returns {string}
+ */
+module.exports.getWeekDayJa = timestamp => {
+    const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+    return daysOfWeek[new Date(timestamp).getDay()];
 };
