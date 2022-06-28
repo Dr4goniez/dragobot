@@ -268,74 +268,87 @@ async function checkBlockStatus(pagename) {
     // --- At this point, UserANs to mark up have a 'duration' or 'domain' property ---
 
     // Final check before edit
-    if (UserAN.filter(obj => obj.domain || obj.duration).length === 0) return console.log('Procedure cancelled: There\'s no UserAN to update.');
-    UserAN.filter(obj => obj.domain || obj.duration).forEach(obj => { // Get new UserANs to replace old ones with
-        const replacee = obj.modified ? obj.modified : obj.old;
-        obj.new = replacee.replace(/\|*\}{2}$/, '') + '|' + obj.domain + obj.duration + obj.flags + obj.date + '}}';
-    });
+    var modOnly = false; // True if no user is newly blocked but some UserANs need to be modified
+    if (UserAN.some(obj => obj.domain || obj.duration)) { // Someone is newly blocked
+        UserAN.filter(obj => obj.domain || obj.duration).forEach(obj => { // Get new UserANs to replace old ones with
+            const replacee = obj.modified ? obj.modified : obj.old;
+            obj.new = replacee.replace(/\|*\}{2}$/, '') + '|' + obj.domain + obj.duration + obj.flags + obj.date + '}}';
+        });
+    } else if (UserAN.some(obj => obj.modified)) {
+        modOnly = true;
+        UserAN.filter(obj => obj.modified).forEach(obj => obj.new = obj.modified); // Get the modified UserANs to replace old ones with
+    } else {
+        return console.log('Procedure cancelled: There\'s no UserAN to update.');
+    }
 
     // Get summary
-    const getUserLink = (obj) => {
-        if (obj.type.match(/^(?:user2|unl|usernolink)$/)) {
-            const maxLetterCnt = containsJapaneseCharacter(obj.user) ? 10 : 20;
-            if (obj.user.length > maxLetterCnt) {
-                return `${obj.user.substring(0, maxLetterCnt)}.. (${obj.domain}${obj.duration})`;
-            } else {
-                return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${obj.domain}${obj.duration})`;
-            }
-        } else if (obj.type.match(/^(?:ip2|ipuser2)$/)) {
-            return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${obj.domain}${obj.duration})`;
-        } else if (obj.type.match(/^(?:log|logid)$/)) {
-            return `[[特別:転送/logid/${obj.logid}|Logid/${obj.logid}]] (${obj.domain}${obj.duration})`;
-        } else if (obj.type.match(/^(?:dif|diff)$/)) {
-            return `[[特別:差分/${obj.diff}|差分/${obj.diff}]]の投稿者 (${obj.domain}${obj.duration})`;
-        }
-    };
-
     var summary = '';
-    const sections = UserAN.filter(obj => obj.new).map(obj => obj.section).filter((item, i, arr) => arr.indexOf(item) === i);
-    if (sections.length > 1) { // If the bot is to mark up UserANs in multiple sections
+    if (!modOnly) {
 
-        summary += 'Bot:';
-        const reportsBySection = UserAN.filter(obj => obj.new).reduce((acc, obj, i) => { // {section1: [{ user: username, ...}],
-            if (!acc[obj.section]) acc[obj.section] = [{...obj}];                        //  section2: [{ user: username, ...}],
-            if (i !== 0 && acc[obj.section].every(obj2 => obj2.user !== obj.user)) {     //  ... } ### UserANs to update in each section
-                acc[obj.section].push({...obj}); // Push the object iff loop cnt != 0 & the relevant username isn't in the array of objects
-            }                                    // (This prevents the output involving the same username: One user could be reported multiple
-            return acc;                          //  times in the same section)
-        }, Object.create(null));
-
-        for (let key in reportsBySection) {
-            summary += ` /*${key}*/ `;
-            const bool = reportsBySection[key].every((obj, i) => {
-                let tempSummary = (i === 0 ? getUserLink(obj) : ', ' + getUserLink(obj));
-                if ((summary + tempSummary).length <= 500) { // Prevent the summary from exceeding the max word count
-                    summary += tempSummary;
-                    return true; // Go on to the next loop
+        const getUserLink = (obj) => {
+            if (obj.type.match(/^(?:user2|unl|usernolink)$/)) {
+                const maxLetterCnt = containsJapaneseCharacter(obj.user) ? 10 : 20;
+                if (obj.user.length > maxLetterCnt) {
+                    return `${obj.user.substring(0, maxLetterCnt)}.. (${obj.domain}${obj.duration})`;
                 } else {
-                    summary += ' ほか';
-                    return false; // Exit the loop
+                    return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${obj.domain}${obj.duration})`;
+                }
+            } else if (obj.type.match(/^(?:ip2|ipuser2)$/)) {
+                return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${obj.domain}${obj.duration})`;
+            } else if (obj.type.match(/^(?:log|logid)$/)) {
+                return `[[特別:転送/logid/${obj.logid}|Logid/${obj.logid}]] (${obj.domain}${obj.duration})`;
+            } else if (obj.type.match(/^(?:dif|diff)$/)) {
+                return `[[特別:差分/${obj.diff}|差分/${obj.diff}]]の投稿者 (${obj.domain}${obj.duration})`;
+            }
+        };
+
+        const sections = UserAN.filter(obj => obj.new).map(obj => obj.section).filter((item, i, arr) => arr.indexOf(item) === i);
+        if (sections.length > 1) { // If the bot is to mark up UserANs in multiple sections
+
+            summary = 'Bot:';
+            const reportsBySection = UserAN.filter(obj => obj.new).reduce((acc, obj, i) => { // {section1: [{ user: username, ...}],
+                if (!acc[obj.section]) acc[obj.section] = [{...obj}];                        //  section2: [{ user: username, ...}],
+                if (i !== 0 && acc[obj.section].every(obj2 => obj2.user !== obj.user)) {     //  ... } ### UserANs to update in each section
+                    acc[obj.section].push({...obj}); // Push the object iff loop cnt != 0 & the relevant username isn't in the array of objects
+                }                                    // (This prevents the output involving the same username: One user could be reported multiple
+                return acc;                          //  times in the same section)
+            }, Object.create(null));
+
+            for (let key in reportsBySection) {
+                summary += ` /*${key}*/ `;
+                const bool = reportsBySection[key].every((obj, i) => {
+                    let tempSummary = (i === 0 ? getUserLink(obj) : ', ' + getUserLink(obj));
+                    if ((summary + tempSummary).length <= 500) { // Prevent the summary from exceeding the max word count
+                        summary += tempSummary;
+                        return true; // Go on to the next loop
+                    } else {
+                        summary += ' ほか';
+                        return false; // Exit the loop
+                    }
+                });
+                if (!bool) break; // array.every() returned false, which means the summary reached the word count limit
+            }
+
+        } else { // If the bot is to mark up UserANs in one section
+
+            const userlinksArr = [];
+            UserAN.filter(obj => obj.new).forEach((obj, i) => {
+                const userlink = getUserLink(obj);
+                if (!userlinksArr.includes(userlink)) { // Prevent the same links from being displayed
+                    summary += (i === 0 ? userlink : ', ' + userlink);
+                    userlinksArr.push(userlink);
                 }
             });
-            if (!bool) break; // array.every() returned false, which means the summary reached the word count limit
+            summary = `/*${sections[0]}*/ Bot: ` + summary;
+
         }
 
-    } else { // If the bot is to mark up UserANs in one section
-
-        const userlinksArr = [];
-        UserAN.filter(obj => obj.new).forEach((obj, i) => {
-            const userlink = getUserLink(obj);
-            if (!userlinksArr.includes(userlink)) { // Prevent the same links from being displayed
-                summary += (i === 0 ? userlink : ', ' + userlink);
-                userlinksArr.push(userlink);
-            }
-        });
-        summary = `/*${sections[0]}*/ Bot: ` + summary;
-
+    } else {
+        summary = 'Bot: UserANの修正';
     }
 
     // Edit the relevant page
-    const result = await edit(pagename, summary);
+    const result = await edit(pagename, summary, modOnly);
     switch(result) {
         case true:
             console.log('Edit done.');
@@ -349,7 +362,7 @@ async function checkBlockStatus(pagename) {
 
 }
 
-async function edit(pagename, summary) {
+async function edit(pagename, summary, botedit) {
 
     // Get the latest revision and its timestamp(s)
     const parsed = await lib.getLatestRevision(pagename);
@@ -361,7 +374,7 @@ async function edit(pagename, summary) {
 
     // Edit the page
     return new Promise(resolve => {
-        api.request({
+        const params = {
             'action': 'edit',
             'title': pagename,
             'text': wikitext,
@@ -370,7 +383,9 @@ async function edit(pagename, summary) {
             'basetimestamp': parsed.basetimestamp,
             'starttimestamp': parsed.curtimestamp,
             'token': token
-        }).then(res => {
+        };
+        if (botedit) params.bot = true;
+        api.request(params).then(res => {
             if (res && res.edit) {
                 if (res.edit.result === 'Success') return resolve(true);
             }
