@@ -270,6 +270,7 @@ async function checkBlockStatus(pagename) {
     // Final check before edit
     var modOnly = false; // True if no user is newly blocked but some UserANs need to be modified
     if (UserAN.some(obj => obj.domain || obj.duration)) { // Someone is newly blocked
+        if (UserAN.some(obj => obj.modified)) UserAN.filter(obj => obj.modified).forEach(obj => obj.new = obj.modified);
         UserAN.filter(obj => obj.domain || obj.duration).forEach(obj => { // Get new UserANs to replace old ones with
             const replacee = obj.modified ? obj.modified : obj.old;
             obj.new = replacee.replace(/\|*\}{2}$/, '') + '|' + obj.domain + obj.duration + obj.flags + obj.date + '}}';
