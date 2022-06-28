@@ -307,13 +307,13 @@ async function checkBlockStatus(pagename) {
         if (sections.length > 1) { // If the bot is to mark up UserANs in multiple sections
 
             summary = 'Bot:';
-            const reportsBySection = UserAN.filter(obj => obj.new).reduce((acc, obj, i) => { // {section1: [{ user: username, ...}],
-                if (!acc[obj.section]) acc[obj.section] = [{...obj}];                        //  section2: [{ user: username, ...}],
-                if (i !== 0 && acc[obj.section].every(obj2 => obj2.user !== obj.user)) {     //  ... } ### UserANs to update in each section
-                    acc[obj.section].push({...obj}); // Push the object iff loop cnt != 0 & the relevant username isn't in the array of objects
-                }                                    // (This prevents the output involving the same username: One user could be reported multiple
-                return acc;                          //  times in the same section)
-            }, Object.create(null));
+            const reportsBySection = UserAN.filter(obj => obj.new && (obj.domain || obj.duration)).reduce((acc, obj, i) => {
+                if (!acc[obj.section]) acc[obj.section] = [{...obj}];                       // {section1: [{ user: username, ...}],
+                if (i !== 0 && acc[obj.section].every(obj2 => obj2.user !== obj.user)) {    //  section2: [{ user: username, ...}],
+                    acc[obj.section].push({...obj});                                        //  ... } ### UserANs to update in each section
+                }                                    // Push the object iff loop cnt != 0 & the relevant username isn't in the array of objects
+                return acc;                          // (This prevents the output involving the same username: One user could be reported multiple
+            }, Object.create(null));                 //  times in the same section)
 
             for (let key in reportsBySection) {
                 summary += ` /*${key}*/ `;
