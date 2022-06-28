@@ -10,7 +10,7 @@ const api = new MWBot({
  * @param {string} [templateName] The first letter is case-insensitive
  * @returns {Array}
  */
-module.exports.findTemplates = (wikitext, templateName) => {
+const findTemplates = (wikitext, templateName) => {
 
     // Split the wikitext with '{{', the head delimiter of templates
     const tempInnerContent = wikitext.split('{{'); // Note: tempInnerContent[0] has always nothing to do with templates
@@ -70,6 +70,136 @@ module.exports.findTemplates = (wikitext, templateName) => {
     }
 
     return templates;
+
+};
+module.exports.findTemplates = findTemplates;
+
+/**
+ * Get the parameters of templates as an array
+ * @param {string} template 
+ * @returns {Array} This doesn't contain the template's name
+ */
+const getTemplateParams = template => {
+
+    // If the template doesn't contain '|', it doesn't have params
+    if (template.indexOf('|') === -1) return [];
+
+    // Remove the first '{{' and the last '}}' (or '|}}')
+    const frameRegExp = /(?:^\{{2}|\|*\}{2}$)/g;
+    var params = template.replace(frameRegExp, '');
+
+    // In case the params nest other templates
+    var nested = findTemplates(params);
+    if (nested.length !== 0) {
+        nested = nested.filter(item => { // Sort out templates that don't nest yet other templates (findTemplates() returns both TL1 and TL2
+            return nested.filter(itemN => itemN !== item).every(itemN => itemN.indexOf(item) === -1); // ↳ in {{TL1| {{TL2}} }} ), but we don't need TL2 
+            // ↳ Look at the other elements in the array 'nested' (.filter) and only preserve items that are not part of those items (.every)
+        });
+        nested.forEach((item, i) => {
+            params = params.replaceAll(item, `$TL${i}`); // Replace nested templates with '$TLn'
+        });
+    }
+
+    // Get an array of parameters
+    params = params.split('|'); // This could be messed up if the nested templates hadn't been replaced
+    params.shift(); // Remove the template name
+    if (nested.length !== 0) {
+        params.forEach((item, i) => {
+            var m;
+            if (m = item.match(/\$TL\d+/g)) { // Find all $TLn in the item
+                for (let j = 0; j < m.length; j += 2) {
+                    const index = m[j].match(/\$TL(\d+)/)[1]; // The n in $TLn ((/\$TL\d+/g).exec(item) didn't work, so this is an alternative)
+                    m.splice(j + 1, 0, index); // Push the index at m[j + 1]
+                    const replacee = j === 0 ? item : params[i];
+                    params[i] = replacee.replaceAll(m[j], nested[m[j + 1]]);  // Re-replace delimiters with original templates
+                }
+            }
+        });
+    }
+
+    return params;
+
+};
+module.exports.getTemplateParams = getTemplateParams;
+
+/**
+ * Extract all UserANs with open reports as an array
+ * @param {string} wikitext 
+ * @returns {Array}
+ */
+module.exports.getOpenUserANs = wikitext => {
+
+    if (!wikitext) {
+        console.log('lib.getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
+        return [];
+    }
+
+    // Get all UserANs in the wikitext
+    const templates = lib.findTemplates(wikitext, 'UserAN');
+    if (templates.length === 0) return [];
+
+    // Create an array of objects out of the 'templates' array
+    var UserAN = [];
+    templates.forEach(template => {
+        UserAN.push({
+            'template': template,
+            'closed': true
+        });
+    });
+
+    // RegExps to evaluate the templates' parameters
+    const paramsRegExp = {
+        'bot': /^\s*bot\s*=/, // bot=
+        'type': /^\s*(?:t|[Tt]ype)\s*=/, // t=, type=, or Type=
+        'statusS': /^\s*(?:状態|s|[Ss]tatus)\s*=\s*$/, // 状態=, s=, status=, or Status=
+        'statusSClosed': /^\s*(?:状態|s|[Ss]tatus)\s*=\s*.+/, // Closed statusS
+    };
+
+    // Find UserANs with open reports by evaluating their parameters
+    UserAN.forEach(obj => {
+
+        // Get parameters
+        var params = getTemplateParams(obj.template); // This doesn't include the template name
+        if (params.length === 0) return;
+        params = params.filter(item => !item.match(paramsRegExp.bot)); // Remove bot= parameter if there's any
+
+        /**********************************************************************************************************\
+            A full list of parameter combinations
+                params.length === 1
+                - [(1=)username] (open)
+                params.length === 2
+                - [t=TYPE, (1=)username] (open)
+                - [(1=)username, 状態=] (open)
+                - [(1=)username, 状態=X] (closed) => UserANs with a 状態=X paremeter are always closed
+                - [(1=)username, (2=)無期限] (closed)
+                params.length === 3
+                - [t=TYPE, (1=)username, 状態=] (open)
+                - [t=TYPE, (1=)username, 状態=X] (closed) => UserANs with a 状態=X paremeter are always closed
+                - [t=TYPE, (1=)username, (2=)無期限] (closed)
+                - [(1=)username, 状態=, (2=)無期限] (closed)
+                params.length === 4
+                - [t=TYPE, (1=)username, 状態=, (2=)無期限] (closed)
+            Only UserANs with params in one of the four patterns need to be configured with obj.closed = false
+        \***********************************************************************************************************/
+
+        if (params.filter(item => item.match(paramsRegExp.statusSClosed)).length > 0) return; // 状態=X param is present: Always closed
+        switch(params.length) {
+            case 1: // [(1=)username] (open)
+                obj.closed = false;
+                return;
+            case 2: // [t=TYPE, (1=)username] (open), [(1=)username, 状態=] (open), [(1=)username, (2=)無期限] (closed)
+                if (params.filter(item => item.match(paramsRegExp.type)).length > 0 || // The template has a type param, or
+                    params.filter(item => item.match(paramsRegExp.statusS)).length > 0) { // the template has a 状態= param: The request is open
+                    obj.closed = false;
+                }
+                return;
+            case 3: // [t=TYPE, (1=)username, 状態=] (open), [t=TYPE, (1=)username, (2=)無期限] (closed), [(1=)username, 状態=, (2=)無期限] (closed)
+                if (params.filter(item => item.match(paramsRegExp.type) && item.match(paramsRegExp.statusS)).length > 0) obj.closed = false;
+        }
+
+    });
+
+    return UserAN.filter(obj => !obj.closed).map(obj => obj.template);
 
 };
 
