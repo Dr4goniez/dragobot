@@ -3,6 +3,8 @@ const MWBot = require('mwbot');
 const api = new MWBot({
     apiUrl: my.apiUrl
 });
+const net = require('net');
+const isCidr = require('is-cidr');
 
 /** 
  * Extract templates from wikitext
@@ -135,7 +137,7 @@ module.exports.getOpenUserANs = wikitext => {
     }
 
     // Get all UserANs in the wikitext
-    const templates = lib.findTemplates(wikitext, 'UserAN');
+    const templates = findTemplates(wikitext, 'UserAN');
     if (templates.length === 0) return [];
 
     // Create an array of objects out of the 'templates' array
@@ -341,3 +343,10 @@ module.exports.getWeekDayJa = timestamp => {
     const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
     return daysOfWeek[new Date(timestamp).getDay()];
 };
+
+/**
+ * Check if a string is an IP address
+ * @param {string} ip 
+ * @returns {boolean}
+ */
+module.exports.isIPAddress = ip => net.isIP(ip) || isCidr(ip);
