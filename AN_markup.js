@@ -6,8 +6,6 @@ const api = new MWBot({
     apiUrl: my.apiUrl
 });
 const lib = require('./lib');
-const net = require('net');
-const isCidr = require('is-cidr');
 
 console.log('The bot started running.');
 
@@ -56,12 +54,11 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
             var resBlck;
             if (!res || !res.query) return resolve();
             if ((resBlck = res.query.blocks).length === 0) return resolve();
-            for (const blck of resBlck) {
-                if (blck.reason.indexOf('最近使用したため、自動ブロック') === -1 && lib.compareTimestamps(ts, blck.timestamp) >= 0) {
-                    return resolve(true); // Returns true if someone has been manually blocked since the last run
-                }
+            if (resBlck.some(obj => obj.reason.indexOf('最近使用したため、自動ブロック') === -1 && lib.compareTimestamps(ts, obj.timestamp) >= 0)) {
+                resolve(true); // Returns true if someone has been manually blocked since the last run
+            } else {
+                resolve(false);
             }
-            resolve(false);
         }).catch(() => resolve());
     });
 
@@ -112,36 +109,25 @@ async function checkBlockStatus(pagename) {
     const parsed = await lib.getLatestRevision(pagename);
     if (!parsed) return console.log('Failed to parse the page.');
     const wikitext = parsed.content;
-    const templates = lib.findTemplates(wikitext, 'UserAN'); // Extract all UserAN occurrences from the page content
+    var templates = lib.getOpenUserANs(wikitext);
+    if (templates.length === 0) return;
 
-    // RegExps to evaluate the templates' parameters
-    const paramsRegExp = {
-        'useran': new RegExp('[Uu]serAN'), // Template name: The 1st letter is case-insensitive
-        'user': new RegExp('^\\s*(?:1|[Uu]ser)\\s*='), // Template param: 1=, user=, or User=
-        'type': new RegExp('^\\s*(?:t|[Tt]ype)\\s*='), // Template param: t=, type=, or Type=
-        'status': new RegExp('^\\s*(?:状態|s|[Ss]tatus)\\s*='), // Template param: 状態=, s=, status=, or Status=. ⇓ Closed verson
-        'statusFilled': new RegExp('^\\s*(?:状態|s|[Ss]tatus)\\s*=\\s*(?:(?:not )?done|済(?:み)?|却下|非対処|取り下げ)\\s*$'),
-        'status2': new RegExp('^\\s*2\\s*='), // Template param: 2=
-        'status2Filled': new RegExp('^\\s*2\\s*=(?=.+)'), // 2=USERNAME (closed)
-        'bot': new RegExp('^\\s*bot\\s*='), // bot=
-        'botOptedOut': new RegExp('\\s*bot\\s*=\\s*no\\s*'), // bot=no
-        'section': new RegExp('={2,5}[^\\S\\r\\n]*.+[^\\S\\r\\n]*={2,5}', 'g') // == sectiontitle == (2-5 levels)
-    };
+    // Remove redundant UserANs
     const ignoreThese = [ // Commented out UserANs in the instruction on WP:AN/I
         '{{UserAN|type=IPuser2|111.222.333.444}}',
         '{{UserAN|type=IP2|111.222.333.444}}',
         '{{UserAN|利用者名}}',
         '{{UserAN|type=none|アカウント作成日時 (UTC)}}'
     ];
+    templates = templates.filter(template => !ignoreThese.includes(template));
+    templates = templates.filter(template => !template.match(/\|\s*bot\s*=\s*no/)); // Remove UserANs with a bot=no parameter
 
     // Create an array of objects out of the templates
     for (const tl of templates) {
         UserAN.push({
             'old': tl,
             'new': '',
-            'closed': true,
-            'ignore': false, // If true, ignore the relevant report as though it's not there
-            'markup': true, // If false (bot=no), don't mark up the report
+            'modified': '',
             'timestamp': '',
             'section': '',
             'user': '',
@@ -156,96 +142,56 @@ async function checkBlockStatus(pagename) {
             'date': '',
         });
     }
+    
+    // RegExps to evaluate the templates' parameters
+    const paramsRegExp = {
+        'bot': /'^\s*bot\s*=/, // bot=
+        'user': /^\s*(?:1|[Uu]ser)\s*=/, // Template param: 1=, user=, or User=
+        'type': /^\s*(?:t|[Tt]ype)\s*=/, // Template param: t=, type=, or Type=
+        'statusS': /^\s*(?:状態|s|[Ss]tatus)\s*=/, // Template param: 状態=, s=, status=, or Status=. ⇓ Closed verson
+        'section': /={2,5}[^\S\r\n]*.+[^\S\r\n]*={2,5}/g // == sectiontitle == (2-5 levels)
+    };
 
-    // Find UserANs with open reports by evaluating their parameters
+    // Set the 'type', 'user', 'section', and 'timestamp' properties of the object
     UserAN.forEach(obj => {
 
-        // Get the names of the sections that the UserAN belongs to
-        const mtch = lib.splitInto2(wikitext, obj.old, true)[0].match(paramsRegExp.section); // Split the srctxt at tpl and get the last section title in arr[0]
-        if (mtch) obj.section = mtch[mtch.length - 1].replace(/^={2,5}[^\S\r\n]*/, '').replace(/[^\S\r\n]*={2,5}$/, ''); // .replace removes '='s
-
-        // Ignore UserANs that are ungrammatical or for instructions
-        if (obj.old.indexOf('|') === -1 || ignoreThese.includes(obj.old)) {
-            obj.ignore = true;
-            return;
-        }
-
-        // Don't mark up UserAN with a bot=no parameter
-        if (obj.old.match(paramsRegExp.botOptedOut)) obj.markup = false;
-
-        // Get an array of parameters
-        var params = obj.old.replace(/^\{{2}/, '').replace(/\|*\}{2}$/, ''); // Remove the first '{{' and the last '}}' (or '|}}')
-        params = params.split('|');
-        params = params.filter(item => !item.match(paramsRegExp.bot)); // Remove bot= parameter if there's any
-        if (!params.every(item => !item.match(/\{{2}.+\}{2}/))) { // Don't look at UserANs that nest some other templates
-            obj.ignore = true;
-            return;
-        }
+        var params = lib.getTemplateParams(obj.old);
+        params = params.filter(item => !item.match(paramsRegExp.bot) && !item.match(paramsRegExp.statusS)); // Remove bot= and 状態= params
 
         /**********************************************************************************************************\
-            A full list of parameter combinations
-                params.length === 2
-                - {{UserAN|username}} (open)
-                params.length === 3
-                - {{UserAN|t=TYPE|username}} (open)
-                - {{UserAN|username|状態=}} (open)
-                - {{UserAN|username|状態=X}} (closed) => UserANs with a 状態=X paremeter are always closed
-                - {{UserAN|username|無期限}} (closed)
-                params.length === 4
-                - {{UserAN|t=TYPE|username|状態=}} (open)
-                - {{UserAN|t=TYPE|username|状態=X}} (closed) => UserANs with a 状態=X paremeter are always closed
-                - {{UserAN|t=TYPE|username|無期限}} (closed)
-                - {{UserAN|username|状態=|無期限}} (closed)
-                params.length === 5
-                - {{UserAN|t=TYPE|username|状態=|無期限}} (closed)
-            Only UserANs with params in one of the four patterns need to be configured with obj.closed = false
-        \***********************************************************************************************************/
-
-        if (params.filter(item => item.match(paramsRegExp.statusFilled)).length > 0) return; // 状態=X param is present: Always closed
-        switch(params.length) {
-            case 2: // {{UserAN|username}} (open)
-                obj.closed = false;
-                return;
-            case 3: // {{UserAN|t=TYPE|(1=)username}} (open), {{UserAN|(1=)username|状態=}} (open), {{UserAN|(1=)username|(2=)無期限}} (closed) 
-                if (params.filter(item => item.match(paramsRegExp.type)).length > 0 || // The template has a type param, or
-                    params.filter(item => item.match(paramsRegExp.status)).length > 0) { // the template has a 状態= param: The request is open
-                    obj.closed = false;
-                }
-                return;
-            case 4: // {{UserAN|t=TYPE|username|状態=}} (open), {{UserAN|t=TYPE|username|無期限}} (closed), {{UserAN|username|状態=|無期限}} (closed)
-                if (params.filter(item => item.match(paramsRegExp.type) && item.match(paramsRegExp.status)).length > 0) obj.closed = false;
-        }
-
-    }); // At this point each object in the array UserAN has either obj.closed = false or obj.closed = true
-
-    // Set the 'type', 'user', and 'timestamp' properties of the object
-    UserAN.filter(obj => !obj.closed).forEach(obj => { // Only look at open ones (or the code would be unnecessarily complex)
-
-        var params = obj.old.replace(/^\{{2}/, '').replace(/\|*\}{2}$/, '').split('|');
-        params = params.filter(item => !item.match(paramsRegExp.useran) && !item.match(paramsRegExp.status)); // Remove the UserAN and 状態= params
-
-        /**********************************************************************************************************\
-            A full list of parameter combinations at this point
-                {{UserAN|usename}} => {{username}}
-                {{UserAN|username|状態=}} => {{username}}
-                {{UserAN|t=TYPE|username}} => {{t=TYPE|username}}
-                {{UserAN|t=TYPE|username|状態=}} => {{t=TYPE|username}}
+            A full list of open UserANs' parameter combinations
+                [(1=)username]
+                [(1=)username, 状態=] => [(1=)username]
+                [t=TYPE, (1=)username]
+                [t=TYPE, (1=)username, 状態=] => [t=TYPE, (1=)username]
             Now we can differentiate these four in whether they have a t= param
         \***********************************************************************************************************/
+
+        if (params.length > 2) return; // Contains an undefined parameter
 
         if (params.filter(item => item.match(paramsRegExp.type)).length === 0) { // If the template doesn't have a t= param
             obj.type = 'user2';
             obj.user = params[0].replace(/\u200e/g, '').trim();
         } else { // If the template has a t= param
-            obj.type = params.filter(item => item.match(paramsRegExp.type))[0].replace(paramsRegExp.type, '').toLowerCase();
-            const userParam = params.filter(item => !item.match(paramsRegExp.type))[0].replace(/\u200e/g, '').trim();
-            switch(obj.type) {
+            obj.type = params.filter(item => item.match(paramsRegExp.type))[0].replace(paramsRegExp.type, '').replace(/\u200e/g, '').trim().toLowerCase();
+            const userParam = params.filter(item => !item.match(paramsRegExp.type))[0].replace(paramsRegExp.user, '').replace(/\u200e/g, '').trim();
+            switch (obj.type) {
                 case 'user2':
                 case 'unl':
                 case 'usernolink':
+                    obj.user = userParam;
+                    if (lib.isIPAddress(userParam)) {
+                        obj.modified = `{{UserAN|t=IP2|${userParam}}}`;
+                        obj.type = 'ip2';
+                    }
+                    break;
                 case 'ip2':
                 case 'ipuser2':
                     obj.user = userParam;
+                    if (!lib.isIPAddress(userParam)) {
+                        obj.modified = `{{UserAN|${userParam}}}`;
+                        obj.type = 'user2';
+                    }
                     break;
                 case 'log':
                 case 'logid':
@@ -259,12 +205,17 @@ async function checkBlockStatus(pagename) {
                     obj.none = userParam;
                     break;
                 default: // Invalid type
+                    if (lib.isIPAddress(userParam)) {
+                        obj.user = userParam;
+                        obj.type = 'ip2';
+                        obj.modified = `{{UserAN|t=IP2|${userParam}}}`;
+                    }
             }
         }
 
         // Get a timestamp for obj
         const wtSplit = lib.splitInto2(wikitext, obj.old, true); // Split the source text at the template and find the first signature following it
-        var ts = wtSplit[1].match(/(\d{4})年(\d{1,2})月(\d{1,2})日 \((?:日|月|火|水|木|金|土)\) (\d{2}:\d{2}) \(UTC\)/); // YYYY年MM月DD日 (日) hh:mm (UTC)
+        var ts = wtSplit[1].match(/(\d{4})年(\d{1,2})月(\d{1,2})日 \(.{1}\) (\d{2}:\d{2}) \(UTC\)/); // YYYY年MM月DD日 (日) hh:mm (UTC)
         if (!ts) return;
         for (let i = 2; i <= 3; i++) {
             ts[i] = ts[i].length === 1 ? '0' + ts[i] : ts[i]; // MM and DD may be of one digit but they need to be of two digits
@@ -272,12 +223,16 @@ async function checkBlockStatus(pagename) {
         ts = `${ts[1]}-${ts[2]}-${ts[3]}T${ts[4]}:00Z`; // YYYY-MM-DDThh:mm:00Z (hh:mm is one capturing group)
         obj.timestamp = ts;
 
+        // Get a section title
+        const mtch = lib.splitInto2(wikitext, obj.old)[0].match(paramsRegExp.section); // Split the srctxt at tpl and get the last section title in arr[0]
+        if (mtch) obj.section = mtch[mtch.length - 1].replace(/(^={2,5}[^\S\r\n]*|[^\S\r\n]*={2,5}$)/g, ''); // Remove '='s
+
     });
+    UserAN = UserAN.filter(obj => obj.user || obj.logid || obj.diff); // Remove UserANs that can't be forwarded to block check
 
     // Get an array of logids and diff numbers (these need to be converted to usernames through API requests before block check)
-    const needBlockCheck = obj => !obj.closed && !obj.ignore && obj.markup;
-    const logids = UserAN.filter(obj => needBlockCheck(obj) && obj.logid && !obj.user && !Logids[obj.logid]).map(obj => obj.logid);
-    const diffs = UserAN.filter(obj => needBlockCheck(obj) && obj.diff && !obj.user && !Diffs[obj.diff]).map(obj => obj.diff);
+    const logids = UserAN.filter(obj => obj.logid && !obj.user && !Logids[obj.logid]).map(obj => obj.logid);
+    const diffs = UserAN.filter(obj => obj.diff && !obj.user && !Diffs[obj.diff]).map(obj => obj.diff);
 
     // Convert logids and diffids to usernames through API queries (for logids, only search for the latest 5000 logevents)
     var queries = [];
@@ -289,10 +244,9 @@ async function checkBlockStatus(pagename) {
     });
 
     // Sort registered users and IPs
-    const isIPAddress = ip => net.isIP(ip) || isCidr(ip);
-    var users = UserAN.filter(obj => needBlockCheck(obj) && obj.user).map(obj => obj.user);
-    const ips = users.filter(username => isIPAddress(username)); // An array of IPs
-    users = users.filter(username => !isIPAddress(username)); // An array of registered users
+    var users = UserAN.filter(obj => obj.user).map(obj => obj.user);
+    const ips = users.filter(username => lib.isIPAddress(username)); // An array of IPs
+    users = users.filter(username => !lib.isIPAddress(username)); // An array of registered users
 
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
@@ -303,9 +257,9 @@ async function checkBlockStatus(pagename) {
 
     // Check if the users and IPs in the arrays are globally (b)locked
     if (checkGlobal) {
-        let gUsers = UserAN.filter(obj => needBlockCheck(obj) && obj.user && !obj.duration).map(obj => obj.user); // Only check users that aren't locally blocked
-        const gIps = gUsers.filter(username => isIPAddress(username));
-        gUsers = gUsers.filter(username => !isIPAddress(username));
+        let gUsers = UserAN.filter(obj => obj.user && !obj.duration).map(obj => obj.user); // Only check users that aren't locally blocked
+        const gIps = gUsers.filter(username => lib.isIPAddress(username));
+        gUsers = gUsers.filter(username => !lib.isIPAddress(username));
         queries = [];
         queries.push(getLockedUsers(gUsers), getGloballyBlockedIps(gIps));
         await Promise.all(queries);
@@ -316,20 +270,9 @@ async function checkBlockStatus(pagename) {
     // Final check before edit
     if (UserAN.filter(obj => obj.domain || obj.duration).length === 0) return console.log('Procedure cancelled: There\'s no UserAN to update.');
     UserAN.filter(obj => obj.domain || obj.duration).forEach(obj => { // Get new UserANs to replace old ones with
-        obj.new = obj.old.replace(/\|*\}{2}$/, '') + '|' + obj.domain + obj.duration + obj.flags + obj.date + '}}';
+        const replacee = obj.modified ? obj.modified : obj.old;
+        obj.new = replacee.replace(/\|*\}{2}$/, '') + '|' + obj.domain + obj.duration + obj.flags + obj.date + '}}';
     });
-
-    // Check how many UserANs are in each section
-    const replacerCnt = UserAN.filter(obj => obj.new).reduce((acc, obj) => { // Create object {sectionTitle: cnt, sectionTitle2: cnt2...}
-        if (!acc[obj.section]) acc[obj.section] = 0;                          // This object counts how many UserANs are to be updated in each section
-        acc[obj.section]++;
-        return acc;
-    }, Object.create(null));
-    const openReportsCnt = UserAN.filter(obj => !obj.ignore).reduce((acc, obj) => { // This stores the number of open reports in each section
-        if (!acc[obj.section]) acc[obj.section] = 0;
-        if (!obj.closed && !obj.new) acc[obj.section]++;
-        return acc;
-    }, Object.create(null));
 
     // Get summary
     const getUserLink = (obj) => {
@@ -348,8 +291,11 @@ async function checkBlockStatus(pagename) {
             return `[[特別:差分/${obj.diff}|差分/${obj.diff}]]の投稿者 (${obj.domain}${obj.duration})`;
         }
     };
+
     var summary = '';
-    if (Object.keys(replacerCnt).length > 1) { // If the bot is to mark up UserANs in multiple sections
+    const sections = UserAN.filter(obj => obj.new).map(obj => obj.section).filter((item, i, arr) => arr.indexOf(item) === i);
+    if (sections.length > 1) { // If the bot is to mark up UserANs in multiple sections
+
         summary += 'Bot:';
         const reportsBySection = UserAN.filter(obj => obj.new).reduce((acc, obj, i) => { // {section1: [{ user: username, ...}],
             if (!acc[obj.section]) acc[obj.section] = [{...obj}];                        //  section2: [{ user: username, ...}],
@@ -358,6 +304,7 @@ async function checkBlockStatus(pagename) {
             }                                    // (This prevents the output involving the same username: One user could be reported multiple
             return acc;                          //  times in the same section)
         }, Object.create(null));
+
         for (let key in reportsBySection) {
             summary += ` /*${key}*/ `;
             const bool = reportsBySection[key].every((obj, i) => {
@@ -370,10 +317,11 @@ async function checkBlockStatus(pagename) {
                     return false; // Exit the loop
                 }
             });
-            // summary += ` (未${openReportsCnt[key]})`;
             if (!bool) break; // array.every() returned false, which means the summary reached the word count limit
         }
+
     } else { // If the bot is to mark up UserANs in one section
+
         const userlinksArr = [];
         UserAN.filter(obj => obj.new).forEach((obj, i) => {
             const userlink = getUserLink(obj);
@@ -382,7 +330,8 @@ async function checkBlockStatus(pagename) {
                 userlinksArr.push(userlink);
             }
         });
-        summary = `/*${Object.keys(replacerCnt)[0]}*/ Bot: ` + summary;// + ` (未${openReportsCnt[Object.keys(replacerCnt)[0]]})`;
+        summary = `/*${sections[0]}*/ Bot: ` + summary;
+
     }
 
     // Edit the relevant page
@@ -418,7 +367,6 @@ async function edit(pagename, summary) {
             'text': wikitext,
             'summary': summary,
             'minor': true,
-            //'bot': true,
             'basetimestamp': parsed.basetimestamp,
             'starttimestamp': parsed.curtimestamp,
             'token': token
@@ -571,13 +519,13 @@ async function getBlockedIps(ipsArr) {
                       hardblock = !resBlck.anononly,
                       partial = resBlck.restrictions && !Array.isArray(resBlck.restrictions),
                       indef = resBlck.expiry === 'infinity',
-                      rangeBlocked = resBlck.user !== ip && resBlck.user.substring(resBlck.user.length - 3) !== ip.substring(ip.length - 3);
+                      rangeblock = resBlck.user !== ip && resBlck.user.substring(resBlck.user.length - 3) !== ip.substring(ip.length - 3);
                 UserAN.forEach(obj => {
                     if (obj.user === ip) {
                         const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true) >= 0;
                         if (newlyReported) {
                             obj.duration = indef ? '無期限' : lib.getDuration(resBlck.timestamp, resBlck.expiry);
-                            if (rangeBlocked) obj.duration = resBlck.user.substring(resBlck.user.length - 3) + 'で' + obj.duration;
+                            if (rangeblock) obj.duration = resBlck.user.substring(resBlck.user.length - 3) + 'で' + obj.duration;
                             obj.date = getBlockedDate(resBlck.timestamp);
                             obj.domain = partial ? '部分ブロック ' : '';
                             if (nousertalk && noemail) {
