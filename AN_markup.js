@@ -333,7 +333,7 @@ async function checkBlockStatus(pagename) {
         } else { // If the bot is to mark up UserANs in one section
 
             const userlinksArr = [];
-            UserAN.filter(obj => obj.new).forEach((obj, i) => {
+            UserAN.filter(obj => obj.new && (obj.domain || obj.duration)).forEach((obj, i) => {
                 const userlink = getUserLink(obj);
                 if (!userlinksArr.includes(userlink)) { // Prevent the same links from being displayed
                     summary += (i === 0 ? userlink : ', ' + userlink);
