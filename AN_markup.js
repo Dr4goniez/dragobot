@@ -22,7 +22,7 @@ const token = await api.loginGetEditToken({
 }).then(res => {
     if (!res) return console.log('An unexpected error occurred on login attempt.');
     return res.csrftoken;
-}).catch((err) => console.log(err.login.reason));
+}).catch((err) => console.log(err.response.login.reason));
 if (!token) return;
 
 // Pages to maintain
