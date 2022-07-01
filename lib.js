@@ -110,7 +110,7 @@ const getTemplateParams = template => {
             var m;
             if (m = item.match(/\$TL\d+/g)) { // Find all $TLn in the item
                 for (let j = 0; j < m.length; j += 2) {
-                    const index = m[j].match(/\$TL(\d+)/)[1]; // The n in $TLn ((/\$TL\d+/g).exec(item) didn't work, so this is an alternative)
+                    const index = m[j].match(/\$TL(\d+)/)[1];
                     m.splice(j + 1, 0, index); // Push the index at m[j + 1]
                     const replacee = j === 0 ? item : params[i];
                     params[i] = replacee.replaceAll(m[j], nested[m[j + 1]]);  // Re-replace delimiters with original templates
