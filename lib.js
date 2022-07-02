@@ -3,6 +3,7 @@ const MWBot = require('mwbot');
 const api = new MWBot({
     apiUrl: my.apiUrl
 });
+module.exports.api = api;
 const net = require('net');
 const isCidr = require('is-cidr');
 

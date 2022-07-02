@@ -1,10 +1,6 @@
 /********************** DEPENDENCIES **********************/
 
 const my = require('./my');
-const MWBot = require('mwbot');
-const api = new MWBot({
-    apiUrl: my.apiUrl
-});
 const lib = require('./lib');
 
 console.log('The bot started running.');
@@ -16,7 +12,7 @@ console.log('The bot started running.');
 /********************** STARTUP FUNCTION **********************/
 
 // Login
-const token = await api.loginGetEditToken({
+const token = await lib.api.loginGetEditToken({
     username: my.username,
     password: my.password
 }).then(res => {
@@ -44,7 +40,7 @@ const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {dif
 
     // Function to check if the bot should run
     const checkNewBlocks = ts => new Promise(resolve => {
-        api.request({
+        lib.api.request({
             'action': 'query',
             'list': 'blocks',
             'bklimit': 50,
@@ -387,7 +383,7 @@ async function edit(pagename, summary, botedit) {
             'token': token
         };
         if (botedit) params.bot = true;
-        api.request(params).then(res => {
+        lib.api.request(params).then(res => {
             if (res && res.edit) {
                 if (res.edit.result === 'Success') return resolve(true);
             }
@@ -409,7 +405,7 @@ async function convertLogidsToUsernames(arr) {
     function logidQuery(lecontinue) {
         cnt++;
         return new Promise(resolve => {
-            api.request({
+            lib.api.request({
                 'action': 'query',
                 'list': 'logevents',
                 'leprop': 'ids|user',
@@ -437,7 +433,7 @@ async function convertLogidsToUsernames(arr) {
 async function convertDiffidsToUsernames(arr) {
     if (arr.length === 0) return [];
     return new Promise(resolve => {
-        api.request({
+        lib.api.request({
             'action': 'query',
             'revids': arr.slice(0, 500).join('|'),
             'prop': 'revisions',
@@ -469,7 +465,7 @@ async function getBlockedUsers(usersArr) {
 
     function blockQuery(arr) {
         return new Promise(resolve => {
-            api.request({
+            lib.api.request({
                 'action': 'query',
                 'list': 'blocks',
                 'bklimit': 'max',
@@ -519,7 +515,7 @@ async function getBlockedIps(ipsArr) {
 
     function blockQuery(ip) {
         return new Promise(resolve => {
-            api.request({
+            lib.api.request({
                 'action': 'query',
                 'list': 'blocks',
                 'bklimit': 1,
@@ -573,7 +569,7 @@ async function getLockedUsers(regUsersArr) {
     if (regUsersArr.length === 0)  return [];
 
     const glockQuery = user => new Promise(resolve => {
-        api.request({
+        lib.api.request({
             action: 'query',
             list: 'globalallusers',
             agulimit: 1,
@@ -609,7 +605,7 @@ async function getGloballyBlockedIps(arr) {
 
     const gblockQuery = ip => {
         return new Promise(resolve => {
-            api.request({
+            lib.api.request({
                 'action': 'query',
                 'list': 'globalblocks',
                 'bgip': ip,
