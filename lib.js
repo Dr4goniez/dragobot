@@ -6,6 +6,50 @@ const api = new MWBot({
 const net = require('net');
 const isCidr = require('is-cidr');
 
+
+// ****************************** ASYNCHRONOUS FUNCTIONS ******************************
+
+/**
+ * @param {string} pagename
+ * @returns {Promise<boolean|{basetimestamp: string, curtimestamp: string, content: string, revid: string}>} False if page doesn't exit, or else an object
+ */
+module.exports.getLatestRevision = pagename => {
+    return new Promise(resolve => {
+        api.request({
+            action: 'query',
+            titles: pagename,
+            prop: 'revisions',
+            rvprop: 'ids|timestamp|content',
+            rvslots: 'main',
+            curtimestamp: 1,
+            formatversion: 2
+        }).then(res => {
+            if (!res || !res.query) return resolve();
+            const resPages = res.query.pages;
+            if (resPages.length === 0) return resolve();
+            if (resPages[0].missing) return resolve(false);
+            const resRev = resPages[0].revisions[0];
+            resolve({
+                'basetimestamp': resRev.timestamp,
+                'curtimestamp': res.curtimestamp,
+                'content': resRev.slots.main.content,
+                'originalContent': JSON.parse(JSON.stringify(resRev.slots.main.content)),
+                'revid': resRev.revid.toString()
+            });
+        }).catch(() => resolve());
+    });
+};
+
+/**
+ * Make an intentional N-millisecond delay (must be awaited)
+ * @param {number} milliseconds
+ * @returns {Promise}
+ */
+module.exports.delay = milliseconds => new Promise(resolve =>  setTimeout(resolve, milliseconds));
+
+
+// ****************************** SYNCHRONOUS FUNCTIONS ******************************
+
 /** 
  * Extract templates from wikitext
  * @param {string} wikitext
@@ -221,37 +265,6 @@ module.exports.splitInto2 = (str, delimiter, lastindex) => {
 };
 
 /**
- * @param {string} pagename
- * @returns {Promise<boolean|{basetimestamp: string, curtimestamp: string, content: string, revid: string}>} False if page doesn't exit, or else an object
- */
-module.exports.getLatestRevision = pagename => {
-    return new Promise(resolve => {
-        api.request({
-            action: 'query',
-            titles: pagename,
-            prop: 'revisions',
-            rvprop: 'ids|timestamp|content',
-            rvslots: 'main',
-            curtimestamp: 1,
-            formatversion: 2
-        }).then(res => {
-            if (!res || !res.query) return resolve();
-            const resPages = res.query.pages;
-            if (resPages.length === 0) return resolve();
-            if (resPages[0].missing) return resolve(false);
-            const resRev = resPages[0].revisions[0];
-            resolve({
-                'basetimestamp': resRev.timestamp,
-                'curtimestamp': res.curtimestamp,
-                'content': resRev.slots.main.content,
-                'originalContent': JSON.parse(JSON.stringify(resRev.slots.main.content)),
-                'revid': resRev.revid.toString()
-            });
-        }).catch(() => resolve());
-    });
-};
-
-/**
  * @param {string} timestamp1 
  * @param {string} timestamp2 
  * @param {boolean} [rewind5minutes] if true, rewind timestamp1 by 5 minutes
@@ -311,13 +324,6 @@ module.exports.getDuration = (timestamp1, timestamp2) => {
     }
 
 };
-
-/**
- * Make an intentional N-millisecond delay (must be awaited)
- * @param {number} milliseconds
- * @returns {Promise}
- */
-module.exports.delay = milliseconds => new Promise(resolve =>  setTimeout(resolve, milliseconds));
 
 /**
  * Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!')
