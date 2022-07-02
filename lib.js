@@ -11,6 +11,23 @@ const isCidr = require('is-cidr');
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
 
 /**
+ * Log in and get an edit token
+ * @param {boolean} [experiment] If true, get a token for the test account
+ * @returns {Promise<string>} token
+ */
+module.exports.getToken = experiment => {
+    return new Promise(resolve => {
+        api.loginGetEditToken({
+            username: experiment ? my.username2 : my.username,
+            password: experiment ? my.password2 : my.password
+        }).then(res => {
+            if (!res) return resolve(console.log('An unexpected error occurred on login attempt.'));
+            resolve(res.csrftoken);
+        }).catch((err) => resolve(console.log(err.response.login.reason)));
+    });
+};
+
+/**
  * @param {string} pagename
  * @returns {Promise<boolean|{basetimestamp: string, curtimestamp: string, content: string, revid: string}>} False if page doesn't exit, or else an object
  */
