@@ -350,3 +350,17 @@ module.exports.getWeekDayJa = timestamp => {
  * @returns {boolean}
  */
 module.exports.isIPAddress = ip => net.isIP(ip) || isCidr(ip);
+
+/**
+ * Check if a string is an IPv4 address
+ * @param {string} ip 
+ * @returns {boolean}
+ */
+module.exports.isIPv4 = ip => net.isIPv4(ip) || isCidr.v4(ip);
+
+/**
+ * Check if a string is an IPv6 address
+ * @param {string} ip 
+ * @returns {boolean}
+ */
+module.exports.isIPv6 = ip => net.isIPv6(ip) || isCidr.v6(ip);
