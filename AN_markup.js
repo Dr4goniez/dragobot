@@ -174,7 +174,8 @@ async function checkBlockStatus(pagename) {
             obj.user = params[0].replace(/\u200e/g, '').trim();
         } else { // If the template has a t= param
             obj.type = params.filter(item => item.match(paramsRegExp.type))[0].replace(paramsRegExp.type, '').replace(/\u200e/g, '').trim().toLowerCase();
-            const userParam = params.filter(item => !item.match(paramsRegExp.type))[0].replace(paramsRegExp.user, '').replace(/\u200e/g, '').trim();
+            var userParam = params.filter(item => !item.match(paramsRegExp.type))[0].replace(paramsRegExp.user, '').replace(/\u200e/g, '').trim();
+            if (lib.isIPv6(userParam)) userParam = userParam.toUpperCase();
             switch (obj.type) {
                 case 'user2':
                 case 'unl':
