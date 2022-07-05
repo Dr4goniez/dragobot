@@ -15,14 +15,14 @@ const token = await lib.getToken();
 if (!token) return;
 
 // Pages to maintain
-const ANI = 'Wikipedia:管理者伝言板/投稿ブロック';
-const ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット';
-const AN3RR = 'Wikipedia:管理者伝言板/3RR';
-const Iccic = 'Wikipedia:進行中の荒らし行為/長期/Iccic/投稿ブロック依頼';
-const ISECHIKA = 'Wikipedia:管理者伝言板/投稿ブロック/いせちか';
-const KAGE = 'Wikipedia:管理者伝言板/投稿ブロック/影武者';
-const KIYOSHIMA = 'Wikipedia:管理者伝言板/投稿ブロック/清島達郎';
-const SHINJU = 'Wikipedia:管理者伝言板/投稿ブロック/真珠王子';
+const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
+      ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット',
+      AN3RR = 'Wikipedia:管理者伝言板/3RR',
+      Iccic = ANS + '/Iccic',
+      ISECHIKA = ANS + '/いせちか',
+      KAGE = ANS + '/影武者',
+      KIYOSHIMA = ANS + '/清島達郎',
+      SHINJU = ANS + '/真珠王子';
 
 // Across-the-function variables
 var UserAN = [], checkGlobal = false;
