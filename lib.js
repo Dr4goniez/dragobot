@@ -68,15 +68,32 @@ module.exports.delay = milliseconds => new Promise(resolve =>  setTimeout(resolv
 
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
 
+/**
+ * Remove parts enclosed by comment-out tags and the like from a string
+ * @param {string} str 
+ * @returns {string}
+ */
+const removeCommentsFromString = str => {
+    var removed = JSON.parse(JSON.stringify(str));
+    removed = removed.replace(/<!--[\s\S]*?-->/gm, '');
+    removed = removed.replace(/<nowiki>[\s\S]*?<\/nowiki>/gm, '');
+    removed = removed.replace(/<pre[\s\S]*?<\/pre>/gm, '');
+    removed = removed.replace(/<syntaxhighlight[\s\S]*?<\/syntaxhighlight>/gm, '');
+    removed = removed.replace(/<source[\s\S]*?<\/source>/gm, '');
+    return removed;
+};
+module.exports.removeCommentsFromString = removeCommentsFromString;
+
 /** 
  * Extract templates from wikitext
- * @param {string} wikitext
+ * @param {string} content
  * @param {string} [templateName] The first letter is case-insensitive
  * @returns {Array}
  */
-const findTemplates = (wikitext, templateName) => {
+const findTemplates = (content, templateName) => {
 
     // Split the wikitext with '{{', the head delimiter of templates
+    const wikitext = removeCommentsFromString(content);
     const tempInnerContent = wikitext.split('{{'); // Note: tempInnerContent[0] has always nothing to do with templates
     if (tempInnerContent.length === 0) return [];
     var templates = [];
