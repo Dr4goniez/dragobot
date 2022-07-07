@@ -102,13 +102,6 @@ async function checkBlockStatus(pagename) {
     if (templates.length === 0) return;
 
     // Remove redundant UserANs
-    const ignoreThese = [ // Commented out UserANs in the instruction on WP:AN/I
-        '{{UserAN|type=IPuser2|111.222.333.444}}',
-        '{{UserAN|type=IP2|111.222.333.444}}',
-        '{{UserAN|利用者名}}',
-        '{{UserAN|type=none|アカウント作成日時 (UTC)}}'
-    ];
-    templates = templates.filter(template => !ignoreThese.includes(template));
     templates = templates.filter(template => !template.match(/\|\s*bot\s*=\s*no/)); // Remove UserANs with a bot=no parameter
 
     // Create an array of objects out of the templates
