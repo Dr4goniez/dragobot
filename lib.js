@@ -68,71 +68,57 @@ module.exports.delay = milliseconds => new Promise(resolve =>  setTimeout(resolv
 
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
 
-/**
- * Remove parts enclosed by comment-out tags and the like from a string
- * @param {string} str 
- * @returns {string}
- */
-const removeCommentsFromString = str => {
-    var removed = JSON.parse(JSON.stringify(str));
-    removed = removed.replace(/<!--[\s\S]*?-->/gm, '');
-    removed = removed.replace(/<nowiki>[\s\S]*?<\/nowiki>/gm, '');
-    removed = removed.replace(/<pre[\s\S]*?<\/pre>/gm, '');
-    removed = removed.replace(/<syntaxhighlight[\s\S]*?<\/syntaxhighlight>/gm, '');
-    removed = removed.replace(/<source[\s\S]*?<\/source>/gm, '');
-    return removed;
-};
-module.exports.removeCommentsFromString = removeCommentsFromString;
-
 /** 
  * Extract templates from wikitext
- * @param {string} content
- * @param {string} [templateName] The first letter is case-insensitive
+ * @param {string} wikitext the wikitext from which templates are extracted
+ * @param {string|Array} [templateName] sort out templates by these template names
+ * @param {string|Array} [templatePrefix] sort out templates by these template prefixes
  * @returns {Array}
  */
-const findTemplates = (content, templateName) => {
+function findTemplates(wikitext, templateName, templatePrefix) {
 
-    // Split the wikitext with '{{', the head delimiter of templates
-    const wikitext = removeCommentsFromString(content);
-    const tempInnerContent = wikitext.split('{{'); // Note: tempInnerContent[0] has always nothing to do with templates
-    if (tempInnerContent.length === 0) return [];
-    var templates = [];
-    const nest = []; // Stores the element number of tempInnerContent if the element involves nested templates
+    // Create an array by splitting the original content with '{{'
+    const tempInnerContents = wikitext.split('{{'); // Note: tempInnerContents[0] is always an empty string or a string that has nothing to do with templates
+    if (tempInnerContents.length === 0) return [];
 
     // Extract templates from the wikitext
-    for (let i = 1; i < tempInnerContent.length; i++) {
+    var templates = [];
+    const nest = [];
+    tempInnerContents.forEach((tempInnerContent, i, arr) => { // Loop through all elements in tempInnerContents (except tempInnerContents[0])
 
-        let tempTailCnt = (tempInnerContent[i].match(/\}\}/g) || []).length; // The number of '}}' in the split segment
-        let temp = ''; // Temporary escape hatch
+        if (i === 0) return;
 
-        // The split segment not having any '}}' (= it nests another template)
+        const tempTailCnt = (tempInnerContent.match(/\}\}/g) || []).length; // The number of '}}' in the split array
+        var temp = ''; // Temporary escape hatch
+
+        // There's no '}}' (= nesting other templates)
         if (tempTailCnt === 0) {
 
-            nest.push(i); // Push the element number into the array
+            nest.push(i); // Save the index of the element in the array
 
-        // The split segment itself is the whole inner content of one template
+        // There's one '}}' in the element of the array (= the left part of '}}' is the whole of the template's parameters)
         } else if (tempTailCnt === 1) {
 
-            temp = '{{' + tempInnerContent[i].split('}}')[0] + '}}';
+            temp = '{{' + tempInnerContent.split('}}')[0] + '}}';
             if (!templates.includes(temp)) templates.push(temp);
 
-        // The split segment is part of more than one template (e.g. TL2|...}}...}} )
+        // There're two or more '}}'s (e.g. 'TL2|...}}...}}'; = templates are nested)
         } else {
 
-            for (let j = 0; j < tempTailCnt; j++) { // Loop through all the nests
+            for (let j = 0; j < tempTailCnt; j++) {
 
                 if (j === 0) { // The innermost template
 
-                    temp = '{{' + tempInnerContent[i].split('}}')[j] + '}}'; // Same as when tempTailCnt === 1
+                    temp = '{{' + tempInnerContent.split('}}')[j] + '}}'; // Same as when there's one '}}' in the element
                     if (!templates.includes(temp)) templates.push(temp);
 
-                } else { // Nesting templates
+                } else { // Multi-nested template(s)
 
-                    const elNum = nest[nest.length -1]; // The start of the nesting template
-                    nest.pop();
-                    const nestedTempInnerContent = tempInnerContent[i].split('}}');
+                    const elNum = nest[nest.length -1]; // The index of the element that involves the start of the nest
+                    nest.pop(); // The index won't be reused after reference
+                    const nestedTempInnerContent = tempInnerContent.split('}}'); // Create another array by splitting with '}}'
 
-                    temp = '{{' + tempInnerContent.slice(elNum, i).join('{{') + '{{' + nestedTempInnerContent.slice(0, j + 1).join('}}') + '}}';
+                    temp = '{{' + arr.slice(elNum, i).join('{{') + '{{' + nestedTempInnerContent.slice(0, j + 1).join('}}') + '}}';
                     if (!templates.includes(temp)) templates.push(temp);
 
                 }
@@ -141,26 +127,78 @@ const findTemplates = (content, templateName) => {
 
         }
 
+    }); // All templates in the wikitext is stored in 'templates' when the loop is done
+
+    // Remove templates that are part of comments
+    const co = extractCommentOuts(wikitext);
+    if (co) {
+        co.forEach(item => {
+            templates = templates.filter(template => item.indexOf(template) === -1);
+        });
     }
 
-    // Check if the optional parameter is specified
-    if (templateName && templates.length !== 0) {
-        const caseInsensitiveFirstLetter = str => '[' + str.substring(0, 1).toUpperCase() + str.substring(0, 1).toLowerCase() + ']';
-        const templateRegExp = new RegExp('^\\s*\{\{\\s*' + caseInsensitiveFirstLetter(templateName) + templateName.substring(1));
-        templates = templates.filter(item => item.match(templateRegExp)); // Only leave the specified template in the array
+    // End here if the templates don't need to be sorted
+    if ((!templateName && !templatePrefix) || templates.length === 0) return templates;
+
+    // Convert passed parameters to arrays if they are strings
+    if (templateName && typeof templateName === 'string') templateName = [templateName];
+    if (templatePrefix && typeof templatePrefix === 'string') templatePrefix = [templatePrefix];
+
+    /**
+     * Function to create a regex that makes the first character of a template case-insensitive
+     * @param {string} str 
+     * @returns {string} [Xx]
+     */
+    const caseInsensitiveFirstLetter = str => '[' + str.substring(0, 1).toUpperCase() + str.substring(0, 1).toLowerCase() + ']';
+
+    // Create regex for template sorting
+    const names = [], prefixes = [];
+    if (templateName) {
+        for (let i = 0; i < templateName.length; i++) {
+            names.push(caseInsensitiveFirstLetter(templateName[i]) + escapeRegExp(templateName[i].substring(1)));
+        }
+        var templateNameRegExp = new RegExp('^(' + names.join('|') + ')$');
     }
+    if (templatePrefix) {
+        for (let i = 0; i < templatePrefix.length; i++) {
+            prefixes.push(caseInsensitiveFirstLetter(templatePrefix[i]) + escapeRegExp(templatePrefix[i].substring(1)));
+        }
+        var templatePrefixRegExp = new RegExp('^(' + prefixes.join('|') + ')');
+    }
+
+    // Sort out certain templates
+    templates = templates.filter(item => {
+        const name = item.match(/^\{{2}\s*([^\|\{\}\n]+)/)[1].trim(); // {{ TEMPLATENAME | ... }} の TEMPLATENAME を抽出
+        if (templateName && templatePrefix) {
+            return name.match(templateNameRegExp) || name.match(templatePrefixRegExp);
+        } else if (templateName) {
+            return name.match(templateNameRegExp);
+        } else if (templatePrefix) {
+            return name.match(templatePrefixRegExp);
+        }
+    });
 
     return templates;
 
-};
+}
 module.exports.findTemplates = findTemplates;
+
+/**
+ * Get strings enclosed by <!-- -->, <nowiki />, <pre />, <syntaxhighlight />, and <source />
+ * @param {string} wikitext 
+ * @returns {Array|null} 
+ */
+function extractCommentOuts(wikitext) {
+    return wikitext.match(/(<!--[\s\S]*?-->|<nowiki>[\s\S]*?<\/nowiki>|<pre[\s\S]*?<\/pre>|<syntaxhighlight[\s\S]*?<\/syntaxhighlight>|<source[\s\S]*?<\/source>)/gm);
+}
+module.exports.extractCommentOuts = extractCommentOuts;
 
 /**
  * Get the parameters of templates as an array
  * @param {string} template 
  * @returns {Array} This doesn't contain the template's name
  */
-const getTemplateParams = template => {
+function getTemplateParams(template) {
 
     // If the template doesn't contain '|', it doesn't have params
     if (template.indexOf('|') === -1) return [];
@@ -200,7 +238,7 @@ const getTemplateParams = template => {
 
     return params;
 
-};
+}
 module.exports.getTemplateParams = getTemplateParams;
 
 /**
@@ -365,7 +403,10 @@ module.exports.getDuration = (timestamp1, timestamp2) => {
  * @param {string} str 
  * @returns 
  */
-module.exports.escapeRegExp = str => str.replace(/[\\{}().?*+\-^$[\]|]/g, '\\$&');
+function escapeRegExp(str) {
+    return str.replace(/[\\{}().?*+\-^$[\]|]/g, '\\$&');
+}
+module.exports.escapeRegExp = escapeRegExp;
 
 /**
  * Get the last day of a given month
