@@ -313,7 +313,7 @@ module.exports.getOpenUserANs = wikitext => {
                 }
                 return;
             case 3: // [t=TYPE, (1=)username, 状態=] (open), [t=TYPE, (1=)username, (2=)無期限] (closed), [(1=)username, 状態=, (2=)無期限] (closed)
-                if (params.filter(item => item.match(paramsRegExp.type) && item.match(paramsRegExp.statusS)).length > 0) obj.closed = false;
+                if (params.some(item => item.match(paramsRegExp.type)) && params.some(item => item.match(paramsRegExp.statusS))) obj.closed = false;
         }
 
     });
