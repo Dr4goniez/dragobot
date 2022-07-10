@@ -394,7 +394,7 @@ async function convertLogidsToUsernames(arr) {
             lib.api.request({
                 'action': 'query',
                 'list': 'logevents',
-                'leprop': 'ids|user',
+                'leprop': 'ids|title',
                 'letype': 'newusers',
                 'lelimit': 'max',
                 'lecontinue': lecontinue,
@@ -404,8 +404,8 @@ async function convertLogidsToUsernames(arr) {
                 if (!res || !res.query) return resolve();
                 if ((resLgEv = res.query.logevents).length === 0) return resolve();
                 resLgEv.forEach(obj => {
-                    let logid = obj.logid.toString();
-                    if (!Logids[logid]) Logids[logid] = obj.user;
+                    const logid = obj.logid.toString();
+                    if (!Logids[logid]) Logids[logid] = obj.title.replace(/^利用者:/, '');
                 });
                 logidsArr = logidsArr.filter(item => !Logids[item]); // Remove logids that have already been converted
                 if (logidsArr.length !== 0 && res.continue && cnt <= 10) await logidQuery(res.continue.lecontinue);
