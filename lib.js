@@ -54,7 +54,7 @@ module.exports.getLatestRevision = pagename => {
                 'originalContent': JSON.parse(JSON.stringify(resRev.slots.main.content)),
                 'revid': resRev.revid.toString()
             });
-        }).catch(() => resolve());
+        }).catch(err => resolve(console.log(err)));
     });
 };
 
