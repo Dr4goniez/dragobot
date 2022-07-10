@@ -23,75 +23,79 @@ const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
       KAGE = ANS + '/影武者',
       KIYOSHIMA = ANS + '/清島達郎',
       SHINJU = ANS + '/真珠王子';
+const pages = [ANI, ANS, AN3RR, Iccic, ISECHIKA, KAGE, KIYOSHIMA, SHINJU];
 
 // Across-the-function variables
 var UserAN = [], checkGlobal = false;
 const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {diffid: username, diffid2: username2...}
 
-// Run the bot
-(() => {
-
-    // Function to check if the bot should run
-    const checkNewBlocks = ts => new Promise(resolve => {
-        lib.api.request({
-            'action': 'query',
-            'list': 'blocks',
-            'bklimit': 50,
-            'bkprop': 'timestamp|reason',
-            'formatversion': 2
-        }).then(res => {
-            var resBlck;
-            if (!res || !res.query) return resolve();
-            if ((resBlck = res.query.blocks).length === 0) return resolve();
-            if (resBlck.some(obj => obj.reason.indexOf('最近使用したため、自動ブロック') === -1 && lib.compareTimestamps(ts, obj.timestamp) >= 0)) {
-                resolve(true); // Returns true if someone has been manually blocked since the last run
-            } else {
-                resolve(false);
-            }
-        }).catch(() => resolve());
-    });
-
-    // The procedure to loop
-    const pages = [ANI, ANS, AN3RR, Iccic, ISECHIKA, KAGE, KIYOSHIMA, SHINJU];
-    var runCnt = 0, lastRunTs;
-    const bot = async () => {
-
-        console.log('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
-
-        runCnt++;
-        if (lastRunTs && runCnt % 6 !== 0) { // Compare the timestamp of the last run and timestamps in list=blocks
-            const sbIsRecentlyBlocked = await checkNewBlocks(lastRunTs);
-            if (!sbIsRecentlyBlocked) {
-                lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'); // YYYY-MM-DDT00:00:00.000Z => YYYY-MM-DDT00:00:00Z
-                return console.log('Stopped execution: No new blocks found.');
-            }
-        }
-
-        lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
-
-        if (runCnt % 6 === 0) {
-            checkGlobal = true; // Check global block/lock status every 6 runs (1 hour)
+// Function to check if the bot should run
+const checkNewBlocks = ts => new Promise(resolve => {
+    lib.api.request({
+        'action': 'query',
+        'list': 'blocks',
+        'bklimit': 50,
+        'bkprop': 'timestamp|reason',
+        'formatversion': 2
+    }).then(res => {
+        var resBlck;
+        if (!res || !res.query) return resolve();
+        if ((resBlck = res.query.blocks).length === 0) return resolve();
+        if (resBlck.some(obj => obj.reason.indexOf('最近使用したため、自動ブロック') === -1 && lib.compareTimestamps(ts, obj.timestamp) >= 0)) {
+            resolve(true); // Returns true if someone has been manually blocked since the last run
         } else {
-            checkGlobal = false;
+            resolve(false);
         }
+    }).catch(err => resolve(console.log(err)));
+});
 
-        for (let i = 0; i < pages.length; i++) {
-            if (i !== 0) await lib.delay(5*1000); // Intentional 5-sec delay in accordance with the local bot policy
-            console.log('Checking ' + pages[i] + '...');
-            UserAN = []; // Reset
-            await checkBlockStatus(pages[i]);
+// The procedure to loop
+var runCnt = 0, lastRunTs;
+const bot = async () => {
+
+    console.log('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
+
+    runCnt++;
+    if (lastRunTs && runCnt % 6 !== 0) { // Compare the timestamp of the last run and timestamps in list=blocks
+        const sbIsRecentlyBlocked = await checkNewBlocks(lastRunTs);
+        if (!sbIsRecentlyBlocked) {
+            lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'); // YYYY-MM-DDT00:00:00.000Z => YYYY-MM-DDT00:00:00Z
+            return console.log('Stopped execution: No new blocks found.');
         }
+    }
 
-    };
+    lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
 
-    // Run the bot
-    bot();
-    setInterval(bot, 10*60*1000); // Run every 10 minutes
+    if (runCnt % 6 === 0) {
+        checkGlobal = true; // Check global block/lock status every 6 runs (1 hour)
+    } else {
+        checkGlobal = false;
+    }
 
-})();
+    var result;
+    for (let i = 0; i < pages.length; i++) {
+        if (result) {
+            result = false;
+            await lib.delay(5*1000);
+        }
+        console.log('Checking ' + pages[i] + '...');
+        UserAN = []; // Reset
+        result = await checkBlockStatus(pages[i]);
+    }
+
+};
+
+// Run the bot
+bot();
+setInterval(bot, 10*60*1000); // Run every 10 minutes
+
 
 //********************** MAIN FUNCTIONS OF THE BOT **********************/
 
+/**
+ * @param {string} pagename 
+ * @returns {boolean|undefined} True if edit succeeded
+ */
 async function checkBlockStatus(pagename) {
 
     // Get page content
@@ -99,7 +103,7 @@ async function checkBlockStatus(pagename) {
     if (!parsed) return console.log('Failed to parse the page.');
     const wikitext = parsed.content;
     var templates = lib.getOpenUserANs(wikitext);
-    if (templates.length === 0) return;
+    if (templates.length === 0) return console.log('Procedure cancelled: There\'s no UserAN to update.');
 
     // Remove redundant UserANs
     templates = templates.filter(template => !template.match(/\|\s*bot\s*=\s*no/)); // Remove UserANs with a bot=no parameter
@@ -336,7 +340,7 @@ async function checkBlockStatus(pagename) {
     switch(result) {
         case true:
             console.log('Edit done.');
-            break;
+            return true;
         case false:
             console.log('Edit failed due to an unknown error.');
             break;
@@ -346,6 +350,12 @@ async function checkBlockStatus(pagename) {
 
 }
 
+/**
+ * @param {string} pagename 
+ * @param {string} summary 
+ * @param {boolean} botedit 
+ * @returns {boolean|string} True if edit succeeded, false if an unknown error occurred, error info as a string if a known error occurred
+ */
 async function edit(pagename, summary, botedit) {
 
     // Get the latest revision and its timestamp(s)
@@ -404,13 +414,14 @@ async function convertLogidsToUsernames(arr) {
                 if (!res || !res.query) return resolve();
                 if ((resLgEv = res.query.logevents).length === 0) return resolve();
                 resLgEv.forEach(obj => {
+                    if (obj.actionhidden) return;
                     const logid = obj.logid.toString();
                     if (!Logids[logid]) Logids[logid] = obj.title.replace(/^利用者:/, '');
                 });
                 logidsArr = logidsArr.filter(item => !Logids[item]); // Remove logids that have already been converted
                 if (logidsArr.length !== 0 && res.continue && cnt <= 10) await logidQuery(res.continue.lecontinue);
                 resolve();
-            }).catch(() => resolve());
+            }).catch(err => resolve(console.log(err)));
         });
     }
 
