@@ -414,7 +414,7 @@ async function convertLogidsToUsernames(arr) {
                 if (!res || !res.query) return resolve();
                 if ((resLgEv = res.query.logevents).length === 0) return resolve();
                 resLgEv.forEach(obj => {
-                    if (obj.actionhidden) return;
+                    if (typeof obj.title === 'undefined') return;
                     const logid = obj.logid.toString();
                     if (!Logids[logid]) Logids[logid] = obj.title.replace(/^利用者:/, '');
                 });
