@@ -323,6 +323,66 @@ module.exports.getOpenUserANs = wikitext => {
 };
 
 /**
+ * @param {string} pageContent
+ * @returns {Array<{header: string, title: string, level: number, index: number, content: string, deepest: boolean}>} Never undefined
+ */
+module.exports.parseContentBySection = pageContent => {
+
+    const regex = {
+        'header': /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/,
+        'headerG': /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/g,
+        'headerEquals': /(?:^={2,5}[^\S\n\r]*|[^\S\n\r]*={2,5}$)/g
+    };
+
+    const content = JSON.parse(JSON.stringify(pageContent));
+    var headers = content.match(regex.headerG);
+    
+    const co = extractCommentOuts(content);
+    if (co) {
+        co.forEach(item => {
+            headers = headers.filter(header => item.indexOf(header) === -1);
+        });
+    }
+
+    const sections = [];
+    sections.push({ // The top section
+        'header': null,
+        'title': null,
+        'level': 1,
+        'index': 0,
+        'content': headers ? content.split(headers[0])[0] : content,
+        'deepest': null
+    });
+    if (headers) {
+        headers.forEach(header => {
+            sections.push({
+                'header': header,
+                'title': header.replace(regex.headerEquals, ''),
+                'level': header.match(/=/g).length / 2,
+                'index': undefined,
+                'content': undefined,
+                'deepest': undefined
+            });
+        });
+        sections.forEach((obj, i, arr) => {
+            if (i === 0) return;
+            var sectionContent;
+            arr.slice(i + 1).some(obj2 => { // Find a higher-level section boundary and get the content between the header and the boundary
+                if (obj2.level <= obj.level) sectionContent = content.substring(content.indexOf(obj.header), content.indexOf(obj2.header));
+                return typeof sectionContent !== 'undefined';
+            });
+            if (!sectionContent) sectionContent = content.substring(content.indexOf(obj.header)); // For last section
+            obj.index = i;
+            obj.content = sectionContent;
+            obj.deepest = obj.content.match(regex.header).length === 1;
+        });
+    }
+
+    return sections;
+
+}
+
+/**
  * Split a string into two
  * @param {string} str 
  * @param {string} delimiter 
