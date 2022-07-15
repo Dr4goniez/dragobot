@@ -184,6 +184,74 @@ function findTemplates(wikitext, templateName, templatePrefix) {
 module.exports.findTemplates = findTemplates;
 
 /**
+ * Find all HTML tags in a string, including innerHTML
+ * @param {string} content String in which to search for tags
+ * @param {string|Array} [tagnames] Tags to sort out
+ * @returns {Array} Array of outerHTMLs
+ */
+function findHtmlTags(content, tagnames) {
+
+    // Copy the content
+    var str = JSON.parse(JSON.stringify(content));
+
+    // Remove comments
+    const co = extractCommentOuts(str);
+    if (co) {
+        co.forEach(item => {
+            const regex = new RegExp(escapeRegExp(item) + '\s?');
+            str = str.replace(regex, '');
+        });
+    }
+
+    // Get all <tag> and </tag>s and create an array of objects
+    const regex = /(?:<[^\s/>]+[^\S\r\n]*[^>]*>|<\/[^\S\r\n]*[^\s>]+[^\S\r\n]*>)/g;
+    // const regex = /(?:<([^\s/>]+)[^\S\r\n]*[^>]*>|<\/[^\S\r\n]*([^\s>]+)[^\S\r\n]*>)/g;
+    const mArr = [];
+    var m;
+    while (m = regex.exec(str)) {
+        const type = m[0].match(/^<[^\S\r\n]*\//) ? 'end' : 'start';
+        mArr.push({
+            'tag': m[0], // e.g. <div>, </div>
+            'tagname': m[0].match(/^<\/?[^\S\r\n]*([^\s>]+)[^\S\r\n]*\S*>$/)[1], // e.g. div
+            // 'tagname': m[1], // The capturing group doesn'T work for closing tags for some reason
+            'type': type, // 'start' or 'end'
+            'index': m.index // Index of the tag in the content
+        });
+    }
+
+    var nestCnt = 0,
+        tags = [];
+    mArr.forEach((obj, i, arr) => {
+        if (obj.type === 'end') return; // Loop through all opening tags
+        if (!arr[i + 1]) return;
+        arr.filter((fObj, fi) => i < fi && fObj.tagname === obj.tagname).some(sObj => { // Look at all elements after the current element of the array
+            if (sObj.type === obj.type) { // If there's a starting tag, that's a nested tag (e.g. <div2> in <div> ... <div2> ... </div>)
+                nestCnt++;
+                return false; // Continue the loop
+            } else if (sObj.type !== obj.type && nestCnt !== 0) { // If there's a closing tag and if it's for a nested opening tag
+                nestCnt--;
+                return false; // Continue the loop
+            } else if (sObj.type !== obj.type && nestCnt === 0) { // If there's a closing tag and if it's what closes the current element
+                tags.push(str.substring(obj.index, sObj.index + sObj.tag.length)); // Push the innerHTML into the array 'tags'
+                return true; // End the loop
+            }
+            console.log('findHtmlTags: Unexpected condition detected.');
+        });
+        nestCnt = 0; // Reset
+    });
+
+    if (!tagnames) return tags;
+
+    // Sort out tags if the relevant parameter is passed to the function
+    if (typeof tagnames === 'string') tagnames = [tagnames];
+    const tagNameRegex = new RegExp(`^<(?:${tagnames.join('|')})[^\\S\\r\\n]*[^>]*>`); // Matches e.g. <div class="CLASS"> if tagnames === ['div']
+    tags = tags.filter(item => item.match(tagNameRegex));
+    return tags;
+
+}
+module.exports.findHtmlTags = findHtmlTags;
+
+/**
  * Get strings enclosed by <!-- -->, <nowiki />, <pre />, <syntaxhighlight />, and <source />
  * @param {string} wikitext 
  * @returns {Array|null} 
