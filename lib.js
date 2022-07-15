@@ -212,7 +212,7 @@ function findHtmlTags(content, tagnames) {
         const type = m[0].match(/^<[^\S\r\n]*\//) ? 'end' : 'start';
         mArr.push({
             'tag': m[0], // e.g. <div>, </div>
-            'tagname': m[0].match(/^<\/?[^\S\r\n]*([^\s>]+)[^\S\r\n]*\S*>$/)[1], // e.g. div
+            'tagname': m[0].match(/^<\/?[^\S\r\n]*([^\s>]+)[^\S\r\n]*[^>]*>$/)[1], // e.g. div
             // 'tagname': m[1], // The capturing group doesn'T work for closing tags for some reason
             'type': type, // 'start' or 'end'
             'index': m.index // Index of the tag in the content
