@@ -11,11 +11,13 @@ const http = require('http');
 /********************** STARTUP FUNCTION **********************/
 
 // Create server
-const port = parseInt(process.env.PORT, 10);
-await http.createServer((req, res) => {
-    res.writeHead(200, {'Content-Type': 'text/plain'});
-    res.end('DragoBot is running!');
-}).listen(port);
+try {
+    const port = parseInt(process.env.PORT, 10);
+    await http.createServer((req, res) => {
+        res.writeHead(200, {'Content-Type': 'text/plain'});
+        res.end('DragoBot is running!');
+    }).listen(port);
+} catch {}
 
 console.log('The bot started running.');
 
