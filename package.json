@@ -1,10 +1,12 @@
 {
   "name": "dragobot",
-  "version": "2.7.1",
+  "version": "2.7.2",
   "description": "A Wikipedia bot.",
   "main": "AN_markup.js",
   "scripts": {
-    "start": "node AN_markup.js > log.text"
+    "start": "node AN_markup.js > log.text",
+    "startDev": "node AN_markup.js",
+    "dev": "node test.js"
   },
   "author": "Dragoniez",
   "license": "MIT",

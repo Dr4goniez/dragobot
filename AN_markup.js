@@ -1,7 +1,6 @@
 /********************** DEPENDENCIES **********************/
 
 const lib = require('./lib');
-const my = require('./my');
 const http = require('http');
 
 /********************** SCRIPT BODY **********************/
@@ -22,13 +21,7 @@ try {
 console.log('The bot started running.');
 
 // Log in
-const token = await lib.api.loginGetEditToken({
-    username: my.username,
-    password: my.password
-}).then(res => {
-    if (!res) return console.log('An unexpected error occurred on login attempt.');
-    return res.csrftoken;
-}).catch((err) => console.log(err.response.login.reason));
+const token = await lib.getToken();
 if (!token) return;
 
 // Pages to maintain

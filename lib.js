@@ -22,6 +22,7 @@ module.exports.getToken = experiment => {
             password: experiment ? my.password2 : my.password
         }).then(res => {
             if (!res) return resolve(console.log('An unexpected error occurred on login attempt.'));
+            if (res.result === 'Success') console.log('Successfully logged in.');
             resolve(res.csrftoken);
         }).catch((err) => resolve(console.log(err.response.login.reason)));
     });
