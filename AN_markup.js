@@ -1,6 +1,7 @@
 /********************** DEPENDENCIES **********************/
 
 const lib = require('./lib');
+const my = require('./my');
 
 console.log('The bot started running.');
 
@@ -11,7 +12,13 @@ console.log('The bot started running.');
 /********************** STARTUP FUNCTION **********************/
 
 // Log in
-const token = await lib.getToken();
+const token = await lib.api.loginGetEditToken({
+    username: my.username,
+    password: my.password
+}).then(res => {
+    if (!res) return console.log('An unexpected error occurred on login attempt.');
+    return res.csrftoken;
+}).catch((err) => console.log(err.response.login.reason));
 if (!token) return;
 
 // Pages to maintain
