@@ -275,6 +275,7 @@ function getTemplateParams(template) {
     // Remove the first '{{' and the last '}}' (or '|}}')
     const frameRegExp = /(?:^\{{2}|\|*\}{2}$)/g;
     var params = template.replace(frameRegExp, '');
+    console.log(params);
 
     // In case the params nest other templates
     var nested = findTemplates(params);
