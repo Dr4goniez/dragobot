@@ -1,10 +1,5 @@
 /********************** DEPENDENCIES **********************/
 
-const my = require('./my');
-const MWBot = require('mwbot');
-const api = new MWBot({
-    apiUrl: my.apiUrl
-});
 const lib = require('./lib');
 
 console.log('The bot started running.');
@@ -16,13 +11,7 @@ console.log('The bot started running.');
 /********************** STARTUP FUNCTION **********************/
 
 // Login
-const token = await api.loginGetEditToken({
-    username: my.username,
-    password: my.password
-}).then(res => {
-    if (!res) return console.log('An unexpected error occurred on login attempt.');
-    return res.csrftoken;
-}).catch((err) => console.log(err.response.login.reason));
+const token = await lib.getToken();
 if (!token) return;
 
 // Get the current month
@@ -37,7 +26,7 @@ var lr = await lib.getLatestRevision(pagetitle);
 if (lr || lr === undefined) return;
 
 // Create the page
-var result = await api.request({
+var result = await lib.api.request({
     'action': 'edit',
     'title': pagetitle,
     'text': '{{投稿ブロック依頼}}\n== ログ ==\n\n== 依頼 ==',
@@ -84,7 +73,7 @@ if (links.includes(thisMonth)) return console.log('The template has already been
 content = content.replace(template, newTemplate);
 if (content === lr.content) return console.log(templatename + ': Edit cancelled (same content).');
 
-result = await api.request({
+result = await lib.api.request({
     'action': 'edit',
     'title': templatename,
     'text': content,
