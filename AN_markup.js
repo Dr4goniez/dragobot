@@ -10,10 +10,6 @@ console.log('The bot started running.');
 
 /********************** STARTUP FUNCTION **********************/
 
-// Log in
-const token = await lib.getToken();
-if (!token) return;
-
 // Pages to maintain
 const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
       ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット',
@@ -50,8 +46,12 @@ const checkNewBlocks = ts => new Promise(resolve => {
 });
 
 // The procedure to loop
-var runCnt = 0, lastRunTs;
+var runCnt = 0, lastRunTs, token;
 const bot = async () => {
+
+    // Log in
+    token = await lib.getToken();
+    if (!token) return;
 
     console.log('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
 
