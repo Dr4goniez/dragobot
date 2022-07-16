@@ -2,14 +2,22 @@
 
 const lib = require('./lib');
 const my = require('./my');
-
-console.log('The bot started running.');
+const http = require('http');
 
 /********************** SCRIPT BODY **********************/
 
 (async () => { // Just a wrapper function
 
 /********************** STARTUP FUNCTION **********************/
+
+// Create server
+const port = parseInt(process.env.PORT, 10);
+await http.createServer((req, res) => {
+    res.writeHead(200, {'Content-Type': 'text/plain'});
+    res.end('DragoBot is running!');
+}).listen(port);
+
+console.log('The bot started running.');
 
 // Log in
 const token = await lib.api.loginGetEditToken({
