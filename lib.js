@@ -64,7 +64,24 @@ module.exports.getLatestRevision = pagename => {
  * @param {number} milliseconds
  * @returns {Promise}
  */
-module.exports.delay = milliseconds => new Promise(resolve =>  setTimeout(resolve, milliseconds));
+function delay(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+module.exports.delay = delay;
+
+/**
+ * Make sure to have a 5-second interval between each edit
+ * @param {string} edittedTs JSON timestamp
+ * @returns {Promise}
+ */
+module.exports.dynamicDelay = edittedTs => {
+    return new Promise(async (resolve, reject) => {
+        if (!edittedTs) return reject();
+        const diffMilliseconds = compareTimestamps(edittedTs, new Date().toJSON()); // Milliseconds after the last edit
+        if (diffMilliseconds < 5000) await delay(5000 - diffMilliseconds);
+        resolve();
+    });
+};
 
 
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
@@ -472,14 +489,15 @@ module.exports.splitInto2 = (str, delimiter, lastindex) => {
  * @param {boolean} [rewind5minutes] if true, rewind timestamp1 by 5 minutes
  * @returns {number} timestamp2 - timestamp1 (in milliseconds)
  */
-module.exports.compareTimestamps = (timestamp1, timestamp2, rewind5minutes) => {
+function compareTimestamps(timestamp1, timestamp2, rewind5minutes) {
     if (typeof timestamp1 === 'undefined' || typeof timestamp2 === 'undefined') return;
     const ts1 = new Date(timestamp1);
     if (rewind5minutes) ts1.setMinutes(ts1.getMinutes() - 5);
     const ts2 = new Date(timestamp2);
     const diff = ts2.getTime() - ts1.getTime();
     return diff;
-};
+}
+module.exports.compareTimestamps = compareTimestamps;
 
 /**
  * @param {string} timestamp1 

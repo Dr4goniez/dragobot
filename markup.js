@@ -1,112 +1,23 @@
 /********************** DEPENDENCIES **********************/
 
 const lib = require('./lib');
-const http = require('http');
 
-/********************** SCRIPT BODY **********************/
+//********************** MAIN FUNCTION **********************/
 
-(async () => { // Just a wrapper function
-
-/********************** STARTUP FUNCTION **********************/
-
-// Create server
-try {
-    const port = parseInt(process.env.PORT, 10);
-    await http.createServer((req, res) => {
-        res.writeHead(200, {'Content-Type': 'text/plain'});
-        res.end('DragoBot is running!');
-    }).listen(port);
-} catch {}
-
-console.log('The bot started running.');
-
-// Log in
-const token = await lib.getToken();
-if (!token) return;
-
-// Pages to maintain
-const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
-      ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット',
-      AN3RR = 'Wikipedia:管理者伝言板/3RR',
-      Iccic = ANS + '/Iccic',
-      ISECHIKA = ANS + '/いせちか',
-      KAGE = ANS + '/影武者',
-      KIYOSHIMA = ANS + '/清島達郎',
-      SHINJU = ANS + '/真珠王子';
-const pages = [ANI, ANS, AN3RR, Iccic, ISECHIKA, KAGE, KIYOSHIMA, SHINJU];
-
-// Across-the-function variables
-var UserAN = [], checkGlobal = false;
-const Logids = {}, Diffs = {}; // {logid: username, logid2: username2...} & {diffid: username, diffid2: username2...}
-
-// Function to check if the bot should run
-const checkNewBlocks = ts => new Promise(resolve => {
-    lib.api.request({
-        'action': 'query',
-        'list': 'blocks',
-        'bklimit': 50,
-        'bkprop': 'timestamp|reason',
-        'formatversion': 2
-    }).then(res => {
-        var resBlck;
-        if (!res || !res.query) return resolve();
-        if ((resBlck = res.query.blocks).length === 0) return resolve();
-        if (resBlck.some(obj => obj.reason.indexOf('最近使用したため、自動ブロック') === -1 && lib.compareTimestamps(ts, obj.timestamp) >= 0)) {
-            resolve(true); // Returns true if someone has been manually blocked since the last run
-        } else {
-            resolve(false);
-        }
-    }).catch(err => resolve(console.log(err)));
-});
-
-// The procedure to loop
-var runCnt = 0, lastRunTs;
-const bot = async () => {
-
-    console.log('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
-
-    runCnt++;
-    if (lastRunTs && runCnt % 6 !== 0) { // Compare the timestamp of the last run and timestamps in list=blocks
-        const sbIsRecentlyBlocked = await checkNewBlocks(lastRunTs);
-        if (!sbIsRecentlyBlocked) {
-            lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'); // YYYY-MM-DDT00:00:00.000Z => YYYY-MM-DDT00:00:00Z
-            return console.log('Stopped execution: No new blocks found.');
-        }
-    }
-
-    lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
-
-    if (runCnt % 6 === 0) {
-        checkGlobal = true; // Check global block/lock status every 6 runs (1 hour)
-    } else {
-        checkGlobal = false;
-    }
-
-    var result;
-    for (let i = 0; i < pages.length; i++) {
-        if (result) {
-            result = false;
-            await lib.delay(5*1000);
-        }
-        console.log('Checking ' + pages[i] + '...');
-        UserAN = []; // Reset
-        result = await checkBlockStatus(pages[i]);
-    }
-
-};
-
-// Run the bot
-bot();
-setInterval(bot, 10*60*1000); // Run every 10 minutes
-
-
-//********************** MAIN FUNCTIONS OF THE BOT **********************/
-
+var UserAN;
+const Logids = {}, // {logid: username, logid2: username2...}
+      Diffs = {}; // {diffid: username, diffid2: username2...} (These objects keep their values)
 /**
  * @param {string} pagename 
- * @returns {boolean|undefined} True if edit succeeded
+ * @param {string} token
+ * @param {boolean} checkGlobal
+ * @param {string} [edittedTs] Timestamp of last edit
+ * @returns {string|undefined} JSON timestamp if the target page is editted
  */
-async function checkBlockStatus(pagename) {
+async function markup(pagename, token, checkGlobal, edittedTs) {
+
+    // Initialize array
+    UserAN = [];
 
     // Get page content
     const parsed = await lib.getLatestRevision(pagename);
@@ -345,59 +256,47 @@ async function checkBlockStatus(pagename) {
         summary = 'Bot: UserANの修正';
     }
 
-    // Edit the relevant page
-    const result = await edit(pagename, summary, modOnly);
-    switch(result) {
+    // Get the latest revision and its timestamp(s)
+    if (edittedTs) await lib.dynamicDelay(edittedTs);
+    const lr = await lib.getLatestRevision(pagename);
+    if (!lr) return 'Failed to get the latest revision.';
+    var newContent = lr.content;
+
+    // Update UserANs in the source text
+    UserAN.filter(obj => obj.new).forEach(obj => newContent = newContent.split(obj.old).join(obj.new));
+
+    // Edit the page
+    const params = {
+        'action': 'edit',
+        'title': pagename,
+        'text': newContent,
+        'summary': summary,
+        'minor': true,
+        'basetimestamp': lr.basetimestamp,
+        'starttimestamp': lr.curtimestamp,
+        'token': token
+    };
+    if (modOnly) params.bot = true;
+
+    const result = await lib.api.request(params).then(res => {
+        if (res && res.edit) {
+            if (res.edit.result === 'Success') return true;
+        }
+        return false;
+    }).catch((err) => resolve(err));
+
+    switch (result) {
         case true:
             console.log('Edit done.');
-            return true;
+            return new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
         case false:
-            console.log('Edit failed due to an unknown error.');
-            break;
+            return console.log('Edit failed due to an unknown error.');
         default:
-            console.log('Edit failed: ' + result);
+            return console.log('Edit failed: ' + result);
     }
 
 }
-
-/**
- * @param {string} pagename 
- * @param {string} summary 
- * @param {boolean} botedit 
- * @returns {boolean|string} True if edit succeeded, false if an unknown error occurred, error info as a string if a known error occurred
- */
-async function edit(pagename, summary, botedit) {
-
-    // Get the latest revision and its timestamp(s)
-    const parsed = await lib.getLatestRevision(pagename);
-    if (!parsed) return 'Failed to get the latest revision.';
-    var wikitext = parsed.content;
-
-    // Update UserANs in the source text
-    UserAN.filter(obj => obj.new).forEach(obj => wikitext = wikitext.split(obj.old).join(obj.new));
-
-    // Edit the page
-    return new Promise(resolve => {
-        const params = {
-            'action': 'edit',
-            'title': pagename,
-            'text': wikitext,
-            'summary': summary,
-            'minor': true,
-            'basetimestamp': parsed.basetimestamp,
-            'starttimestamp': parsed.curtimestamp,
-            'token': token
-        };
-        if (botedit) params.bot = true;
-        lib.api.request(params).then(res => {
-            if (res && res.edit) {
-                if (res.edit.result === 'Success') return resolve(true);
-            }
-            resolve(false);
-        }).catch((err) => resolve(err));
-    });
-
-}
+module.exports.markup = markup;
 
 //********************** UTILITY FUNCTIONS **********************/
 
@@ -507,7 +406,7 @@ async function getBlockedUsers(usersArr) {
                     });
                 }
                 resolve();
-            }).catch((err) => resolve(console.log(err.error.info)));
+            }).catch((err) => resolve(console.log(err)));
         });
     }
 }
@@ -560,7 +459,7 @@ async function getBlockedIps(ipsArr) {
                     }
                 });
                 resolve();
-            }).catch((err) => resolve(console.log(err.error.info)));
+            }).catch((err) => resolve(console.log(err)));
         });
     }
 
@@ -588,7 +487,7 @@ async function getLockedUsers(regUsersArr) {
             if (!res || !res.query) return resolve();
             if ((resLck = res.query.globalallusers).length === 0) return resolve(false); // The array is empty: not locked
             resolve(resLck[0].locked !== undefined); // resLck[0].locked === '' if locked, otherwise undefined
-        }).catch((err) => resolve(console.log(err.error.info)));
+        }).catch((err) => resolve(console.log(err)));
     });
 
     const queries = [], lockedUsers = [];
@@ -638,7 +537,7 @@ async function getGloballyBlockedIps(arr) {
                     }
                 });
                 resolve();
-            }).catch((err) => resolve(console.log(err.error.info)));
+            }).catch((err) => resolve(console.log(err)));
         });
     };
 
@@ -662,7 +561,3 @@ function getBlockedDate(timestamp) {
 function containsJapaneseCharacter(str) {
     return str.match(/[\u30a0-\u30ff\u3040-\u309f\u3005-\u3006\u30e0-\u9fcf]+/) ? true : false;
 }
-
-//*******************************************/
-
-})(); // IIFE closure
