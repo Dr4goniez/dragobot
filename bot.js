@@ -1,5 +1,5 @@
 const lib = require('./lib');
-const {createLandingPage} = require('./server/server');
+const {createLandingPage} = require('./server');
 const {markup} = require('./markup');
 
 (async () => {
