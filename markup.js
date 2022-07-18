@@ -490,6 +490,8 @@ async function getLockedUsers(regUsersArr) {
         }).catch((err) => resolve(console.log(err)));
     });
 
+    const lockedDate = getBlockedDate();
+
     const queries = [], lockedUsers = [];
     for (const user of regUsersArr) {
         queries.push(glockQuery(user).then(locked => {
@@ -499,7 +501,10 @@ async function getLockedUsers(regUsersArr) {
     await Promise.all(queries);
     lockedUsers.forEach(username => {
         UserAN.forEach(obj => {
-            if (obj.user === username) obj.domain = 'グローバルロック';
+            if (obj.user === username) {
+                obj.domain = 'グローバルロック';
+                obj.date = lockedDate;
+            }
         });
     });
 
@@ -547,17 +552,22 @@ async function getGloballyBlockedIps(arr) {
 
 }
 
-function getBlockedDate(timestamp) {
-    const d = new Date(timestamp);
+/**
+ * Get ' (MM/DD)' from a JSON timestamp or the current time
+ * @param {string} [timestamp] JSON timestamp in UTC
+ * @returns {string} ' (MM/DD)'
+ */
+ function getBlockedDate(timestamp) {
+    const d = timestamp ? new Date(timestamp) : new Date();
     d.setHours(d.getHours() + 9);
-    const ts = d.toJSON().replace(/\.\d{3}Z$/, 'Z');
-    const mtch = ts.match(/^\d{4}-(\d{2})-(\d{2})T\d{2}:\d{2}:\d{2}Z$/);
-    for (let i = 1; i <= 2; i++) {
-        if (mtch[i].indexOf('0') === 0) mtch[i] = mtch[i].substring(1);
-    }
-    return ` (${mtch[1]}/${mtch[2]})`;
+    return ` (${d.getMonth() + 1}/${d.getDate()})`;
 }
 
+/**
+ * Check if a string contains a Japanese character
+ * @param {string} str
+ * @returns {boolean}
+ */
 function containsJapaneseCharacter(str) {
     return str.match(/[\u30a0-\u30ff\u3040-\u309f\u3005-\u3006\u30e0-\u9fcf]+/) ? true : false;
 }
