@@ -12,7 +12,7 @@ const Logids = {}, // {logid: username, logid2: username2...}
  * @param {string} token
  * @param {boolean} checkGlobal
  * @param {string} [edittedTs] Timestamp of last edit
- * @returns {string|undefined} JSON timestamp if the target page is editted
+ * @returns {Promise<string|undefined>} JSON timestamp if the target page is editted
  */
 async function markup(pagename, token, checkGlobal, edittedTs) {
 
