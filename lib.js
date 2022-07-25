@@ -83,6 +83,37 @@ module.exports.dynamicDelay = edittedTs => {
     });
 };
 
+/**
+ * Edit a given page
+ * @param {object} params 
+ * @returns {Promise<string|undefined>} JSON timestamp if the edit succeeded, or else undefined
+ */
+module.exports.editPage = params => {
+    return new Promise(async resolve => {
+
+        var result = await lib.api.request(params)
+        .then(res => {
+            if (res && res.edit) {
+                if (res.edit.result === 'Success') return true;
+            }
+            return false;
+        }).catch(err => err.error.info);
+
+        switch (result) {
+            case true:
+                console.log(params.title + ': Edit done.');
+                return resolve(new Date().toJSON());
+            case false:
+                console.log(params.title + ': Edit failed due to an unknown error.');
+                return resolve();
+            default:
+                console.log(params.title + ': Edit failed: ' + result);
+                return resolve();
+        }
+
+    });
+};
+
 
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
 

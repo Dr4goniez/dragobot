@@ -278,22 +278,8 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
     };
     if (modOnly) params.bot = true;
 
-    const result = await lib.api.request(params).then(res => {
-        if (res && res.edit) {
-            if (res.edit.result === 'Success') return true;
-        }
-        return false;
-    }).catch((err) => resolve(err));
-
-    switch (result) {
-        case true:
-            console.log('Edit done.');
-            return new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
-        case false:
-            return console.log('Edit failed due to an unknown error.');
-        default:
-            return console.log('Edit failed: ' + result);
-    }
+    const ts = await lib.editPage(params);
+    return ts;
 
 }
 module.exports.markup = markup;
