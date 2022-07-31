@@ -91,7 +91,7 @@ module.exports.dynamicDelay = edittedTs => {
 module.exports.editPage = params => {
     return new Promise(async resolve => {
 
-        var result = await lib.api.request(params)
+        var result = await api.request(params)
         .then(res => {
             if (res && res.edit) {
                 if (res.edit.result === 'Success') return true;
