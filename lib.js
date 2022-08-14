@@ -97,7 +97,7 @@ module.exports.editPage = params => {
                 if (res.edit.result === 'Success') return true;
             }
             return false;
-        }).catch(err => err.error.info);
+        }).catch(err => err.response.error.info);
 
         switch (result) {
             case true:
