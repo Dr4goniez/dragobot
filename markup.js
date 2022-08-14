@@ -77,11 +77,16 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
         if (params.length > 2) return; // Contains an undefined parameter
 
         if (params.filter(item => item.match(paramsRegExp.type)).length === 0) { // If the template doesn't have a t= param
+            const userParam = params[0].replace(/\u200e/g, '').trim();
+            obj.user = userParam;
             obj.type = 'user2';
-            obj.user = params[0].replace(/\u200e/g, '').trim();
+            if (lib.isIPAddress(userParam)) {
+                obj.modified = `{{UserAN|t=IP2|${userParam}}}`;
+                obj.type = 'ip2';
+            }
         } else { // If the template has a t= param
             obj.type = params.filter(item => item.match(paramsRegExp.type))[0].replace(paramsRegExp.type, '').replace(/\u200e/g, '').trim().toLowerCase();
-            var userParam = params.filter(item => !item.match(paramsRegExp.type))[0].replace(paramsRegExp.user, '').replace(/\u200e/g, '').trim();
+            let userParam = params.filter(item => !item.match(paramsRegExp.type))[0].replace(paramsRegExp.user, '').replace(/\u200e/g, '').trim();
             if (lib.isIPv6(userParam)) userParam = userParam.toUpperCase();
             switch (obj.type) {
                 case 'user2':
@@ -226,7 +231,7 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
             for (let key in reportsBySection) {
                 summary += ` /*${key}*/ `;
                 const bool = reportsBySection[key].every((obj, i) => {
-                    let tempSummary = (i === 0 ? getUserLink(obj) : ', ' + getUserLink(obj));
+                    var tempSummary = (i === 0 ? getUserLink(obj) : ', ' + getUserLink(obj));
                     if ((summary + tempSummary).length <= 500) { // Prevent the summary from exceeding the max word count
                         summary += tempSummary;
                         return true; // Go on to the next loop
@@ -335,7 +340,7 @@ async function convertDiffidsToUsernames(arr) {
             if (!res || !res.query) return resolve();
             if ((resPgs = res.query.pages).length === 0) return resolve();
             resPgs.forEach(page => {
-                let revid = page.revisions[0].revid.toString();
+                var revid = page.revisions[0].revid.toString();
                 if (!Diffs[revid]) Diffs[revid] = page.revisions[0].user;
             });
             resolve();
