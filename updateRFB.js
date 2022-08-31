@@ -13,7 +13,6 @@ const lib = require('./lib');
 async function updateRFB(token, edittedTs) {
 
     console.log('Starting monthly update of RFB-replated pages...');
-    if (typeof edittedTs === 'undefined') var edittedTs;
     var ts = edittedTs ? edittedTs : undefined;
 
     /************************************************************************************
@@ -50,7 +49,7 @@ async function updateRFB(token, edittedTs) {
     // Create [[Wikipedia:投稿ブロック依頼 YYYY年MM月]]
     const createMonthlySubpage = async () => {
 
-        const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
+        const pagetitle = `利用者:DragoTest/test/Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
         console.log(`Creating ${pagetitle}...`);
         if (ts) await lib.dynamicDelay(ts);
         const lr = await lib.getLatestRevision(pagetitle);
@@ -81,7 +80,7 @@ async function updateRFB(token, edittedTs) {
 
     /**
      * @param {string} pagetitle 
-     * @param {Array} linktype ['current', 'next'] or ['last', 'current']
+     * @param {string} linktype 'next' or 'current'
      * @returns 
      */
     const updateLinks = async (pagetitle, linktype) => {
@@ -92,11 +91,14 @@ async function updateRFB(token, edittedTs) {
         if (!lr) return console.error('Failed to get the lastest revision of ' + pagetitle);
 
         var content = JSON.parse(JSON.stringify(lr.content));
-        const lkOld = getLink(d[linktype[0]].year, d[linktype[0]].month),
-              lkNew = getLink(d[linktype[1]].year, d[linktype[1]].month, true);
-        if (content.indexOf(getLink(d[linktype[1]].year, d[linktype[1]].month)) !== -1) {
+        const lkNew = getLink(d[linktype].year, d[linktype].month, true);
+        if (content.indexOf(getLink(d[linktype].year, d[linktype].month)) !== -1) {
             return console.log('Cancelled: Links have already been updated.');
         }
+        const linkRegex = /\[\[[Ww]ikipedia:投稿ブロック依頼 \d{4}年\d{1,2}月\|\d{1,2}月\]\]/g;
+        var lkOld = content.match(linkRegex);
+        if (!lkOld) return console.log('Cancelled: No replacee link found.');
+        lkOld = lkOld[lkOld.length - 1];
         content = content.replace(lkOld, lkOld + ' - ' + lkNew);
         if (content === lr.content) return console.log(pagetitle + ': Edit cancelled (same content).');
 
@@ -115,16 +117,16 @@ async function updateRFB(token, edittedTs) {
 
     };
 
-    const pages = ['Template:投稿ブロック依頼', 'Wikipedia:投稿ブロック依頼'];
+    const pages = ['利用者:DragoTest/test/Template:投稿ブロック依頼', '利用者:DragoTest/test/Wikipedia:投稿ブロック依頼'];
     for (let i = 0; i < pages.length; i++) {
-        const linktype = i === 0 ? ['current', 'next'] : ['last', 'current'];
+        const linktype = i === 0 ? 'next' : 'current';
         await updateLinks(pages[i], linktype);
     }
     if (d.next.month !== 1) return ts !== edittedTs ? ts : undefined;
 
     const createNewAnnualSubpage = async () => {
 
-        const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
+        const pagetitle = `利用者:DragoTest/test/Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
         console.log(`Creating ${pagetitle}...`);
         if (ts) await lib.dynamicDelay(ts);
         const lr = lib.getLatestRevision(pagetitle);
@@ -156,7 +158,7 @@ async function updateRFB(token, edittedTs) {
 
     const updateArchiveTemplte = async () => {
 
-        const pagetitle = 'Template:投稿ブロック依頼過去ログ';
+        const pagetitle = '利用者:DragoTest/test/Template:投稿ブロック依頼過去ログ';
         console.log(`Updating links on ${pagetitle}...`);
         if (ts) await lib.dynamicDelay(ts);
         const lr = await lib.getLatestRevision(pagetitle);
