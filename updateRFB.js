@@ -49,7 +49,7 @@ async function updateRFB(token, edittedTs) {
     // Create [[Wikipedia:投稿ブロック依頼 YYYY年MM月]]
     const createMonthlySubpage = async () => {
 
-        const pagetitle = `利用者:DragoTest/test/Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
+        const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
         console.log(`Creating ${pagetitle}...`);
         if (ts) await lib.dynamicDelay(ts);
         const lr = await lib.getLatestRevision(pagetitle);
@@ -117,7 +117,7 @@ async function updateRFB(token, edittedTs) {
 
     };
 
-    const pages = ['利用者:DragoTest/test/Template:投稿ブロック依頼', '利用者:DragoTest/test/Wikipedia:投稿ブロック依頼'];
+    const pages = ['Template:投稿ブロック依頼', 'Wikipedia:投稿ブロック依頼'];
     for (let i = 0; i < pages.length; i++) {
         const linktype = i === 0 ? 'next' : 'current';
         await updateLinks(pages[i], linktype);
@@ -126,7 +126,7 @@ async function updateRFB(token, edittedTs) {
 
     const createNewAnnualSubpage = async () => {
 
-        const pagetitle = `利用者:DragoTest/test/Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
+        const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
         console.log(`Creating ${pagetitle}...`);
         if (ts) await lib.dynamicDelay(ts);
         const lr = lib.getLatestRevision(pagetitle);
@@ -158,7 +158,7 @@ async function updateRFB(token, edittedTs) {
 
     const updateArchiveTemplte = async () => {
 
-        const pagetitle = '利用者:DragoTest/test/Template:投稿ブロック依頼過去ログ';
+        const pagetitle = 'Template:投稿ブロック依頼過去ログ';
         console.log(`Updating links on ${pagetitle}...`);
         if (ts) await lib.dynamicDelay(ts);
         const lr = await lib.getLatestRevision(pagetitle);
