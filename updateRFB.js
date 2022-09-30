@@ -30,7 +30,7 @@ async function updateRFB(token, edittedTs) {
     const dt = new Date();
     dt.setHours(dt.getHours() + 9); // e.g. 2022-07-31T23:35:00Z
     const curYear = dt.getFullYear(),
-          curMonth = dt.getMonth();
+          curMonth = dt.getMonth() + 1;
     const d = {
         last: {
             year: curMonth === 1 ? curYear - 1 : curYear,

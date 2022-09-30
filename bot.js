@@ -102,7 +102,7 @@ function monthTransitioning() {
     const d = new Date();
     d.setHours(d.getHours() + 9); // JST
     const year = d.getFullYear(),
-          month = d.getMonth(),
+          month = d.getMonth() + 1,
           lastDay = lib.lastDay(year, month),
           anchorTs40 = `${year}-${(month.toString().length === 1 ? '0' : '') + month}-${lastDay}T23:40:00Z`,
           anchorTs30 = anchorTs40.replace(/40:00Z$/, '30:00Z');
