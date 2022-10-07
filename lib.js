@@ -88,7 +88,7 @@ module.exports.dynamicDelay = dynamicDelay;
  * Edit a given page
  * @param {object} params
  * @param {string} [ts]
- * @returns {Promise<string|undefined>} JSON timestamp if the edit succeeded, or else undefined
+ * @returns {Promise<string|undefined|null>} JSON timestamp if the edit succeeded, or else undefined (null if re-login is needed)
  */
 module.exports.editPage = (params, ts) => {
     return new Promise(async resolve => {
@@ -111,7 +111,8 @@ module.exports.editPage = (params, ts) => {
                 return resolve();
             default:
                 console.log(params.title + ': Edit failed: ' + result);
-                return resolve();
+                const ret = result.indexOf('Invalid CSRF token') !== -1 ? null : undefined;
+                return resolve(ret);
         }
 
     });

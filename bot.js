@@ -10,7 +10,7 @@ const {updateRFB} = require('./updateRFB');
     console.log('The bot started running.');
 
     // Login
-    const token = await lib.getToken();
+    var token = await lib.getToken();
     if (!token) return;
 
     // Pages to maintain
@@ -51,6 +51,10 @@ const {updateRFB} = require('./updateRFB');
                 console.log('Checking ' + pages[i] + '...');
                 result = await markup(pages[i], token, checkGlobal, edittedTs);
                 edittedTs = result ? result : edittedTs;
+                if (result === null) {
+                    console.log('Edit token seems to have expired. Re-logging in...');
+                    token = await lib.getToken();
+                }
             }
         } else {
             console.log('Markup cancelled: No new blocks found.');
