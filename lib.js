@@ -55,7 +55,7 @@ module.exports.getLatestRevision = pagename => {
                 'originalContent': JSON.parse(JSON.stringify(resRev.slots.main.content)),
                 'revid': resRev.revid.toString()
             });
-        }).catch(err => resolve(console.log(err)));
+        }).catch(err => resolve(console.log(err.info)));
     });
 };
 
@@ -112,6 +112,91 @@ module.exports.editPage = params => {
         }
 
     });
+};
+
+/**
+ * Get an array of pagetitles that have links to a given page, transclusions not included
+ * @param {string} pagetitle 
+ * @param {Array<integer>} [nsExclude] an array of namespace numbers to exclude
+ * @returns {Promise<Array|undefined>}
+ */
+module.exports.getBackLinks = async (pagetitle, nsExclude) => {
+
+    var pages = [];
+    if (typeof nsExclude === 'undefined') nsExclude = [];
+    const query = blcontinue => {
+        return new Promise(resolve => {
+            api.request({
+                action: 'query',
+                list: 'backlinks',
+                bltitle: pagetitle,
+                bllimit: 'max',
+                blcontinue: blcontinue,
+                formatversion: '2'
+            }).then(async res => {
+
+                var resBL, resCont;
+                if (!res || !res.query || !(resBL = res.query.backlinks)) return resolve(console.log('getBackLinks: Query failed.'));
+
+                const titles = resBL.filter(obj => nsExclude.indexOf(obj.ns) === -1).map(obj => obj.title);
+                pages = pages.concat(titles);
+
+                if (res && res.continue && (resCont = res.continue.blcontinue)) {
+                    await query(resCont);
+                }
+                resolve(true);
+
+            }).catch(err => resolve(console.log(err.info)))
+        });
+    };
+
+    const result = await query();
+    return result ? pages : undefined;
+
+};
+
+/**
+ * Get an array of pagetitles that have links to a given page, transclusions not included
+ * @param {string} cattitle Must start with 'Category:' but automatically added 
+ * @param {Array<integer>} [nsExclude] an array of namespace numbers to exclude
+ * @returns {Promise<Array|undefined>}
+ */
+module.exports.getCatMembers = async (cattitle, nsExclude) => {
+
+    if (cattitle && !cattitle.match(/^Category:/)) cattitle = 'Category:' + cattitle;
+
+    var cats = [];
+    if (typeof nsExclude === 'undefined') nsExclude = [];
+    const query = cmcontinue => {
+        return new Promise(resolve => {
+            api.request({
+                action: 'query',
+                list: 'categorymembers',
+                cmtitle: cattitle,
+                cmprop: 'title',
+                cmlimit: 'max',
+                cmcontinue: cmcontinue,
+                formatversion: '2'
+            }).then(async res => {
+
+                var resCM, resCont;
+                if (!res || !res.query || !(resCM = res.query.categorymembers)) return resolve(console.log('getCatMembers: Query failed.'));
+
+                const titles = resCM.filter(obj => nsExclude.indexOf(obj.ns) === -1).map(obj => obj.title);
+                cats = cats.concat(titles);
+
+                if (res && res.continue && (resCont = res.continue.cmcontinue)) {
+                    await getCatMembers(cattitle, resCont);
+                }
+                resolve(true);
+
+            }).catch(err => resolve(console.log(err.info)));
+        });
+    };
+
+    const result = await query();
+    return result ? cats : undefined;
+
 };
 
 
