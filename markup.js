@@ -262,7 +262,6 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
     }
 
     // Get the latest revision and its timestamp(s)
-    if (edittedTs) await lib.dynamicDelay(edittedTs);
     const lr = await lib.getLatestRevision(pagename);
     if (!lr) return 'Failed to get the latest revision.';
     var newContent = lr.content;
@@ -283,7 +282,7 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
     };
     if (modOnly) params.bot = true;
 
-    const ts = await lib.editPage(params);
+    const ts = await lib.editPage(params, edittedTs);
     return ts;
 
 }

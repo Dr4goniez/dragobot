@@ -71,26 +71,29 @@ module.exports.delay = delay;
 
 /**
  * Make sure to have a 5-second interval between each edit
- * @param {string} edittedTs JSON timestamp
+ * @param {string} ts JSON timestamp
  * @returns {Promise}
  */
-module.exports.dynamicDelay = edittedTs => {
+function dynamicDelay(ts) {
     return new Promise(async (resolve, reject) => {
-        if (!edittedTs) return reject();
-        const diffMilliseconds = compareTimestamps(edittedTs, new Date().toJSON()); // Milliseconds after the last edit
+        if (!ts) return reject();
+        const diffMilliseconds = compareTimestamps(ts, new Date().toJSON()); // Milliseconds after the last edit
         if (diffMilliseconds < 5000) await delay(5000 - diffMilliseconds);
         resolve();
     });
-};
+}
+module.exports.dynamicDelay = dynamicDelay;
 
 /**
  * Edit a given page
- * @param {object} params 
+ * @param {object} params
+ * @param {string} [ts]
  * @returns {Promise<string|undefined>} JSON timestamp if the edit succeeded, or else undefined
  */
-module.exports.editPage = params => {
+module.exports.editPage = (params, ts) => {
     return new Promise(async resolve => {
 
+        if (ts) await dynamicDelay(ts);
         var result = await api.request(params)
         .then(res => {
             if (res && res.edit) {

@@ -51,7 +51,6 @@ async function updateRFB(token, edittedTs) {
 
         const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
         console.log(`Creating ${pagetitle}...`);
-        if (ts) await lib.dynamicDelay(ts);
         const lr = await lib.getLatestRevision(pagetitle);
         if (lr) return console.log(`Cancelled: ${pagetitle} already exists.`);
         if (lr === undefined) return;
@@ -63,7 +62,7 @@ async function updateRFB(token, edittedTs) {
             'bot': true,
             'token': token
         };
-        ts = await lib.editPage(params);
+        ts = await lib.editPage(params, ts);
 
     };
     await createMonthlySubpage();
@@ -86,7 +85,6 @@ async function updateRFB(token, edittedTs) {
     const updateLinks = async (pagetitle, linktype) => {
 
         console.log(`Updating links on ${pagetitle}...`);
-        if (ts) await lib.dynamicDelay(ts);
         const lr = await lib.getLatestRevision(pagetitle);
         if (!lr) return console.error('Failed to get the lastest revision of ' + pagetitle);
 
@@ -113,7 +111,7 @@ async function updateRFB(token, edittedTs) {
             'starttimestamp': lr.curtimestamp,
             'token': token
         };
-        ts = await lib.editPage(params);
+        ts = await lib.editPage(params, ts);
 
     };
 
@@ -128,7 +126,6 @@ async function updateRFB(token, edittedTs) {
 
         const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
         console.log(`Creating ${pagetitle}...`);
-        if (ts) await lib.dynamicDelay(ts);
         const lr = lib.getLatestRevision(pagetitle);
         if (lr) return console.log(`Cancelled: ${pagetitle} already exists.`);
         if (lr === undefined) return;
@@ -151,7 +148,7 @@ async function updateRFB(token, edittedTs) {
             'bot': true,
             'token': token
         };
-        ts = await lib.editPage(params);
+        ts = await lib.editPage(params, ts);
 
     };
     await createNewAnnualSubpage();
@@ -160,7 +157,6 @@ async function updateRFB(token, edittedTs) {
 
         const pagetitle = 'Template:投稿ブロック依頼過去ログ';
         console.log(`Updating links on ${pagetitle}...`);
-        if (ts) await lib.dynamicDelay(ts);
         const lr = await lib.getLatestRevision(pagetitle);
         if (!lr) return console.error('Failed to get the lastest revision of ' + pagetitle);
 
@@ -182,7 +178,7 @@ async function updateRFB(token, edittedTs) {
             'starttimestamp': lr.curtimestamp,
             'token': token
         };
-        ts = await lib.editPage(params);
+        ts = await lib.editPage(params, ts);
 
     };
     await updateArchiveTemplte();
