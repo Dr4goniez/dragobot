@@ -5,13 +5,9 @@ const lib = require('./lib');
 //********************** MAIN FUNCTION **********************/
 
 var UserAN;
-/**
- * {logid: username, logid2: username2...}
- */
+/** {logid: username, logid2: username2...} */
 const Logids = {};
-/**
- * {diffid: username, diffid2: username2...}
- */
+/** {diffid: username, diffid2: username2...} */
 const Diffs = {};
 var unprocessableLogids = [];
 var leend;
