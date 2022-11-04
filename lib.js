@@ -6,6 +6,8 @@ const api = new MWBot({
 module.exports.api = api;
 const net = require('net');
 const isCidr = require('is-cidr');
+const cheerio = require('cheerio');
+const axios = require('axios');
 
 
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
@@ -15,7 +17,7 @@ const isCidr = require('is-cidr');
  * @param {boolean} [experiment] If true, get a token for the test account
  * @returns {Promise<string>} token
  */
-module.exports.getToken = experiment => {
+function getToken(experiment) {
     return new Promise(resolve => {
         api.loginGetEditToken({
             username: experiment ? my.username2 : my.username,
@@ -26,38 +28,46 @@ module.exports.getToken = experiment => {
             resolve(res.csrftoken);
         }).catch((err) => resolve(console.log(err.response.login.reason)));
     });
-};
+}
+module.exports.getToken = getToken;
 
 /**
  * @param {string} pagename
- * @returns {Promise<boolean|{basetimestamp: string, curtimestamp: string, content: string, revid: string}>} False if page doesn't exit, or else an object
+ * @returns {Promise<boolean|{isRedirect: boolean, basetimestamp: string, curtimestamp: string, content: string, originalContent: string, revid: string}|undefined>}
+ * False if page doesn't exit, undefined if error occurs, or else an object
  */
-module.exports.getLatestRevision = pagename => {
+function getLatestRevision(pagename) {
     return new Promise(resolve => {
         api.request({
             action: 'query',
             titles: pagename,
-            prop: 'revisions',
+            prop: 'info|revisions',
             rvprop: 'ids|timestamp|content',
             rvslots: 'main',
             curtimestamp: 1,
             formatversion: 2
         }).then(res => {
-            if (!res || !res.query) return resolve();
-            const resPages = res.query.pages;
-            if (resPages.length === 0) return resolve();
-            if (resPages[0].missing) return resolve(false);
-            const resRev = resPages[0].revisions[0];
+
+            var resPgs;
+            if (!res || !res.query || !(resPgs = res.query.pages)) return resolve();
+            if (resPgs.length === 0) return resolve();
+            resPgs = resPgs[0];
+            if (resPgs.missing) return resolve(false);
+
+            const isRedirect = resPgs.redirect ? true : false;
+            const resRev = resPgs.revisions[0];
             resolve({
-                'basetimestamp': resRev.timestamp,
-                'curtimestamp': res.curtimestamp,
-                'content': resRev.slots.main.content,
-                'originalContent': JSON.parse(JSON.stringify(resRev.slots.main.content)),
-                'revid': resRev.revid.toString()
+                isRedirect: isRedirect,
+                basetimestamp: resRev.timestamp,
+                curtimestamp: res.curtimestamp,
+                content: resRev.slots.main.content,
+                originalContent: JSON.parse(JSON.stringify(resRev.slots.main.content)),
+                revid: resRev.revid.toString()
             });
         }).catch(err => resolve(console.log(err.info)));
     });
-};
+}
+module.exports.getLatestRevision = getLatestRevision;
 
 /**
  * Make an intentional N-millisecond delay (must be awaited)
@@ -78,7 +88,7 @@ function dynamicDelay(ts) {
     return new Promise(async (resolve, reject) => {
         if (!ts) return reject();
         const diffMilliseconds = compareTimestamps(ts, new Date().toJSON()); // Milliseconds after the last edit
-        if (diffMilliseconds < 5000) await delay(5000 - diffMilliseconds);
+        if (diffMilliseconds < 4200) await delay(4200 - diffMilliseconds);
         resolve();
     });
 }
@@ -90,7 +100,7 @@ module.exports.dynamicDelay = dynamicDelay;
  * @param {string} [ts]
  * @returns {Promise<string|undefined|null>} JSON timestamp if the edit succeeded, or else undefined (null if re-login is needed)
  */
-module.exports.editPage = (params, ts) => {
+function editPage(params, ts) {
     return new Promise(async resolve => {
 
         if (ts) await dynamicDelay(ts);
@@ -116,7 +126,8 @@ module.exports.editPage = (params, ts) => {
         }
 
     });
-};
+}
+module.exports.editPage = editPage;
 
 /**
  * Get an array of pagetitles that have links to a given page, transclusions not included
@@ -124,7 +135,7 @@ module.exports.editPage = (params, ts) => {
  * @param {Array<integer>} [nsExclude] an array of namespace numbers to exclude
  * @returns {Promise<Array|undefined>}
  */
-module.exports.getBackLinks = async (pagetitle, nsExclude) => {
+async function getBackLinks(pagetitle, nsExclude) {
 
     var pages = [];
     if (typeof nsExclude === 'undefined') nsExclude = [];
@@ -157,7 +168,8 @@ module.exports.getBackLinks = async (pagetitle, nsExclude) => {
     const result = await query();
     return result ? pages : undefined;
 
-};
+}
+module.exports.getBackLinks = getBackLinks;
 
 /**
  * Get an array of pagetitles that have links to a given page, transclusions not included
@@ -165,7 +177,7 @@ module.exports.getBackLinks = async (pagetitle, nsExclude) => {
  * @param {Array<integer>} [nsExclude] an array of namespace numbers to exclude
  * @returns {Promise<Array|undefined>}
  */
-module.exports.getCatMembers = async (cattitle, nsExclude) => {
+async function getCatMembers(cattitle, nsExclude) {
 
     if (cattitle && !cattitle.match(/^Category:/)) cattitle = 'Category:' + cattitle;
 
@@ -198,10 +210,171 @@ module.exports.getCatMembers = async (cattitle, nsExclude) => {
         });
     };
 
-    const result = await query();
-    return result ? cats : undefined;
+    var result = await query();
+    result = result ? cats : undefined;
+    if (Array.isArray(result) && result.length === 0) console.log('No page belongs to ' + cattitle);
+    return result;
 
-};
+}
+module.exports.getCatMembers = getCatMembers;
+
+/**
+ * Get a list of pages that transclude a given page
+ * @param {string} pagetitle 
+ * @returns {Promise<Array>}
+ */
+async function getTranscludingPages(pagetitle) {
+
+    var pages = [];
+    const query = function(eicontinue) {
+        return new Promise(resolve => {
+            api.request({
+                action: 'query',
+                list: 'embeddedin',
+                eititle: pagetitle,
+                eifilterredir: 'nonredirects',
+                eilimit: 'max',
+                eicontinue: eicontinue,
+                formatversion: '2'
+            }).then(async res => {
+
+                var resEi, resCont;
+                if (!res || !res.query || !(resEi = res.query.embeddedin)) return resolve();
+
+                const titles = resEi.map(obj => obj.title);
+                pages = pages.concat(titles);
+
+                if (res && res.continue && (resCont = res.continue.eicontinue)) {
+                    await query(resCont);
+                }
+                resolve();
+
+            }).catch(function(err) {
+                console.log(err.info);
+                resolve();
+            });
+        });
+    };
+
+    await query();
+    return pages;
+    
+}
+module.exports.getTranscludingPages = getTranscludingPages;
+
+/**
+ * Filter protected pages out of a list of pagetitles
+ * @param {Array} pagetitles
+ * @return {Promise<Array>}
+ */
+async function filterOutProtectedPages(pagetitles) {
+
+    var protected = [];
+    const query = function(pagetitlesArr) {
+        return new Promise(resolve => {
+            api.request({
+                action: 'query',
+                titles: pagetitlesArr.join('|'),
+                prop: 'info',
+                inprop: 'protection',
+                formatversion: '2'
+            }).then(res => {
+
+                var resPg;
+                if (!res || !res.query || !(resPg = res.query.pages)) return resolve();
+
+                const d = new Date();
+                const isProtected = function(prtArr) {
+                    return prtArr.some(function(obj) {
+                        if (!obj.expiry) return false;
+                        if (obj.expiry.match(/^in/)) return true;
+                        const protectedUntil = new Date(obj.expiry);
+                        return d < protectedUntil;
+                    });
+                };
+
+                const titles = resPg.filter(obj => {
+                    var prtArr;
+                    if (!obj.title) return false;
+                    if (!(prtArr = obj.protection) || prtArr.length === 0) {
+                        return false;
+                    } else {
+                        return isProtected(prtArr);
+                    }
+                }).map(obj => obj.title);
+                protected = protected.concat(titles);
+
+                resolve();
+
+            }).catch(err => {
+                console.log(err.info);
+                resolve();
+            });
+        });
+    };
+
+    const pagetitlesArr = JSON.parse(JSON.stringify(pagetitles));
+    const deferreds = [];
+    while (pagetitlesArr.length) {
+        deferreds.push(query(pagetitlesArr.splice(0, 500)));
+    }
+    await Promise.all(deferreds);
+
+    return protected;
+
+}
+module.exports.filterOutProtectedPages = filterOutProtectedPages;
+
+/**
+ * Scrape a webpage
+ * @param {string} url 
+ * @returns {Promise<cheerio|undefined>}
+ */
+async function scrape(url) {
+    try {
+        const res = await axios.get(url);
+        const $ = cheerio.load(res.data);
+        return $;
+    }
+    catch (err) {
+        return console.error(err);
+    }
+}
+module.exports.scrape = scrape;
+
+/**
+ * Get a username from an account creation logid
+ * @param {number|string} logid 
+ * @returns {Promise<string|undefined>}
+ */
+async function scrapeUsernameFromLogid(logid) {
+
+    const url = 'https://ja.wikipedia.org/w/index.php?title=%E7%89%B9%E5%88%A5:%E3%83%AD%E3%82%B0&logid=' + logid;
+    const $ = await scrape(url);
+    if (!$) return;
+
+    var $newusers = $('.mw-logline-newusers');
+    if ($newusers.length === 0) return;
+    $newusers = $newusers.eq(0);
+
+    var username;
+    switch($newusers.attr('data-mw-logaction')) {
+        case 'newusers/create':
+        case 'newusers/autocreate':
+        case 'newusers/create2': // Created by an existing user
+        case 'newusers/byemail': // Created by an existing user and password sent off
+            username = $newusers.children('a.mw-userlink').eq(0).text();
+            break;
+        case 'newusers/forcecreatelocal':
+            username = $newusers.children('a').last().text().replace(/^利用者:/, '');
+            break;
+        default:
+    }
+
+    return username;
+
+}
+module.exports.scrapeUsernameFromLogid = scrapeUsernameFromLogid;
 
 
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
@@ -305,8 +478,14 @@ function findTemplates(wikitext, templateName, templatePrefix) {
     }
 
     // Sort out certain templates
+    var errHandler = false;
     templates = templates.filter(item => {
-        const name = item.match(/^\{{2}\s*([^\|\{\}\n]+)/)[1].trim(); // {{ TEMPLATENAME | ... }} の TEMPLATENAME を抽出
+        var name = item.match(/^\{{2}\s*([^\|\{\}\n]+)/);
+        if (!name) {
+            errHandler = true;
+            return false;
+        }
+        name = name[1].trim(); // {{ TEMPLATENAME | ... }} の TEMPLATENAME を抽出
         if (templateName && templatePrefix) {
             return name.match(templateNameRegExp) || name.match(templatePrefixRegExp);
         } else if (templateName) {
@@ -316,6 +495,7 @@ function findTemplates(wikitext, templateName, templatePrefix) {
         }
     });
 
+    if (errHandler) console.log('findTemplates: Detected unprocessable braces');
     return templates;
 
 }
@@ -452,7 +632,7 @@ module.exports.getTemplateParams = getTemplateParams;
  * @param {string} wikitext 
  * @returns {Array}
  */
-module.exports.getOpenUserANs = wikitext => {
+function getOpenUserANs(wikitext) {
 
     if (!wikitext) {
         console.log('lib.getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
@@ -526,13 +706,14 @@ module.exports.getOpenUserANs = wikitext => {
 
     return UserAN.filter(obj => !obj.closed).map(obj => obj.template);
 
-};
+}
+module.exports.getOpenUserANs = getOpenUserANs;
 
 /**
  * @param {string} pageContent
  * @returns {Array<{header: string, title: string, level: number, index: number, content: string, deepest: boolean}>} Never undefined
  */
-module.exports.parseContentBySection = pageContent => {
+function parseContentBySection(pageContent) {
 
     const regex = {
         'header': /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/,
@@ -587,6 +768,7 @@ module.exports.parseContentBySection = pageContent => {
     return sections;
 
 }
+module.exports.parseContentBySection = parseContentBySection;
 
 /**
  * Split a string into two
@@ -595,13 +777,14 @@ module.exports.parseContentBySection = pageContent => {
  * @param {boolean} lastindex If true, search the delimiter from the bottom of the string
  * @returns {Array}
  */
-module.exports.splitInto2 = (str, delimiter, lastindex) => {
+function splitInto2(str, delimiter, lastindex) {
     const index = lastindex ? str.lastIndexOf(delimiter) : str.indexOf(delimiter);
     if (index === -1) return;
     const firstPart = str.substring(0, index);
     const secondPart = str.substring(index + 1);
     return [firstPart, secondPart];
-};
+}
+module.exports.splitInto2 = splitInto2;
 
 /**
  * @param {string} timestamp1 
@@ -624,7 +807,7 @@ module.exports.compareTimestamps = compareTimestamps;
  * @param {string} timestamp2 
  * @returns {string}
  */
-module.exports.getDuration = (timestamp1, timestamp2) => {
+function getDuration(timestamp1, timestamp2) {
 
     const ts1 = new Date(timestamp1);
     const ts2 = new Date(timestamp2);
@@ -663,7 +846,8 @@ module.exports.getDuration = (timestamp1, timestamp2) => {
         return seconds + '秒';
     }
 
-};
+}
+module.exports.getDuration = getDuration;
 
 /**
  * Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!')
@@ -681,35 +865,48 @@ module.exports.escapeRegExp = escapeRegExp;
  * @param {number|string} month 1-12
  * @returns {number}
  */
-module.exports.lastDay = (year, month) => new Date(year, month, 0).getDate();
+function lastDay(year, month){
+    return new Date(year, month, 0).getDate();
+}
+module.exports.lastDay = lastDay;
 
 /**
  * Get the Japanese name of a day of the week from JSON timestamp
  * @param {string} timestamp 
  * @returns {string}
  */
-module.exports.getWeekDayJa = timestamp => {
+function getWeekDayJa(timestamp) {
     const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
     return daysOfWeek[new Date(timestamp).getDay()];
-};
+}
+module.exports.getWeekDayJa = getWeekDayJa;
 
 /**
  * Check if a string is an IP address
  * @param {string} ip 
  * @returns {boolean}
  */
-module.exports.isIPAddress = ip => net.isIP(ip) || isCidr(ip);
+function isIPAddress(ip) {
+    return net.isIP(ip) || isCidr(ip);
+}
+module.exports.isIPAddress = isIPAddress;
 
 /**
  * Check if a string is an IPv4 address
  * @param {string} ip 
  * @returns {boolean}
  */
-module.exports.isIPv4 = ip => net.isIPv4(ip) || isCidr.v4(ip);
+function isIPv4(ip) {
+    return net.isIPv4(ip) || isCidr.v4(ip);
+}
+module.exports.isIPv4 = isIPv4;
 
 /**
  * Check if a string is an IPv6 address
  * @param {string} ip 
  * @returns {boolean}
  */
-module.exports.isIPv6 = ip => net.isIPv6(ip) || isCidr.v6(ip);
+function isIPv6(ip) {
+    return net.isIPv6(ip) || isCidr.v6(ip);
+}
+module.exports.isIPv6 = isIPv6;

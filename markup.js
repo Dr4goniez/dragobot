@@ -5,8 +5,56 @@ const lib = require('./lib');
 //********************** MAIN FUNCTION **********************/
 
 var UserAN;
-const Logids = {}, // {logid: username, logid2: username2...}
-      Diffs = {}; // {diffid: username, diffid2: username2...} (These objects keep their values)
+/**
+ * {logid: username, logid2: username2...}
+ */
+const Logids = {};
+/**
+ * {diffid: username, diffid2: username2...}
+ */
+const Diffs = {};
+var unprocessableLogids = [];
+var leend;
+
+/**
+ * @param {string} token 
+ * @param {boolean} checkGlobal 
+ * @param {string} [edittedTs] 
+ * @returns {Promise<{edittedTs: string|undefined, token: string|null}>} token has a value only if re-logged in
+ */
+async function markupUserANs (token, checkGlobal, edittedTs) {
+
+    // Pages to maintain
+    const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
+        ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット',
+        AN3RR = 'Wikipedia:管理者伝言板/3RR',
+        Iccic = ANS + '/Iccic',
+        ISECHIKA = ANS + '/いせちか',
+        KAGE = ANS + '/影武者',
+        KIYOSHIMA = ANS + '/清島達郎',
+        SHINJU = ANS + '/真珠王子';
+    const pages = [ANI, ANS, AN3RR, Iccic, ISECHIKA, KAGE, KIYOSHIMA, SHINJU];
+
+    var result,
+        reloggedin = false;
+    for (const page of pages) {
+        console.log(`Checking ${page}...`);
+        result = await markup(page, token, checkGlobal, edittedTs);
+        edittedTs = result ? result : edittedTs;
+        if (result === null) {
+            console.log('Edit token seems to have expired. Re-logging in...');
+            token = await lib.getToken();
+        }
+    }
+
+    return {
+        edittedTs: edittedTs,
+        token : reloggedin ? token : null
+    };
+
+}
+module.exports.markupUserANs = markupUserANs;
+
 /**
  * @param {string} pagename 
  * @param {string} token
@@ -32,31 +80,31 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
     // Create an array of objects out of the templates
     for (const tl of templates) {
         UserAN.push({
-            'old': tl,
-            'new': '',
-            'modified': '',
-            'timestamp': '',
-            'section': '',
-            'user': '',
-            'type': '',
-            'logid': '',
-            'diff': '',
-            'none': '',
+            old: tl,
+            new: '',
+            modified: '',
+            timestamp: '',
+            section: '',
+            user: '',
+            type: '',
+            logid: '',
+            diff: '',
+            none: '',
             // The following gets a value if the user reported by the UserAN has been blocked
-            'domain': '', // Like partial block, global block, and global lock
-            'duration': '',
-            'flags': '',
-            'date': '',
+            domain: '', // Like partial block, global block, and global lock
+            duration: '',
+            flags: '',
+            date: '',
         });
     }
     
     // RegExps to evaluate the templates' parameters
     const paramsRegExp = {
-        'bot': /'^\s*bot\s*=/, // bot=
-        'user': /^\s*(?:1|[Uu]ser)\s*=/, // Template param: 1=, user=, or User=
-        'type': /^\s*(?:t|[Tt]ype)\s*=/, // Template param: t=, type=, or Type=
-        'statusS': /^\s*(?:状態|s|[Ss]tatus)\s*=/, // Template param: 状態=, s=, status=, or Status=. ⇓ Closed verson
-        'section': /={2,5}[^\S\r\n]*.+[^\S\r\n]*={2,5}/g // == sectiontitle == (2-5 levels)
+        bot: /'^\s*bot\s*=/, // bot=
+        user: /^\s*(?:1|[Uu]ser)\s*=/, // Template param: 1=, user=, or User=
+        type: /^\s*(?:t|[Tt]ype)\s*=/, // Template param: t=, type=, or Type=
+        statusS: /^\s*(?:状態|s|[Ss]tatus)\s*=/, // Template param: 状態=, s=, status=, or Status=. ⇓ Closed verson
+        section: /={2,5}[^\S\r\n]*.+[^\S\r\n]*={2,5}/g // == sectiontitle == (2-5 levels)
     };
 
     // Set the 'type', 'user', 'section', and 'timestamp' properties of the object
@@ -144,7 +192,10 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
     UserAN = UserAN.filter(obj => obj.user || obj.logid || obj.diff); // Remove UserANs that can't be forwarded to block check
 
     // Get an array of logids and diff numbers (these need to be converted to usernames through API requests before block check)
-    const logids = UserAN.filter(obj => obj.logid && !obj.user && !Logids[obj.logid]).map(obj => obj.logid);
+    var collectLogids = function() {
+        return UserAN.filter(obj => obj.logid && !obj.user && !Logids[obj.logid]).map(obj => obj.logid).filter(logid => !unprocessableLogids.includes(logid));
+    };
+    var logids = collectLogids();
     const diffs = UserAN.filter(obj => obj.diff && !obj.user && !Diffs[obj.diff]).map(obj => obj.diff);
 
     // Convert logids and diffids to usernames through API queries (for logids, only search for the latest 5000 logevents)
@@ -155,6 +206,23 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
         if (obj.logid && !obj.user && Logids[obj.logid]) obj.user = Logids[obj.logid];
         if (obj.diff && !obj.user && Diffs[obj.diff]) obj.user = Diffs[obj.diff];
     });
+
+    // Another attempt to convert logids
+    logids = collectLogids();
+    queries = [];
+    logids.forEach(logid => {
+        queries.push(lib.scrapeUsernameFromLogid(logid));
+    });
+    const scrapedUsernames = await Promise.all(queries);
+    scrapedUsernames.forEach((u, i) => {
+        var logid = logids[i];
+        if (!Logids[logid]) Logids[logid] = u;
+    });
+    UserAN.forEach(obj => {
+        if (obj.logid && !obj.user && Logids[obj.logid]) obj.user = Logids[obj.logid];
+    });
+    logids = collectLogids();
+    unprocessableLogids = unprocessableLogids.concat(logids).filter((el, i, arr) => arr.indexOf(el) === i);
 
     // Sort registered users and IPs
     var users = UserAN.filter(obj => obj.user).map(obj => obj.user);
@@ -271,14 +339,14 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
 
     // Edit the page
     const params = {
-        'action': 'edit',
-        'title': pagename,
-        'text': newContent,
-        'summary': summary,
-        'minor': true,
-        'basetimestamp': lr.basetimestamp,
-        'starttimestamp': lr.curtimestamp,
-        'token': token
+        action: 'edit',
+        title: pagename,
+        text: newContent,
+        summary: summary,
+        minor: true,
+        basetimestamp: lr.basetimestamp,
+        starttimestamp: lr.curtimestamp,
+        token: token
     };
     if (modOnly) params.bot = true;
 
@@ -286,7 +354,6 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
     return ts;
 
 }
-module.exports.markup = markup;
 
 //********************** UTILITY FUNCTIONS **********************/
 
@@ -295,31 +362,49 @@ async function convertLogidsToUsernames(arr) {
     if (arr.length === 0) return [];
     var logidsArr = JSON.parse(JSON.stringify(arr));
     var cnt = 0;
-    return await logidQuery();
+    var firstTs;
+    await logidQuery();
+    if (firstTs) leend = firstTs;
+    return;
 
     function logidQuery(lecontinue) {
         cnt++;
         return new Promise(resolve => {
             lib.api.request({
-                'action': 'query',
-                'list': 'logevents',
-                'leprop': 'ids|title',
-                'letype': 'newusers',
-                'lelimit': 'max',
-                'lecontinue': lecontinue,
-                'formatversion': 2
+                action: 'query',
+                list: 'logevents',
+                leprop: 'ids|title|timestamp',
+                letype: 'newusers',
+                leend: leend,
+                lelimit: 'max',
+                lecontinue: lecontinue,
+                formatversion: '2'
             }).then(async res => {
-                var resLgEv;
-                if (!res || !res.query) return resolve();
-                if ((resLgEv = res.query.logevents).length === 0) return resolve();
+
+                var resLgEv, resCont;
+                if (!res || !res.query || !(resLgEv = res.query.logevents)) return resolve();
+                if (resLgEv.length === 0) return resolve();
+
                 resLgEv.forEach(obj => {
+                    if (!firstTs) {
+                        firstTs = obj.timestamp;
+                        firstTs = new Date(firstTs);
+                        firstTs.setSeconds(firstTs.getSeconds() + 1);
+                        firstTs = firstTs.toJSON().replace(/\.\d{3}Z$/, 'Z');
+                    }
                     if (typeof obj.title === 'undefined') return;
                     const logid = obj.logid.toString();
                     if (!Logids[logid]) Logids[logid] = obj.title.replace(/^利用者:/, '');
                 });
                 logidsArr = logidsArr.filter(item => !Logids[item]); // Remove logids that have already been converted
-                if (logidsArr.length !== 0 && res.continue && cnt <= 10) await logidQuery(res.continue.lecontinue);
+
+                if (logidsArr.length !== 0 && cnt <= 10) {
+                    if (res && res.continue && (resCont = res.continue.lecontinue)) {
+                        await logidQuery(resCont);
+                    }
+                }
                 resolve();
+
             }).catch(err => resolve(console.log(err)));
         });
     }
@@ -330,20 +415,24 @@ async function convertDiffidsToUsernames(arr) {
     if (arr.length === 0) return [];
     return new Promise(resolve => {
         lib.api.request({
-            'action': 'query',
-            'revids': arr.slice(0, 500).join('|'),
-            'prop': 'revisions',
-            'formatversion': 2
+            action: 'query',
+            revids: arr.slice(0, 500).join('|'),
+            prop: 'revisions',
+            formatversion: '2'
         }).then(res => {
+
             var resPgs;
-            if (!res || !res.query) return resolve();
-            if ((resPgs = res.query.pages).length === 0) return resolve();
+            if (!res || !res.query || !(resPgs = res.query.pages)) return resolve();
+            if (resPgs.length === 0) return resolve();
+
             resPgs.forEach(page => {
                 var revid = page.revisions[0].revid.toString();
                 if (!Diffs[revid]) Diffs[revid] = page.revisions[0].user;
             });
+
             resolve();
-        }).catch(() => resolve(returnArr));
+
+        }).catch(err => resolve(console.log(err)));
     });
 }
 
@@ -362,16 +451,18 @@ async function getBlockedUsers(usersArr) {
     function blockQuery(arr) {
         return new Promise(resolve => {
             lib.api.request({
-                'action': 'query',
-                'list': 'blocks',
-                'bklimit': 'max',
-                'bkusers': arr.join('|'),
-                'bkprop': 'user|timestamp|expiry|restrictions|flags',
-                'formatversion': 2
+                action: 'query',
+                list: 'blocks',
+                bklimit: 'max',
+                bkusers: arr.join('|'),
+                bkprop: 'user|timestamp|expiry|restrictions|flags',
+                formatversion: '2'
             }).then(res => {
+
                 var resBlck;
-                if (!res || !res.query) return resolve();
-                if ((resBlck = res.query.blocks).length === 0) return resolve();
+                if (!res || !res.query || !(resBlck = res.query.blocks)) return resolve();
+                if (resBlck.length === 0) return resolve();
+
                 for (const blck of resBlck) {
                     const nousertalk = !blck.allowusertalk,
                           noemail = blck.noemail,
@@ -395,7 +486,9 @@ async function getBlockedUsers(usersArr) {
                         }
                     });
                 }
+
                 resolve();
+
             }).catch((err) => resolve(console.log(err)));
         });
     }
@@ -412,16 +505,18 @@ async function getBlockedIps(ipsArr) {
     function blockQuery(ip) {
         return new Promise(resolve => {
             lib.api.request({
-                'action': 'query',
-                'list': 'blocks',
-                'bklimit': 1,
-                'bkip': ip,
-                'bkprop': 'user|timestamp|expiry|restrictions|flags',
-                'formatversion': 2
+                action: 'query',
+                list: 'blocks',
+                bklimit: '1',
+                bkip: ip,
+                bkprop: 'user|timestamp|expiry|restrictions|flags',
+                formatversion: '2'
             }).then(res => {
+
                 var resBlck;
-                if (!res || !res.query) return resolve();
-                if ((resBlck = res.query.blocks).length === 0) return resolve();
+                if (!res || !res.query || !(resBlck = res.query.blocks)) return resolve();
+                if (resBlck.length === 0) return resolve();
+
                 resBlck = resBlck[0];
                 const nousertalk = !resBlck.allowusertalk,
                       noemail = resBlck.noemail,
@@ -448,7 +543,9 @@ async function getBlockedIps(ipsArr) {
                         }
                     }
                 });
+ 
                 resolve();
+
             }).catch((err) => resolve(console.log(err)));
         });
     }
@@ -468,14 +565,14 @@ async function getLockedUsers(regUsersArr) {
         lib.api.request({
             action: 'query',
             list: 'globalallusers',
-            agulimit: 1,
+            agulimit: '1',
             agufrom: user,
             aguto: user,
             aguprop: 'lockinfo'
         }).then(res => {
             var resLck;
-            if (!res || !res.query) return resolve();
-            if ((resLck = res.query.globalallusers).length === 0) return resolve(false); // The array is empty: not locked
+            if (!res || !res.query || !(resLck = res.query.globalallusers)) return resolve();
+            if (resLck.length === 0) return resolve(false); // The array is empty: not locked
             resolve(resLck[0].locked !== undefined); // resLck[0].locked === '' if locked, otherwise undefined
         }).catch((err) => resolve(console.log(err)));
     });
@@ -507,16 +604,18 @@ async function getGloballyBlockedIps(arr) {
     const gblockQuery = ip => {
         return new Promise(resolve => {
             lib.api.request({
-                'action': 'query',
-                'list': 'globalblocks',
-                'bgip': ip,
-                'bglimit': 1,
-                'bgprop': 'address|expiry|timestamp',
-                'formatversion': 2
+                action: 'query',
+                list: 'globalblocks',
+                bgip: ip,
+                bglimit: '1',
+                bgprop: 'address|expiry|timestamp',
+                formatversion: '2'
             }).then(res => {
+
                 var resGblck;
-                if (!res || !res.query) return resolve();
-                if ((resGblck = res.query.globalblocks).length === 0) return resolve(); // If the array in the reponse is empty, the IP isn't g-blocked
+                if (!res || !res.query || !(resGblck = res.query.globalblocks)) return resolve();
+                if (resGblck.length === 0) return resolve(); // If the array in the reponse is empty, the IP isn't g-blocked
+
                 resGblck = resGblck[0];
                 const indef = (resGblck.expiry === 'infinity');
                 UserAN.forEach(obj => {
@@ -531,7 +630,9 @@ async function getGloballyBlockedIps(arr) {
                         }
                     }
                 });
+
                 resolve();
+
             }).catch((err) => resolve(console.log(err)));
         });
     };
