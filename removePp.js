@@ -1,28 +1,28 @@
 const lib = require('./lib');
 
 const pp = [
-    'pp',
-    'pp-dispute',
-    'pp-move',
-    'pp-move-dispute',
-    'pp-move-vandalism',
-    'pp-move-vand',
-    'pp-move-vd',
-    'pp-office',
-    'pp-office-dmca',
-    'pp-permanent',
-    'pp-reset',
-    'pp-semi-indef',
-    'pp-template',
-    'pp-vandalism',
-    'pp-vand',
-    'pp-vd',
+    'Pp',
+    'Pp-dispute',
+    'Pp-move',
+    'Pp-move-dispute',
+    'Pp-move-vandalism',
+    'Pp-move-vand',
+    'Pp-move-vd',
+    'Pp-office',
+    'Pp-office-dmca',
+    'Pp-permanent',
+    'Pp-reset',
+    'Pp-semi-indef',
+    'Pp-template',
+    'Pp-vandalism',
+    'Pp-vand',
+    'Pp-vd',
     '保護', // Master
     '保護S',
     '保護s',
     '全保護',
     '半保護', // Master
-    'sprotected',
+    'Sprotected',
     '半保護S',
     '拡張半保護', // Master
     '保護運用', // Master
@@ -32,14 +32,18 @@ const pp = [
     '移動拡張半保護'
 ];
 
-const ignore = [];
+const ignore = [
+    'Wikipedia:主要なテンプレート/メンテナンス',
+    'Template‐ノート:Pp/testcases',
+    'Template:Pp-meta/sandbox'
+];
 
 /**
  * @param {string} token
  * @param {string} [botRunTs] Timestamp of when the bot started the current procedure: if provided, quit function 10 seconds before the next procedure starts
  * @param {string} [edittedTs] Timestamp of last edit
- * @returns {Promise<undefined|{edittedTs: string|undefined, token: string|null}>} undefined if no page is in the category, or else an object
- * (token has a value only if re-logged in)
+ * @returns {Promise<undefined|{edittedTs: string|undefined, token: string|null}>} editedTs has a value only if at least one page is edited, and token has
+ * a value only if re-logged in
  */
 async function removePp(token, botRunTs, edittedTs) {
 
@@ -53,7 +57,10 @@ async function removePp(token, botRunTs, edittedTs) {
     const transcludingPp = result.concat.apply([], result).filter((el, i, arr) => arr.indexOf(el) === i);
 
     const protected = await lib.filterOutProtectedPages(transcludingPp);
-    const notProtected = transcludingPp.filter(el => protected.indexOf(el) === -1 && !ignore.includes(el));
+    var notProtected = transcludingPp.filter(el => protected.indexOf(el) === -1 && !ignore.includes(el));
+    notProtected = notProtected.filter(el => {
+        return pp.map(tl => 'Template:' + tl + '/').every(pfx => el.indexOf(pfx) === -1); // Remove subpages of pp templates
+    });
 
     console.log(`${notProtected.length} page(s) found.`);
     if (notProtected.length === 0) return;
@@ -107,17 +114,6 @@ async function editPageWithPp(pagetitle, token, edittedTs) {
 
     var templates = lib.findTemplates(lr.content, pp);
     if (templates.length === 0) {
-        const testcase = lib.findTemplates(lr.content, 'test case');
-        if (testcase.length !== 0) {
-            const isDemo = testcase.some(el => {
-                const params = lib.getTemplateParams(el);
-                return params.some(param => param.match(/^demolevel\s*=/i));
-            });
-            if (isDemo) {
-                ignore.push(pagetitle);
-                return console.log('Cancelled: The pp in this page is used as a demo.');
-            }
-        }
         return console.log('No protection templates found.');
     } else {
 
