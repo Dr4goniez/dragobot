@@ -57,6 +57,7 @@ async function removePp(token, botRunTs, edittedTs) {
     const transcludingPp = result.concat.apply([], result).filter((el, i, arr) => arr.indexOf(el) === i);
 
     const protected = await lib.filterOutProtectedPages(transcludingPp);
+    if (!protected) return console.log('Failed to filter out protected pages.');
     var notProtected = transcludingPp.filter(el => protected.indexOf(el) === -1 && !ignore.includes(el));
     notProtected = notProtected.filter(el => {
         return pp.map(tl => 'Template:' + tl + '/').every(pfx => el.indexOf(pfx) === -1); // Remove subpages of pp templates

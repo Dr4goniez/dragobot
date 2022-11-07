@@ -264,12 +264,15 @@ module.exports.getTranscludingPages = getTranscludingPages;
 
 /**
  * Filter protected pages out of a list of pagetitles
- * @param {Array} pagetitles
- * @return {Promise<Array>}
+ * @param {Array<string>} pagetitles
+ * @return {Promise<Array<string>>|null} Protected titles; null if any internal query failed
  */
 async function filterOutProtectedPages(pagetitles) {
 
-    var protected = [];
+    /**
+     * @param {Array<string>} pagetitlesArr Subject to apihighlimit
+     * @returns {Promise<Array<string>>} Protected titles
+     */
     const query = function(pagetitlesArr) {
         return new Promise(resolve => {
             api.request({
@@ -302,9 +305,8 @@ async function filterOutProtectedPages(pagetitles) {
                         return isProtected(prtArr);
                     }
                 }).map(obj => obj.title);
-                protected = protected.concat(titles);
 
-                resolve();
+                resolve(titles);
 
             }).catch(err => {
                 console.log(err.info);
@@ -318,9 +320,12 @@ async function filterOutProtectedPages(pagetitles) {
     while (pagetitlesArr.length) {
         deferreds.push(query(pagetitlesArr.splice(0, 500)));
     }
-    await Promise.all(deferreds);
+    const result = await Promise.all(deferreds);
 
-    return protected;
+    const failed = result.some(el => !el);
+    const protected = result.filter(el => el).concat.apply([], result).filter((el, i, arr) => arr.indexOf(el) === i);
+
+    return failed ? null : protected;
 
 }
 module.exports.filterOutProtectedPages = filterOutProtectedPages;
