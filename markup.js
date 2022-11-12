@@ -15,10 +15,10 @@ var leend;
 /**
  * @param {string} token 
  * @param {boolean} checkGlobal 
- * @param {string} [edittedTs] 
- * @returns {Promise<{edittedTs: string|undefined, token: string|null}>} token has a value only if re-logged in
+ * @param {string} [editedTs] 
+ * @returns {Promise<{editedTs: string|undefined, token: string|null}>} token has a value only if re-logged in
  */
-async function markupUserANs (token, checkGlobal, edittedTs) {
+async function markupUserANs (token, checkGlobal, editedTs) {
 
     // Pages to maintain
     const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
@@ -35,8 +35,8 @@ async function markupUserANs (token, checkGlobal, edittedTs) {
         reloggedin = false;
     for (const page of pages) {
         lib.log(`Checking ${page}...`);
-        result = await markup(page, token, checkGlobal, edittedTs);
-        edittedTs = result ? result : edittedTs;
+        result = await markup(page, token, checkGlobal, editedTs);
+        editedTs = result ? result : editedTs;
         if (result === null) {
             lib.log('Edit token seems to have expired. Re-logging in...');
             token = await lib.getToken();
@@ -44,7 +44,7 @@ async function markupUserANs (token, checkGlobal, edittedTs) {
     }
 
     return {
-        edittedTs: edittedTs,
+        editedTs: editedTs,
         token : reloggedin ? token : null
     };
 
@@ -55,10 +55,10 @@ module.exports.markupUserANs = markupUserANs;
  * @param {string} pagename 
  * @param {string} token
  * @param {boolean} checkGlobal
- * @param {string} [edittedTs] Timestamp of last edit
- * @returns {Promise<string|undefined|null>} JSON timestamp if the target page is editted, or else undefined (null if re-login is needed)
+ * @param {string} [editedTs] Timestamp of last edit
+ * @returns {Promise<string|undefined|null>} JSON timestamp if the target page is edited, or else undefined (null if re-login is needed)
  */
-async function markup(pagename, token, checkGlobal, edittedTs) {
+async function markup(pagename, token, checkGlobal, editedTs) {
 
     // Initialize array
     UserAN = [];
@@ -346,7 +346,7 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
     };
     if (modOnly) params.bot = true;
 
-    const ts = await lib.editPage(params, edittedTs);
+    const ts = await lib.editPage(params, editedTs);
     return ts;
 
 }

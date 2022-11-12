@@ -7,13 +7,13 @@ const lib = require('./lib');
 /**
  * Monthly update of RFB-related pages
  * @param {string} token 
- * @param {string} [edittedTs] 
- * @returns {Promise<string|undefined>} JSON timestamp if any page is editted, or else undefined
+ * @param {string} [editedTs] 
+ * @returns {Promise<string|undefined>} JSON timestamp if any page is edited, or else undefined
  */
-async function updateRFB(token, edittedTs) {
+async function updateRFB(token, editedTs) {
 
     lib.log('Starting monthly update of RFB-replated pages...');
-    var ts = edittedTs ? edittedTs : undefined;
+    var ts = editedTs ? editedTs : undefined;
 
     /************************************************************************************
      * List of pages that need to be updated
@@ -120,7 +120,7 @@ async function updateRFB(token, edittedTs) {
         const linktype = i === 0 ? 'next' : 'current';
         await updateLinks(pages[i], linktype);
     }
-    if (d.next.month !== 1) return ts !== edittedTs ? ts : undefined;
+    if (d.next.month !== 1) return ts !== editedTs ? ts : undefined;
 
     const createNewAnnualSubpage = async () => {
 
@@ -183,7 +183,7 @@ async function updateRFB(token, edittedTs) {
     };
     await updateArchiveTemplte();
 
-    return ts !== edittedTs ? ts : undefined;
+    return ts !== editedTs ? ts : undefined;
 
 }
 module.exports.updateRFB = updateRFB;

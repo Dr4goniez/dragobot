@@ -41,11 +41,11 @@ const ignore = [
 /**
  * @param {string} token
  * @param {string} [botRunTs] Timestamp of when the bot started the current procedure: if provided, quit function 10 seconds before the next procedure starts
- * @param {string} [edittedTs] Timestamp of last edit
- * @returns {Promise<undefined|{edittedTs: string|undefined, token: string|null}>} editedTs has a value only if at least one page is edited, and token has
+ * @param {string} [editedTs] Timestamp of last edit
+ * @returns {Promise<undefined|{editedTs: string|undefined, token: string|null}>} editedTs has a value only if at least one page is edited, and token has
  * a value only if re-logged in
  */
-async function removePp(token, botRunTs, edittedTs) {
+async function removePp(token, botRunTs, editedTs) {
 
     lib.log('Checking for pages with inappropriate protection templates...');
 
@@ -69,12 +69,12 @@ async function removePp(token, botRunTs, edittedTs) {
     var reloggedin = false;
     for (const page of notProtected) {
         if (botRunTs && needToQuit(botRunTs)) {
-            lib.log('The next procedure starts within 10 seconds: Put off editting the rest of the pages.');
+            lib.log('The next procedure starts within 10 seconds: Put off editing the rest of the pages.');
             break;
         }
         lib.log('Editing ' + page + '...');
-        const result = await editPageWithPp(page, token, edittedTs);
-        edittedTs = result ? result : edittedTs;
+        const result = await editPageWithPp(page, token, editedTs);
+        editedTs = result ? result : editedTs;
         if (result === null) {
             lib.log('Edit token seems to have expired. Re-logging in...');
             reloggedin = true;
@@ -83,7 +83,7 @@ async function removePp(token, botRunTs, edittedTs) {
     }
 
     return {
-        edittedTs: edittedTs,
+        editedTs: editedTs,
         token : reloggedin ? token : null
     };
 
@@ -105,10 +105,10 @@ function needToQuit(botRunTs) {
 /**
  * @param {string} pagetitle 
  * @param {string} token 
- * @param {string} [edittedTs] 
+ * @param {string} [editedTs] 
  * @returns {Promise<string|null|undefined>} JSON timestamp if the edit succeeded, or else undefined (null if re-login is needed)
  */
-async function editPageWithPp(pagetitle, token, edittedTs) {
+async function editPageWithPp(pagetitle, token, editedTs) {
 
     const lr = await lib.getLatestRevision(pagetitle);
     if (!lr) return lib.log('Failed to parse the page.');
@@ -154,7 +154,7 @@ async function editPageWithPp(pagetitle, token, edittedTs) {
         token: token
     };
 
-    const ts = await lib.editPage(params, edittedTs);
+    const ts = await lib.editPage(params, editedTs);
     return ts;
 
 }

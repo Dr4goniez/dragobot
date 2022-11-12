@@ -16,7 +16,7 @@ const {removePp} = require('./removePp');
 
     // The procedure to loop
     var runCnt = 0;
-    var lastRunTs, edittedTs, checkBlocks, checkGlobal, checkRFB, checkProtectionTemplates;
+    var lastRunTs, editedTs, checkBlocks, checkGlobal, checkRFB, checkProtectionTemplates;
     const bot = async () => {
 
         lib.log('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
@@ -42,25 +42,25 @@ const {removePp} = require('./removePp');
         // ------------------------------ markup ------------------------------
         var result;
         if (checkBlocks) {
-            result = await markupUserANs(token, checkGlobal, edittedTs);
+            result = await markupUserANs(token, checkGlobal, editedTs);
             if (result.token) token = result.token;
-            edittedTs = result.edittedTs;
+            editedTs = result.editedTs;
         } else {
             lib.log('Markup cancelled: No new blocks found.');
         }
 
         // ------------------------------ updateRFB ------------------------------
         if (checkRFB) {
-            result = await updateRFB(token, edittedTs);
-            edittedTs = result ? result : edittedTs;
+            result = await updateRFB(token, editedTs);
+            editedTs = result ? result : editedTs;
         }
 
         // ------------------------------ removePp ------------------------------
         if (checkProtectionTemplates) {
-            result = await removePp(token, lastRunTs, edittedTs);
+            result = await removePp(token, lastRunTs, editedTs);
             if (result) {
                 if (result.token) token = result.token;
-                edittedTs = result.edittedTs ? result.edittedTs : edittedTs;
+                editedTs = result.editedTs ? result.editedTs : editedTs;
             }
         }
 
