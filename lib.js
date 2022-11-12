@@ -8,7 +8,8 @@ const net = require('net');
 const isCidr = require('is-cidr');
 const cheerio = require('cheerio');
 const axios = require('axios');
-
+const {log} = require('./server');
+module.exports.log = log;
 
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
 

@@ -1,5 +1,5 @@
 const lib = require('./lib');
-const {createLandingPage} = require('./server');
+const {createServer} = require('./server');
 const {markupUserANs} = require('./markup');
 const {updateRFB} = require('./updateRFB');
 const {removePp} = require('./removePp');
@@ -7,8 +7,8 @@ const {removePp} = require('./removePp');
 (async () => {
 
     // Create server
-    createLandingPage();
-    console.log('The bot started running.');
+    createServer();
+    lib.log('The bot started running.');
 
     // Login
     var token = await lib.getToken();
@@ -19,7 +19,7 @@ const {removePp} = require('./removePp');
     var lastRunTs, edittedTs, checkBlocks, checkGlobal, checkRFB, checkProtectionTemplates;
     const bot = async () => {
 
-        console.log('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
+        lib.log('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
         checkBlocks = true;
         checkGlobal = false;
         checkRFB = monthTransitioning();
@@ -46,7 +46,7 @@ const {removePp} = require('./removePp');
             if (result.token) token = result.token;
             edittedTs = result.edittedTs;
         } else {
-            console.log('Markup cancelled: No new blocks found.');
+            lib.log('Markup cancelled: No new blocks found.');
         }
 
         // ------------------------------ updateRFB ------------------------------
@@ -112,6 +112,6 @@ function checkNewBlocks(ts) {
                 resolve(false);
             }
 
-        }).catch(err => resolve(console.log(err)));
+        }).catch(err => resolve(lib.log(err)));
     });
 }

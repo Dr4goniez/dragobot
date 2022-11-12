@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+
+        html,
+        body {
+            background: black;
+            color: white;
+            margin: 0;
+            height: 100%;
+        }
+        #container {
+            display: flex;
+            flex-flow: column;
+            height: calc(100% - 4em);
+            padding: 2em;
+        }
+        #header {
+            flex: 0 1 auto;
+        }
+        #content {
+            flex: 1 1 auto;
+            display: flex;
+            flex-flow: column;
+        }
+        
+        #header h1 {
+            padding-bottom: 0.5em;
+            margin: 0;
+            border-bottom: 1px solid white;
+        }
+        #console-label {
+            padding: 1em 0;
+            margin: 0;
+        }
+        #console {
+            flex: 1 1 auto;
+            padding: 0.2em;
+        }
+
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const textarea = document.getElementById('console');
+            textarea.scrollTop = textarea.scrollHeight;
+        });
+    </script>
+    <title>DragoBot</title>
+</head>
+<body>
+    <div id="container">
+        <div id="header">
+            <h1>DragoBot</h1>
+        </div>
+        <div id="content">
+            <h4 id="console-label">Debugger Console</h4>
+            <textarea id="console" readonly><%= logStr %></textarea>
+        </div>
+    </div>
+</body>
+</html>

@@ -34,11 +34,11 @@ async function markupUserANs (token, checkGlobal, edittedTs) {
     var result,
         reloggedin = false;
     for (const page of pages) {
-        console.log(`Checking ${page}...`);
+        lib.log(`Checking ${page}...`);
         result = await markup(page, token, checkGlobal, edittedTs);
         edittedTs = result ? result : edittedTs;
         if (result === null) {
-            console.log('Edit token seems to have expired. Re-logging in...');
+            lib.log('Edit token seems to have expired. Re-logging in...');
             token = await lib.getToken();
         }
     }
@@ -65,10 +65,10 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
 
     // Get page content
     const parsed = await lib.getLatestRevision(pagename);
-    if (!parsed) return console.log('Failed to parse the page.');
+    if (!parsed) return lib.log('Failed to parse the page.');
     const wikitext = parsed.content;
     var templates = lib.getOpenUserANs(wikitext);
-    if (templates.length === 0) return console.log('Procedure cancelled: There\'s no UserAN to update.');
+    if (templates.length === 0) return lib.log('Procedure cancelled: There\'s no UserAN to update.');
 
     // Remove redundant UserANs
     templates = templates.filter(template => !template.match(/\|\s*bot\s*=\s*no/)); // Remove UserANs with a bot=no parameter
@@ -256,7 +256,7 @@ async function markup(pagename, token, checkGlobal, edittedTs) {
         modOnly = true;
         UserAN.filter(obj => obj.modified).forEach(obj => obj.new = obj.modified); // Get the modified UserANs to replace old ones with
     } else {
-        return console.log('Procedure cancelled: There\'s no UserAN to update.');
+        return lib.log('Procedure cancelled: There\'s no UserAN to update.');
     }
 
     // Get summary
@@ -401,7 +401,7 @@ async function convertLogidsToUsernames(arr) {
                 }
                 resolve();
 
-            }).catch(err => resolve(console.log(err)));
+            }).catch(err => resolve(lib.log(err)));
         });
     }
 
@@ -428,7 +428,7 @@ async function convertDiffidsToUsernames(arr) {
 
             resolve();
 
-        }).catch(err => resolve(console.log(err)));
+        }).catch(err => resolve(lib.log(err)));
     });
 }
 
@@ -485,7 +485,7 @@ async function getBlockedUsers(usersArr) {
 
                 resolve();
 
-            }).catch((err) => resolve(console.log(err)));
+            }).catch((err) => resolve(lib.log(err)));
         });
     }
 }
@@ -542,7 +542,7 @@ async function getBlockedIps(ipsArr) {
  
                 resolve();
 
-            }).catch((err) => resolve(console.log(err)));
+            }).catch((err) => resolve(lib.log(err)));
         });
     }
 
@@ -570,7 +570,7 @@ async function getLockedUsers(regUsersArr) {
             if (!res || !res.query || !(resLck = res.query.globalallusers)) return resolve();
             if (resLck.length === 0) return resolve(false); // The array is empty: not locked
             resolve(resLck[0].locked !== undefined); // resLck[0].locked === '' if locked, otherwise undefined
-        }).catch((err) => resolve(console.log(err)));
+        }).catch((err) => resolve(lib.log(err)));
     });
 
     const lockedDate = getBlockedDate();
@@ -629,7 +629,7 @@ async function getGloballyBlockedIps(arr) {
 
                 resolve();
 
-            }).catch((err) => resolve(console.log(err)));
+            }).catch((err) => resolve(lib.log(err)));
         });
     };
 

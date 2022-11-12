@@ -12,7 +12,7 @@ const lib = require('./lib');
  */
 async function updateRFB(token, edittedTs) {
 
-    console.log('Starting monthly update of RFB-replated pages...');
+    lib.log('Starting monthly update of RFB-replated pages...');
     var ts = edittedTs ? edittedTs : undefined;
 
     /************************************************************************************
@@ -50,9 +50,9 @@ async function updateRFB(token, edittedTs) {
     const createMonthlySubpage = async () => {
 
         const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
-        console.log(`Creating ${pagetitle}...`);
+        lib.log(`Creating ${pagetitle}...`);
         const lr = await lib.getLatestRevision(pagetitle);
-        if (lr) return console.log(`Cancelled: ${pagetitle} already exists.`);
+        if (lr) return lib.log(`Cancelled: ${pagetitle} already exists.`);
         if (lr === undefined) return;
         const params = {
             'action': 'edit',
@@ -84,21 +84,21 @@ async function updateRFB(token, edittedTs) {
      */
     const updateLinks = async (pagetitle, linktype) => {
 
-        console.log(`Updating links on ${pagetitle}...`);
+        lib.log(`Updating links on ${pagetitle}...`);
         const lr = await lib.getLatestRevision(pagetitle);
-        if (!lr) return console.error('Failed to get the lastest revision of ' + pagetitle);
+        if (!lr) return lib.log('Failed to get the lastest revision of ' + pagetitle);
 
         var content = JSON.parse(JSON.stringify(lr.content));
         const lkNew = getLink(d[linktype].year, d[linktype].month, true);
         if (content.indexOf(getLink(d[linktype].year, d[linktype].month)) !== -1) {
-            return console.log('Cancelled: Links have already been updated.');
+            return lib.log('Cancelled: Links have already been updated.');
         }
         const linkRegex = /\[\[[Ww]ikipedia:投稿ブロック依頼 \d{4}年\d{1,2}月\|\d{1,2}月\]\]/g;
         var lkOld = content.match(linkRegex);
-        if (!lkOld) return console.log('Cancelled: No replacee link found.');
+        if (!lkOld) return lib.log('Cancelled: No replacee link found.');
         lkOld = lkOld[lkOld.length - 1];
         content = content.replace(lkOld, lkOld + ' - ' + lkNew);
-        if (content === lr.content) return console.log(pagetitle + ': Edit cancelled (same content).');
+        if (content === lr.content) return lib.log(pagetitle + ': Edit cancelled (same content).');
 
         const params = {
             'action': 'edit',
@@ -125,9 +125,9 @@ async function updateRFB(token, edittedTs) {
     const createNewAnnualSubpage = async () => {
 
         const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
-        console.log(`Creating ${pagetitle}...`);
+        lib.log(`Creating ${pagetitle}...`);
         const lr = lib.getLatestRevision(pagetitle);
-        if (lr) return console.log(`Cancelled: ${pagetitle} already exists.`);
+        if (lr) return lib.log(`Cancelled: ${pagetitle} already exists.`);
         if (lr === undefined) return;
 
         var content = '__NOTOC__\n<!--\n';
@@ -156,15 +156,15 @@ async function updateRFB(token, edittedTs) {
     const updateArchiveTemplte = async () => {
 
         const pagetitle = 'Template:投稿ブロック依頼過去ログ';
-        console.log(`Updating links on ${pagetitle}...`);
+        lib.log(`Updating links on ${pagetitle}...`);
         const lr = await lib.getLatestRevision(pagetitle);
-        if (!lr) return console.error('Failed to get the lastest revision of ' + pagetitle);
+        if (!lr) return lib.log('Failed to get the lastest revision of ' + pagetitle);
 
         var content = JSON.parse(JSON.stringify(lr.content));
         const getAnnualLink = y => `[[Wikipedia:投稿ブロック依頼 ${y}年|${y}年]]`;
         const lkOldYear = getAnnualLink(d.current.year),
               lkNewYear = getAnnualLink(d.next.year);
-        if (content.indexOf(lkNewYear) !== -1) return console.log('Cancelled: Links have already been updated.');
+        if (content.indexOf(lkNewYear) !== -1) return lib.log('Cancelled: Links have already been updated.');
         content = content.replace(lkOldYear, lkOldYear + ' - ' + lkNewYear);
 
         const params = {

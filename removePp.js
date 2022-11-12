@@ -47,7 +47,7 @@ const ignore = [
  */
 async function removePp(token, botRunTs, edittedTs) {
 
-    console.log('Checking for pages with inappropriate protection templates...');
+    lib.log('Checking for pages with inappropriate protection templates...');
 
     const queries = [];
     for (const tl of pp.map(el => 'Template:' + el)) {
@@ -57,26 +57,26 @@ async function removePp(token, botRunTs, edittedTs) {
     const transcludingPp = result.concat.apply([], result).filter((el, i, arr) => arr.indexOf(el) === i);
 
     const protected = await lib.filterOutProtectedPages(transcludingPp);
-    if (!protected) return console.log('Failed to filter out protected pages.');
+    if (!protected) return lib.log('Failed to filter out protected pages.');
     var notProtected = transcludingPp.filter(el => protected.indexOf(el) === -1 && !ignore.includes(el));
     notProtected = notProtected.filter(el => {
         return pp.map(tl => 'Template:' + tl + '/').every(pfx => el.indexOf(pfx) === -1); // Remove subpages of pp templates
     });
 
-    console.log(`${notProtected.length} page(s) found.`);
+    lib.log(`${notProtected.length} page(s) found.`);
     if (notProtected.length === 0) return;
 
     var reloggedin = false;
     for (const page of notProtected) {
         if (botRunTs && needToQuit(botRunTs)) {
-            console.log('The next procedure starts within 10 seconds: Put off editting the rest of the pages.');
+            lib.log('The next procedure starts within 10 seconds: Put off editting the rest of the pages.');
             break;
         }
-        console.log('Editing ' + page + '...');
+        lib.log('Editing ' + page + '...');
         const result = await editPageWithPp(page, token, edittedTs);
         edittedTs = result ? result : edittedTs;
         if (result === null) {
-            console.log('Edit token seems to have expired. Re-logging in...');
+            lib.log('Edit token seems to have expired. Re-logging in...');
             reloggedin = true;
             token = await lib.getToken();
         }
@@ -111,11 +111,11 @@ function needToQuit(botRunTs) {
 async function editPageWithPp(pagetitle, token, edittedTs) {
 
     const lr = await lib.getLatestRevision(pagetitle);
-    if (!lr) return console.log('Failed to parse the page.');
+    if (!lr) return lib.log('Failed to parse the page.');
 
     var templates = lib.findTemplates(lr.content, pp);
     if (templates.length === 0) {
-        return console.log('No protection templates found.');
+        return lib.log('No protection templates found.');
     } else {
 
         const isDemo = templates.some(el => {
@@ -124,7 +124,7 @@ async function editPageWithPp(pagetitle, token, edittedTs) {
         });
         if (isDemo) {
             ignore.push(pagetitle);
-            return console.log('Cancelled: The pp in this page is used as a demo.');
+            return lib.log('Cancelled: The pp in this page is used as a demo.');
         }
 
         // Escape the extracted templates
@@ -140,7 +140,7 @@ async function editPageWithPp(pagetitle, token, edittedTs) {
         lr.content = lr.content.replace(/<noinclude>(?:\s)*?<\/noinclude>[^\S\n\r]*\n?/gm, '').replace(/\/\*(?:\s)*?\*\/[^\S\n\r]*\n?/gm, '');
 
     }
-    if (lr.content === lr.originalContent) return console.log('Procedure cancelled: Same content');
+    if (lr.content === lr.originalContent) return lib.log('Procedure cancelled: Same content');
 
     const params = {
         action: 'edit',
