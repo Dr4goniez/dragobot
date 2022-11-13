@@ -5,7 +5,6 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-
         html,
         body {
             background: black;
@@ -27,7 +26,6 @@
             display: flex;
             flex-flow: column;
         }
-        
         #header h1 {
             padding-bottom: 0.5em;
             margin: 0;
@@ -41,11 +39,10 @@
             flex: 1 1 auto;
             padding: 0.2em;
         }
-
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const textarea = document.getElementById('console');
+            var textarea = document.getElementById('console');
             textarea.scrollTop = textarea.scrollHeight;
         });
     </script>
@@ -58,7 +55,7 @@
         </div>
         <div id="content">
             <h4 id="console-label">Debugger Console</h4>
-            <textarea id="console" readonly><%= logStr %></textarea>
+            <textarea id="console" readonly><%= logline %></textarea>
         </div>
     </div>
 </body>
