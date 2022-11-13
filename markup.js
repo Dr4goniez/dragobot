@@ -23,13 +23,8 @@ async function markupUserANs (token, checkGlobal, editedTs) {
     // Pages to maintain
     const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
         ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット',
-        AN3RR = 'Wikipedia:管理者伝言板/3RR',
-        Iccic = ANS + '/Iccic',
-        ISECHIKA = ANS + '/いせちか',
-        KAGE = ANS + '/影武者',
-        KIYOSHIMA = ANS + '/清島達郎',
-        SHINJU = ANS + '/真珠王子';
-    const pages = [ANI, ANS, AN3RR, Iccic, ISECHIKA, KAGE, KIYOSHIMA, SHINJU];
+        AN3RR = 'Wikipedia:管理者伝言板/3RR';
+    const pages = [ANI, ANS, AN3RR];
 
     var result,
         reloggedin = false;
