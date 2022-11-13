@@ -24,10 +24,10 @@ function getToken(experiment) {
             username: experiment ? my.username2 : my.username,
             password: experiment ? my.password2 : my.password
         }).then(res => {
-            if (!res) return resolve(console.log('An unexpected error occurred on login attempt.'));
-            if (res.result === 'Success') console.log('Successfully logged in.');
+            if (!res) return resolve(log('An unexpected error occurred on login attempt.'));
+            if (res.result === 'Success') log('Successfully logged in.');
             resolve(res.csrftoken);
-        }).catch((err) => resolve(console.log(err.response.login.reason)));
+        }).catch((err) => resolve(log(err.response.login.reason)));
     });
 }
 module.exports.getToken = getToken;
@@ -65,7 +65,7 @@ function getLatestRevision(pagename) {
                 originalContent: JSON.parse(JSON.stringify(resRev.slots.main.content)),
                 revid: resRev.revid.toString()
             });
-        }).catch(err => resolve(console.log(err.info)));
+        }).catch(err => resolve(log(err.info)));
     });
 }
 module.exports.getLatestRevision = getLatestRevision;
@@ -115,13 +115,13 @@ function editPage(params, ts) {
 
         switch (result) {
             case true:
-                console.log(params.title + ': Edit done.');
+                log(params.title + ': Edit done.');
                 return resolve(new Date().toJSON());
             case false:
-                console.log(params.title + ': Edit failed due to an unknown error.');
+                log(params.title + ': Edit failed due to an unknown error.');
                 return resolve();
             default:
-                console.log(params.title + ': Edit failed: ' + result);
+                log(params.title + ': Edit failed: ' + result);
                 const ret = result.indexOf('Invalid CSRF token') !== -1 ? null : undefined;
                 return resolve(ret);
         }
@@ -152,7 +152,7 @@ async function getBackLinks(pagetitle, nsExclude) {
             }).then(async res => {
 
                 var resBL, resCont;
-                if (!res || !res.query || !(resBL = res.query.backlinks)) return resolve(console.log('getBackLinks: Query failed.'));
+                if (!res || !res.query || !(resBL = res.query.backlinks)) return resolve(log('getBackLinks: Query failed.'));
 
                 const titles = resBL.filter(obj => nsExclude.indexOf(obj.ns) === -1).map(obj => obj.title);
                 pages = pages.concat(titles);
@@ -162,7 +162,7 @@ async function getBackLinks(pagetitle, nsExclude) {
                 }
                 resolve(true);
 
-            }).catch(err => resolve(console.log(err.info)))
+            }).catch(err => resolve(log(err.info)))
         });
     };
 
@@ -197,7 +197,7 @@ async function getCatMembers(cattitle, nsExclude) {
             }).then(async res => {
 
                 var resCM, resCont;
-                if (!res || !res.query || !(resCM = res.query.categorymembers)) return resolve(console.log('getCatMembers: Query failed.'));
+                if (!res || !res.query || !(resCM = res.query.categorymembers)) return resolve(log('getCatMembers: Query failed.'));
 
                 const titles = resCM.filter(obj => nsExclude.indexOf(obj.ns) === -1).map(obj => obj.title);
                 cats = cats.concat(titles);
@@ -207,13 +207,13 @@ async function getCatMembers(cattitle, nsExclude) {
                 }
                 resolve(true);
 
-            }).catch(err => resolve(console.log(err.info)));
+            }).catch(err => resolve(log(err.info)));
         });
     };
 
     var result = await query();
     result = result ? cats : undefined;
-    if (Array.isArray(result) && result.length === 0) console.log('No page belongs to ' + cattitle);
+    if (Array.isArray(result) && result.length === 0) log('No page belongs to ' + cattitle);
     return result;
 
 }
@@ -251,7 +251,7 @@ async function getTranscludingPages(pagetitle) {
                 resolve();
 
             }).catch(function(err) {
-                console.log(err.info);
+                log(err.info);
                 resolve();
             });
         });
@@ -310,7 +310,7 @@ async function filterOutProtectedPages(pagetitles) {
                 resolve(titles);
 
             }).catch(err => {
-                console.log(err.info);
+                log(err.info);
                 resolve();
             });
         });
@@ -343,7 +343,7 @@ async function scrape(url) {
         return $;
     }
     catch (err) {
-        return console.error(err);
+        return log(err);
     }
 }
 module.exports.scrape = scrape;
@@ -501,7 +501,7 @@ function findTemplates(wikitext, templateName, templatePrefix) {
         }
     });
 
-    if (errHandler) console.log('findTemplates: Detected unprocessable braces');
+    if (errHandler) log('findTemplates: Detected unprocessable braces');
     return templates;
 
 }
@@ -559,7 +559,7 @@ function findHtmlTags(content, tagnames) {
                 tags.push(str.substring(obj.index, sObj.index + sObj.tag.length)); // Push the innerHTML into the array 'tags'
                 return true; // End the loop
             }
-            console.log('findHtmlTags: Unexpected condition detected.');
+            log('findHtmlTags: Unexpected condition detected.');
         });
         nestCnt = 0; // Reset
     });
@@ -641,7 +641,7 @@ module.exports.getTemplateParams = getTemplateParams;
 function getOpenUserANs(wikitext) {
 
     if (!wikitext) {
-        console.log('lib.getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
+        log('lib.getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
         return [];
     }
 
