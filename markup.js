@@ -83,6 +83,7 @@ async function markup(pagename, token, checkGlobal, editedTs) {
             duration: '',
             flags: '',
             date: '',
+            reblocked: ''
         };
     });
     
@@ -220,21 +221,18 @@ async function markup(pagename, token, checkGlobal, editedTs) {
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
     queries.push(getBlockedUsers(users), getBlockedIps(ips)); // Get domain/duration/date properties of UserAN if blocked
-    const result = await Promise.all(queries); // Wait until all the async procedures finish
-    // const usersForReblock = result[0];
-    // const ipsForReblock = result[1];
-    result.forEach((arr, i) => {
-        if (arr.length !== 0) {
-            lib.log('[Dev] ' + (i === 0 ? 'User' : 'IP') + 's for reblock:');
-            lib.log(arr);
-        }
-    });
+    var result = await Promise.all(queries); // Wait until all the async procedures finish
+    const usersForReblock = [].concat.apply([], result);
+    queries = [];
+    usersForReblock.forEach(user => queries.push(getReblockStatus(user)));
+    result = await Promise.all(queries);
+    // JSON.parse(JSON.stringify(UserAN)).filter(obj => usersForReblock.includes(obj.user)).forEach(obj => console.log(obj));
 
-    // --- At this point, UserANs to mark up have a 'duration' property ---
+    // --- Note: UserANs to mark up all have a 'date' property at this point ---
 
     // Check if the users and IPs in the arrays are globally (b)locked
     if (checkGlobal) {
-        let gUsers = UserAN.filter(obj => obj.user && !obj.duration).map(obj => obj.user); // Only check users that aren't locally blocked
+        let gUsers = UserAN.filter(obj => obj.user && !obj.date).map(obj => obj.user); // Only check users that aren't locally blocked
         const gIps = gUsers.filter(username => lib.isIPAddress(username));
         gUsers = gUsers.filter(username => !lib.isIPAddress(username));
         queries = [];
@@ -246,9 +244,9 @@ async function markup(pagename, token, checkGlobal, editedTs) {
 
     // Final check before edit
     var modOnly = false; // True if no user is newly blocked but some UserANs need to be modified
-    if (UserAN.some(obj => obj.domain || obj.duration)) { // Someone is newly blocked
-        if (UserAN.some(obj => obj.modified)) UserAN.filter(obj => obj.modified).forEach(obj => obj.new = obj.modified);
-        UserAN.filter(obj => obj.domain || obj.duration).forEach(obj => { // Get new UserANs to replace old ones with
+    if (UserAN.some(obj => obj.date)) { // Someone is newly blocked
+        UserAN.filter(obj => obj.modified).forEach(obj => obj.new = obj.modified);
+        UserAN.filter(obj => obj.date).forEach(obj => { // Get new UserANs to replace old ones with
             const replacee = obj.modified ? obj.modified : obj.old;
             obj.new = replacee.replace(/\|*\}{2}$/, '') + '|' + obj.domain + obj.duration + obj.flags + obj.date + '}}';
         });
@@ -264,19 +262,20 @@ async function markup(pagename, token, checkGlobal, editedTs) {
     if (!modOnly) {
 
         const getUserLink = (obj) => {
+            var condition = obj.reblocked || obj.domain + obj.duration;
             if (obj.type.match(/^(?:user2|unl|usernolink)$/)) {
                 const maxLetterCnt = containsJapaneseCharacter(obj.user) ? 10 : 20;
                 if (obj.user.length > maxLetterCnt) {
-                    return `${obj.user.substring(0, maxLetterCnt)}.. (${obj.domain}${obj.duration})`;
+                    return `${obj.user.substring(0, maxLetterCnt)}.. (${condition})`;
                 } else {
-                    return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${obj.domain}${obj.duration})`;
+                    return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${condition})`;
                 }
             } else if (obj.type.match(/^(?:ip2|ipuser2)$/)) {
-                return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${obj.domain}${obj.duration})`;
+                return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${condition})`;
             } else if (obj.type.match(/^(?:log|logid)$/)) {
-                return `[[特別:転送/logid/${obj.logid}|Logid/${obj.logid}]] (${obj.domain}${obj.duration})`;
+                return `[[特別:転送/logid/${obj.logid}|Logid/${obj.logid}]] (${condition})`;
             } else if (obj.type.match(/^(?:dif|diff)$/)) {
-                return `[[特別:差分/${obj.diff}|差分/${obj.diff}]]の投稿者 (${obj.domain}${obj.duration})`;
+                return `[[特別:差分/${obj.diff}|差分/${obj.diff}]]の投稿者 (${condition})`;
             }
         };
 
@@ -284,7 +283,7 @@ async function markup(pagename, token, checkGlobal, editedTs) {
         if (sections.length > 1) { // If the bot is to mark up UserANs in multiple sections
 
             summary = 'Bot:';
-            const reportsBySection = UserAN.filter(obj => obj.new && (obj.domain || obj.duration)).reduce((acc, obj, i) => {
+            const reportsBySection = UserAN.filter(obj => obj.new && obj.date).reduce((acc, obj, i) => {
                 if (!acc[obj.section]) acc[obj.section] = [{...obj}];                       // {section1: [{ user: username, ...}],
                 if (i !== 0 && acc[obj.section].every(obj2 => obj2.user !== obj.user)) {    //  section2: [{ user: username, ...}],
                     acc[obj.section].push({...obj});                                        //  ... } ### UserANs to update in each section
@@ -295,7 +294,7 @@ async function markup(pagename, token, checkGlobal, editedTs) {
             for (let key in reportsBySection) {
                 summary += ` /*${key}*/ `;
                 const bool = reportsBySection[key].every((obj, i) => {
-                    var tempSummary = (i === 0 ? getUserLink(obj) : ', ' + getUserLink(obj));
+                    var tempSummary = (i === 0 ? '' : ', ') + getUserLink(obj);
                     if ((summary + tempSummary).length <= 500) { // Prevent the summary from exceeding the max word count
                         summary += tempSummary;
                         return true; // Go on to the next loop
@@ -310,10 +309,10 @@ async function markup(pagename, token, checkGlobal, editedTs) {
         } else { // If the bot is to mark up UserANs in one section
 
             const userlinksArr = [];
-            UserAN.filter(obj => obj.new && (obj.domain || obj.duration)).forEach((obj, i) => {
+            UserAN.filter(obj => obj.new && obj.date).forEach((obj, i) => {
                 const userlink = getUserLink(obj);
                 if (!userlinksArr.includes(userlink)) { // Prevent the same links from being displayed
-                    summary += (i === 0 ? userlink : ', ' + userlink);
+                    summary += (i === 0 ? '' : ', ') + userlink;
                     userlinksArr.push(userlink);
                 }
             });
@@ -350,6 +349,7 @@ async function markup(pagename, token, checkGlobal, editedTs) {
     return ts;
 
 }
+module.exports.markup = markup; // Used only for debugging purposes when called outside the module
 
 //********************** UTILITY FUNCTIONS **********************/
 
@@ -572,49 +572,147 @@ async function getBlockedIps(ipsArr) {
 
 }
 
-// function getReblockStatus(username) {
-//     return new Promise(resolve => {
-//         lib.api.request({
-//             action: 'query',
-//             list: 'logevents',
-//             leaction: 'block/reblock',
-//             letitle: '利用者:' + username,
-//             formatversion: '2'
-//         }).then(res => {
+/**
+ * @param {string} username 
+ * @returns {Promise}
+ */
+function getReblockStatus(username) {
+    return new Promise(resolve => {
+        lib.api.request({
+            action: 'query',
+            list: 'logevents',
+            letype: 'block',
+            letitle: '利用者:' + username,
+            formatversion: '2'
+        }).then(res => {
 
-//             var resLgev;
-//             if (!res || !res.query || !(resLgev = res.query.logevents)) return resolve();
-//             if (resLgev.length === 0) return resolve();
-//             resLgev = resLgev[0];
+            var resLgev;
+            if (!res || !res.query || !(resLgev = res.query.logevents)) return resolve();
+            if (resLgev.length === 0) return resolve();
+            resLgev = resLgev.filter(obj => obj.action !== 'unblock'); // Rm irrelevant unblock logs
 
-//             const bkparams = resLgev.params;
-//             const nousertalk = bkparams.flags.includes('nousertalk'),
-//                   noemail = bkparams.flags.includes('noemail'),
-//                   partial = !bkparams.sitewide,
-//                   indef = bkparams.duration === 'infinity';
-//             UserAN.forEach(obj => {
-//                 if (obj.user === username) {
-//                     const newlyReported = lib.compareTimestamps(obj.timestamp, resLgev.timestamp, true) >= 0;
-//                     if (newlyReported) {
-//                         obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry);
-//                         obj.date = getBlockedDate(blck.timestamp);
-//                         obj.domain = partial ? '部分ブロック ' : '';
-//                         if (nousertalk && noemail) {
-//                             obj.flags = ' 会話×・メール×';
-//                         } else if (nousertalk) {
-//                             obj.flags = ' 会話×';
-//                         } else if (noemail) {
-//                             obj.flags = ' メール×';
-//                         }
-//                     } else {
-//                         needReblock.push(obj.user);
-//                     }
-//                 }
-//             });
+            // Get the latest block and reblocks (e.g. [reblock, reblock, block, reblock, block] => [reblock, reblock, block])
+            var latestBlockIndex;
+            for (let i = 0; i < resLgev.length; i++) {
+                if (resLgev[i].action === 'block') {
+                    latestBlockIndex = i;
+                    break;
+                }
+            }
+            resLgev = resLgev.slice(0, latestBlockIndex + 1);
+            if (!resLgev.some(obj => obj.action === 'reblock')) return resolve();
 
-//         }).catch((err) => resolve(lib.log(err)));
-//     });
-// }
+            // Filter out 2 of the relevant blocks (Note: The response array always has at least one length because the user passed as the param
+            // is blocked currently. Reblock logs have been filtered out in the code above, and thus resLgev has TWO OR MORE elements when the code
+            // reaches the lines below; in other words, we don't need any condition for when the array has exactly two elements in it.)
+            if (resLgev.length > 2) { // If reblocked multiple times
+                const base = resLgev.reduce((acc, obj) => { // Get the first element in the array that is action=block, or action=reblock
+                    if (acc.length !== 0) return acc;       // that was applied more than 1 hour before the latest reblock
+                    if (obj.action === 'block' || lib.compareTimestamps(obj.timestamp, resLgev[0].timestamp) > 1*60*60*1000) {
+                        acc.push(obj);
+                    }
+                    return acc;
+                }, []);
+                resLgev = [].concat(resLgev[0], base);
+            }
+
+            // Clean up some properties
+            resLgev.forEach(obj => {
+
+                // Make sure that both elements have a 'expiry' property (the prop is undefined in the case of indefinite block)
+                if (obj.params.duration === 'infinity' && !obj.params.expiry) obj.params.expiry = 'infinity';
+
+                // Remove 'nocreate' and 'noautoblock' because they're irrelevant
+                var i;
+                if ((i = obj.params.flags.indexOf('nocreate')) !== -1) obj.params.flags.splice(i, 1);
+                if ((i = obj.params.flags.indexOf('noautoblock')) !== -1) obj.params.flags.splice(i, 1);
+
+                // If the user is an IP, change 'anononly' to 'hardblock'
+                if (lib.isIPAddress(username)) {
+                    if ((i = obj.params.flags.indexOf('anononly')) !== -1) {
+                        obj.params.flags.splice(i, 1);
+                    } else {
+                        obj.params.flags.unshift('hardblock');
+                    }
+                }
+
+            });
+            
+            // Get what's changed
+            const b1st = resLgev[1],
+                  b2nd = resLgev[0];
+            var domain = '',
+                duration = '',
+                flags = '';
+
+            // Domain
+            if (b1st.params.sitewide && b2nd.params.sitewide) {
+                // Do nothing
+            } else if (b1st.params.sitewide && !b2nd.params.sitewide) {
+                domain = '部分ブロック';
+            } else if (!b1st.params.sitewide && b2nd.params.sitewide) {
+                domain = 'サイト全体';
+            } else { // !b1st.params.sitewide && !b2nd.params.sitewide
+                if (JSON.stringify(b1st.params.restrictions) === JSON.stringify(b2nd.params.restrictions)) {
+                    // Do nothing
+                } else {
+                    domain = '部分ブロック条件変更';
+                }
+            }
+
+            // Duration (if changed, substitute the 'duration' variable with the new expiry)
+            if (b1st.params.expiry !== b2nd.params.expiry) duration = b2nd.params.expiry;
+
+            // Flags
+            if (JSON.stringify(b1st.params.flags) !== JSON.stringify(b2nd.params.flags)) {
+
+                /**
+                 * @param {string} str 
+                 * @param {boolean} removed 
+                 */
+                const translate = (str, removed) => {
+                    switch (str) {
+                        case 'hardblock':
+                            return removed ? 'ソフトブロック' : 'ハードブロック';
+                        case 'noemail':
+                            return 'メール' + (removed ? '〇' : '×');
+                        case 'nousertalk':
+                            return '会話' + (removed ? '〇' : '×');
+                        default:
+                            return lib.log('translate() encountered an unrecognized value of ' + str + '.');
+                    }
+                };
+
+                if (b1st.params.flags.length > b2nd.params.flags.length) { // Flags removed
+                    flags = b1st.params.flags.filter(el => !b2nd.params.flags.includes(el));
+                    flags = flags.map(el => translate(el, true));
+                } else { // Flags added
+                    flags = b2nd.params.flags.filter(el => !b1st.params.flags.includes(el));
+                    flags = flags.map(el => translate(el, false));
+                }
+                flags = flags.join('・');
+
+            }
+
+            // Set properties of the UserAN array
+            UserAN.forEach(obj => {
+                if (obj.user === username) {
+                    const newlyReported = lib.compareTimestamps(obj.timestamp, b2nd.timestamp, true) >= 0;
+                    if (newlyReported) {
+                        obj.domain = domain;
+                        obj.duration = duration === 'infinity' ? '無期限' : duration ? lib.getDuration(b2nd.timestamp, duration) : duration;
+                        if (domain) obj.duration = ' ' + obj.duration;
+                        obj.flags = (domain || duration ? ' ' : '') + flags;
+                        obj.date = getBlockedDate(b2nd.timestamp);
+                        obj.reblocked = 'ブロック条件変更';
+                    }
+                }
+            });
+            resolve();
+
+        }).catch((err) => resolve(lib.log(err)));
+    });
+}
 
 /**
  * Get an array of locked users from an array of registered users
