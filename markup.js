@@ -13,9 +13,9 @@ var unprocessableLogids = [];
 var leend;
 
 /**
- * @param {string} token 
- * @param {boolean} checkGlobal 
- * @param {string} [editedTs] 
+ * @param {string} token
+ * @param {boolean} checkGlobal
+ * @param {string} [editedTs]
  * @returns {Promise<{editedTs: string|undefined, token: string|null}>} token has a value only if re-logged in
  */
 async function markupUserANs (token, checkGlobal, editedTs) {
@@ -47,7 +47,7 @@ async function markupUserANs (token, checkGlobal, editedTs) {
 module.exports.markupUserANs = markupUserANs;
 
 /**
- * @param {string} pagename 
+ * @param {string} pagename
  * @param {string} token
  * @param {boolean} checkGlobal
  * @param {string} [editedTs] Timestamp of last edit
@@ -86,7 +86,7 @@ async function markup(pagename, token, checkGlobal, editedTs) {
             reblocked: ''
         };
     });
-    
+
     // RegExps to evaluate the templates' parameters
     const paramsRegExp = {
         bot: /'^\s*bot\s*=/, // bot=
@@ -221,11 +221,11 @@ async function markup(pagename, token, checkGlobal, editedTs) {
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
     queries.push(getBlockedUsers(users), getBlockedIps(ips)); // Get domain/duration/date properties of UserAN if blocked
-    var result = await Promise.all(queries); // Wait until all the async procedures finish
+    const result = await Promise.all(queries); // Wait until all the async procedures finish
     const usersForReblock = [].concat.apply([], result);
     queries = [];
     usersForReblock.forEach(user => queries.push(getReblockStatus(user)));
-    result = await Promise.all(queries);
+    await Promise.all(queries);
     // JSON.parse(JSON.stringify(UserAN)).filter(obj => usersForReblock.includes(obj.user)).forEach(obj => console.log(obj));
 
     // --- Note: UserANs to mark up all have a 'date' property at this point ---
@@ -450,7 +450,7 @@ async function getBlockedUsers(usersArr) {
     return result;
 
     /**
-     * @param {Array} arr 
+     * @param {Array} arr
      * @returns {Promise<Array|undefined>} An array of users who need to be reblocked
      */
     function blockQuery(arr) {
@@ -516,7 +516,7 @@ async function getBlockedIps(ipsArr) {
     return result;
 
     /**
-     * @param {string} ip 
+     * @param {string} ip
      * @returns {Promise<string|undefined>} Returns the queried IP only if it needs to be reblocked
      */
     function blockQuery(ip) {
@@ -563,7 +563,7 @@ async function getBlockedIps(ipsArr) {
                         }
                     }
                 });
- 
+
                 resolve(needReblock);
 
             }).catch((err) => resolve(lib.log(err)));
@@ -573,16 +573,16 @@ async function getBlockedIps(ipsArr) {
 }
 
 /**
- * @param {string} username 
+ * @param {string} blockedusername
  * @returns {Promise}
  */
-function getReblockStatus(username) {
+function getReblockStatus(blockedusername) {
     return new Promise(resolve => {
         lib.api.request({
             action: 'query',
             list: 'logevents',
             letype: 'block',
-            letitle: '利用者:' + username,
+            letitle: '利用者:' + blockedusername,
             formatversion: '2'
         }).then(res => {
 
@@ -603,8 +603,8 @@ function getReblockStatus(username) {
             if (!resLgev.some(obj => obj.action === 'reblock')) return resolve();
 
             // Filter out 2 of the relevant blocks (Note: The response array always has at least one length because the user passed as the param
-            // is blocked currently. Reblock logs have been filtered out in the code above, and thus resLgev has TWO OR MORE elements when the code
-            // reaches the lines below; in other words, we don't need any condition for when the array has exactly two elements in it.)
+            // is blocked at the time. Reblock logs have been filtered out in the code above, and thus resLgev has TWO OR MORE elements when the
+            // code reaches the lines below; in other words, we don't need any condition for when the array has exactly two elements in it.)
             if (resLgev.length > 2) { // If reblocked multiple times
                 const base = resLgev.reduce((acc, obj) => { // Get the first element in the array that is action=block, or action=reblock
                     if (acc.length !== 0) return acc;       // that was applied more than 1 hour before the latest reblock
@@ -628,7 +628,7 @@ function getReblockStatus(username) {
                 if ((i = obj.params.flags.indexOf('noautoblock')) !== -1) obj.params.flags.splice(i, 1);
 
                 // If the user is an IP, change 'anononly' to 'hardblock'
-                if (lib.isIPAddress(username)) {
+                if (lib.isIPAddress(blockedusername)) {
                     if ((i = obj.params.flags.indexOf('anononly')) !== -1) {
                         obj.params.flags.splice(i, 1);
                     } else {
@@ -637,7 +637,7 @@ function getReblockStatus(username) {
                 }
 
             });
-            
+
             // Get what's changed
             const b1st = resLgev[1],
                   b2nd = resLgev[0];
@@ -667,8 +667,8 @@ function getReblockStatus(username) {
             if (JSON.stringify(b1st.params.flags) !== JSON.stringify(b2nd.params.flags)) {
 
                 /**
-                 * @param {string} str 
-                 * @param {boolean} removed 
+                 * @param {string} str
+                 * @param {boolean} removed
                  */
                 const translate = (str, removed) => {
                     switch (str) {
@@ -696,7 +696,7 @@ function getReblockStatus(username) {
 
             // Set properties of the UserAN array
             UserAN.forEach(obj => {
-                if (obj.user === username) {
+                if (obj.user === blockedusername) {
                     const newlyReported = lib.compareTimestamps(obj.timestamp, b2nd.timestamp, true) >= 0;
                     if (newlyReported) {
                         obj.domain = domain;
@@ -716,7 +716,7 @@ function getReblockStatus(username) {
 
 /**
  * Get an array of locked users from an array of registered users
- * @param {Array} regUsersArr 
+ * @param {Array} regUsersArr
  * @returns {Promise<Array>}
  */
 async function getLockedUsers(regUsersArr) {
