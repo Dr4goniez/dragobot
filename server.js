@@ -23,11 +23,17 @@ module.exports.createServer = createServer;
  * @param {*} str
  */
 function log(str) {
-    if (typeof str !== 'string') str = JSON.stringify(str);
+    console.log(str);
+    if (typeof str !== 'string') {
+        if (typeof str === 'object') {
+            str = JSON.stringify(str, Object.getOwnPropertyNames(str));
+        } else {
+            str = JSON.stringify(str);
+        }
+    }
     logline = logline ? logline + '\n' + str : str;
     app.get('/', (req, res) => {
         res.update('index', {logline: logline});
     });
-    console.log(str);
 }
 module.exports.log = log;
