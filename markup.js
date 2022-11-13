@@ -60,9 +60,6 @@ module.exports.markupUserANs = markupUserANs;
  */
 async function markup(pagename, token, checkGlobal, editedTs) {
 
-    // Initialize array
-    UserAN = [];
-
     // Get page content
     const parsed = await lib.getLatestRevision(pagename);
     if (!parsed) return lib.log('Failed to parse the page.');
@@ -74,8 +71,8 @@ async function markup(pagename, token, checkGlobal, editedTs) {
     templates = templates.filter(template => !template.match(/\|\s*bot\s*=\s*no/)); // Remove UserANs with a bot=no parameter
 
     // Create an array of objects out of the templates
-    for (const tl of templates) {
-        UserAN.push({
+    UserAN = templates.map(tl => {
+        return {
             old: tl,
             new: '',
             modified: '',
@@ -91,8 +88,8 @@ async function markup(pagename, token, checkGlobal, editedTs) {
             duration: '',
             flags: '',
             date: '',
-        });
-    }
+        };
+    });
     
     // RegExps to evaluate the templates' parameters
     const paramsRegExp = {
@@ -228,7 +225,15 @@ async function markup(pagename, token, checkGlobal, editedTs) {
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
     queries.push(getBlockedUsers(users), getBlockedIps(ips)); // Get domain/duration/date properties of UserAN if blocked
-    await Promise.all(queries); // Wait until all the async procedures finish
+    const result = await Promise.all(queries); // Wait until all the async procedures finish
+    // const usersForReblock = result[0];
+    // const ipsForReblock = result[1];
+    result.forEach((arr, i) => {
+        if (arr.length !== 0) {
+            lib.log('[Dev] ' + (i === 0 ? 'User' : 'IP') + 's for reblock:');
+            lib.log(arr);
+        }
+    });
 
     // --- At this point, UserANs to mark up have a 'duration' property ---
 
@@ -432,18 +437,27 @@ async function convertDiffidsToUsernames(arr) {
     });
 }
 
+/**
+ * @param {Array} usersArr
+ * @returns {Promise<Array>} Returns an array of users who need to be reblocked
+ */
 async function getBlockedUsers(usersArr) {
 
-    if (usersArr.length === 0) return;
+    if (usersArr.length === 0) return [];
     const users = JSON.parse(JSON.stringify(usersArr));
     const queries = [];
     while (users.length !== 0) {
-        queries.push(blockQuery(users.slice(0, 500)));
-        users.splice(0, 500);
+        queries.push(blockQuery(users.splice(0, 500)));
     }
-    await Promise.all(queries);
-    return;
+    var result = await Promise.all(queries);
+    result = result.filter(res => res);
+    result = [].concat.apply([], result).filter((el, i, arr) => arr.indexOf(el) === i);
+    return result;
 
+    /**
+     * @param {Array} arr 
+     * @returns {Promise<Array|undefined>} An array of users who need to be reblocked
+     */
     function blockQuery(arr) {
         return new Promise(resolve => {
             lib.api.request({
@@ -459,6 +473,7 @@ async function getBlockedUsers(usersArr) {
                 if (!res || !res.query || !(resBlck = res.query.blocks)) return resolve();
                 if (resBlck.length === 0) return resolve();
 
+                const needReblock = [];
                 for (const blck of resBlck) {
                     const nousertalk = !blck.allowusertalk,
                           noemail = blck.noemail,
@@ -478,26 +493,37 @@ async function getBlockedUsers(usersArr) {
                                 } else if (noemail) {
                                     obj.flags = ' メール×';
                                 }
+                            } else {
+                                needReblock.push(obj.user);
                             }
                         }
                     });
                 }
 
-                resolve();
+                resolve(needReblock);
 
             }).catch((err) => resolve(lib.log(err)));
         });
     }
 }
 
+/**
+ * @param {Array} ipsArr
+ * @returns {Promise<Array>} Returns an array of IPs that need to be reblocked
+ */
 async function getBlockedIps(ipsArr) {
 
-    if (ipsArr.length === 0) return;
+    if (ipsArr.length === 0) return [];
     const queries = [];
     for (let i = 0; i < ipsArr.length; i++) queries.push(blockQuery(ipsArr[i]));
-    await Promise.all(queries);
-    return;
+    var result = await Promise.all(queries);
+    result = result.filter((el, i, arr) => el && arr.indexOf(el) === i);
+    return result;
 
+    /**
+     * @param {string} ip 
+     * @returns {Promise<string|undefined>} Returns the queried IP only if it needs to be reblocked
+     */
     function blockQuery(ip) {
         return new Promise(resolve => {
             lib.api.request({
@@ -520,6 +546,7 @@ async function getBlockedIps(ipsArr) {
                       partial = resBlck.restrictions && !Array.isArray(resBlck.restrictions),
                       indef = resBlck.expiry === 'infinity',
                       rangeblock = resBlck.user !== ip && resBlck.user.substring(resBlck.user.length - 3) !== ip.substring(ip.length - 3);
+                var needReblock;
                 UserAN.forEach(obj => {
                     if (obj.user === ip) {
                         const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true) >= 0;
@@ -536,17 +563,63 @@ async function getBlockedIps(ipsArr) {
                                 obj.flags = ' メール×';
                             }
                             if (hardblock) obj.flags = ' ハードブロック' + (obj.flags ? obj.flags.replace(/^ /, '・') : '');
+                        } else {
+                            needReblock = ip;
                         }
                     }
                 });
  
-                resolve();
+                resolve(needReblock);
 
             }).catch((err) => resolve(lib.log(err)));
         });
     }
 
 }
+
+// function getReblockStatus(username) {
+//     return new Promise(resolve => {
+//         lib.api.request({
+//             action: 'query',
+//             list: 'logevents',
+//             leaction: 'block/reblock',
+//             letitle: '利用者:' + username,
+//             formatversion: '2'
+//         }).then(res => {
+
+//             var resLgev;
+//             if (!res || !res.query || !(resLgev = res.query.logevents)) return resolve();
+//             if (resLgev.length === 0) return resolve();
+//             resLgev = resLgev[0];
+
+//             const bkparams = resLgev.params;
+//             const nousertalk = bkparams.flags.includes('nousertalk'),
+//                   noemail = bkparams.flags.includes('noemail'),
+//                   partial = !bkparams.sitewide,
+//                   indef = bkparams.duration === 'infinity';
+//             UserAN.forEach(obj => {
+//                 if (obj.user === username) {
+//                     const newlyReported = lib.compareTimestamps(obj.timestamp, resLgev.timestamp, true) >= 0;
+//                     if (newlyReported) {
+//                         obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry);
+//                         obj.date = getBlockedDate(blck.timestamp);
+//                         obj.domain = partial ? '部分ブロック ' : '';
+//                         if (nousertalk && noemail) {
+//                             obj.flags = ' 会話×・メール×';
+//                         } else if (nousertalk) {
+//                             obj.flags = ' 会話×';
+//                         } else if (noemail) {
+//                             obj.flags = ' メール×';
+//                         }
+//                     } else {
+//                         needReblock.push(obj.user);
+//                     }
+//                 }
+//             });
+
+//         }).catch((err) => resolve(lib.log(err)));
+//     });
+// }
 
 /**
  * Get an array of locked users from an array of registered users
