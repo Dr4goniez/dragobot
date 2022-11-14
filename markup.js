@@ -224,6 +224,7 @@ async function markup(pagename, token, checkGlobal, editedTs) {
     const result = await Promise.all(queries); // Wait until all the async procedures finish
     const usersForReblock = [].concat.apply([], result);
     queries = [];
+    if (usersForReblock.length !== 0) lib.log(usersForReblock);
     usersForReblock.forEach(user => queries.push(getReblockStatus(user)));
     await Promise.all(queries);
     // JSON.parse(JSON.stringify(UserAN)).filter(obj => usersForReblock.includes(obj.user)).forEach(obj => console.log(obj));
@@ -474,23 +475,21 @@ async function getBlockedUsers(usersArr) {
                           noemail = blck.noemail,
                           partial = blck.restrictions && !Array.isArray(blck.restrictions),
                           indef = blck.expiry === 'infinity';
-                    UserAN.forEach(obj => {
-                        if (obj.user === blck.user) {
-                            const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true) >= 0;
-                            if (newlyReported) {
-                                obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry);
-                                obj.date = getBlockedDate(blck.timestamp);
-                                obj.domain = partial ? '部分ブロック ' : '';
-                                if (nousertalk && noemail) {
-                                    obj.flags = ' 会話×・メール×';
-                                } else if (nousertalk) {
-                                    obj.flags = ' 会話×';
-                                } else if (noemail) {
-                                    obj.flags = ' メール×';
-                                }
-                            } else {
-                                needReblock.push(obj.user);
+                    UserAN.filter(obj => obj.user === blck.user).forEach(obj => {
+                        const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true) >= 0;
+                        if (newlyReported) {
+                            obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry);
+                            obj.date = getBlockedDate(blck.timestamp);
+                            obj.domain = partial ? '部分ブロック ' : '';
+                            if (nousertalk && noemail) {
+                                obj.flags = ' 会話×・メール×';
+                            } else if (nousertalk) {
+                                obj.flags = ' 会話×';
+                            } else if (noemail) {
+                                obj.flags = ' メール×';
                             }
+                        } else {
+                            needReblock.push(obj.user);
                         }
                     });
                 }
@@ -542,25 +541,23 @@ async function getBlockedIps(ipsArr) {
                       indef = resBlck.expiry === 'infinity',
                       rangeblock = resBlck.user !== ip && resBlck.user.substring(resBlck.user.length - 3) !== ip.substring(ip.length - 3);
                 var needReblock;
-                UserAN.forEach(obj => {
-                    if (obj.user === ip) {
-                        const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true) >= 0;
-                        if (newlyReported) {
-                            obj.duration = indef ? '無期限' : lib.getDuration(resBlck.timestamp, resBlck.expiry);
-                            if (rangeblock) obj.duration = resBlck.user.substring(resBlck.user.length - 3) + 'で' + obj.duration;
-                            obj.date = getBlockedDate(resBlck.timestamp);
-                            obj.domain = partial ? '部分ブロック ' : '';
-                            if (nousertalk && noemail) {
-                                obj.flags = ' 会話×・メール×';
-                            } else if (nousertalk) {
-                                obj.flags = ' 会話×';
-                            } else if (noemail) {
-                                obj.flags = ' メール×';
-                            }
-                            if (hardblock) obj.flags = ' ハードブロック' + (obj.flags ? obj.flags.replace(/^ /, '・') : '');
-                        } else {
-                            needReblock = ip;
+                UserAN.filter(obj => obj.user === ip).forEach(obj => {
+                    const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true) >= 0;
+                    if (newlyReported) {
+                        obj.duration = indef ? '無期限' : lib.getDuration(resBlck.timestamp, resBlck.expiry);
+                        if (rangeblock) obj.duration = resBlck.user.substring(resBlck.user.length - 3) + 'で' + obj.duration;
+                        obj.date = getBlockedDate(resBlck.timestamp);
+                        obj.domain = partial ? '部分ブロック ' : '';
+                        if (nousertalk && noemail) {
+                            obj.flags = ' 会話×・メール×';
+                        } else if (nousertalk) {
+                            obj.flags = ' 会話×';
+                        } else if (noemail) {
+                            obj.flags = ' メール×';
                         }
+                        if (hardblock) obj.flags = ' ハードブロック' + (obj.flags ? obj.flags.replace(/^ /, '・') : '');
+                    } else {
+                        needReblock = ip;
                     }
                 });
 
@@ -695,17 +692,15 @@ function getReblockStatus(blockedusername) {
             }
 
             // Set properties of the UserAN array
-            UserAN.forEach(obj => {
-                if (obj.user === blockedusername) {
-                    const newlyReported = lib.compareTimestamps(obj.timestamp, b2nd.timestamp, true) >= 0;
-                    if (newlyReported) {
-                        obj.domain = domain;
-                        obj.duration = duration === 'infinity' ? '無期限' : duration ? lib.getDuration(b2nd.timestamp, duration) : duration;
-                        if (domain) obj.duration = ' ' + obj.duration;
-                        obj.flags = (domain || duration ? ' ' : '') + flags;
-                        obj.date = getBlockedDate(b2nd.timestamp);
-                        obj.reblocked = 'ブロック条件変更';
-                    }
+            UserAN.filter(obj => obj.user === blockedusername).forEach(obj => {
+                const newlyReported = lib.compareTimestamps(obj.timestamp, b2nd.timestamp, true) >= 0;
+                if (newlyReported) {
+                    obj.domain = domain;
+                    obj.duration = duration === 'infinity' ? '無期限' : duration ? lib.getDuration(b2nd.timestamp, duration) : duration;
+                    if (domain) obj.duration = ' ' + obj.duration;
+                    obj.flags = (domain || duration ? ' ' : '') + flags;
+                    obj.date = getBlockedDate(b2nd.timestamp);
+                    obj.reblocked = 'ブロック条件変更';
                 }
             });
             resolve();
@@ -749,11 +744,9 @@ async function getLockedUsers(regUsersArr) {
     }
     await Promise.all(queries);
     lockedUsers.forEach(username => {
-        UserAN.forEach(obj => {
-            if (obj.user === username) {
-                obj.domain = 'グローバルロック';
-                obj.date = lockedDate;
-            }
+        UserAN.filter(obj => obj.user === username).forEach(obj => {
+            obj.domain = 'グローバルロック';
+            obj.date = lockedDate;
         });
     });
 
@@ -780,16 +773,14 @@ async function getGloballyBlockedIps(arr) {
 
                 resGblck = resGblck[0];
                 const indef = (resGblck.expiry === 'infinity');
-                UserAN.forEach(obj => {
-                    if (obj.user === ip) {
-                        const newlyReported = lib.compareTimestamps(obj.timestamp, resGblck.timestamp, true) >= 0;
-                        let duration;
-                        if (newlyReported) {
-                            if (!indef) duration = lib.getDuration(resGblck.timestamp, resGblck.expiry);
-                            obj.duration = indef ? '無期限' : duration;
-                            obj.date = getBlockedDate(resGblck.timestamp);
-                            obj.domain = 'グローバルブロック ';
-                        }
+                UserAN.filter(obj => obj.user === ip).forEach(obj => {
+                    const newlyReported = lib.compareTimestamps(obj.timestamp, resGblck.timestamp, true) >= 0;
+                    var duration;
+                    if (newlyReported) {
+                        if (!indef) duration = lib.getDuration(resGblck.timestamp, resGblck.expiry);
+                        obj.duration = indef ? '無期限' : duration;
+                        obj.date = getBlockedDate(resGblck.timestamp);
+                        obj.domain = 'グローバルブロック ';
                     }
                 });
 
