@@ -10,7 +10,7 @@ const Logids = {};
 /** {diffid: username, diffid2: username2...} */
 const Diffs = {};
 var unprocessableLogids = [];
-var leend;
+var leend, apilimit;
 
 /**
  * @param {string} token
@@ -51,9 +51,12 @@ module.exports.markupUserANs = markupUserANs;
  * @param {string} token
  * @param {boolean} checkGlobal
  * @param {string} [editedTs] Timestamp of last edit
+ * @param {boolean} [noapihighlimit]
  * @returns {Promise<string|undefined|null>} JSON timestamp if the target page is edited, or else undefined (null if re-login is needed)
  */
-async function markup(pagename, token, checkGlobal, editedTs) {
+async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
+
+    apilimit = noapihighlimit ? 50 : 500;
 
     // Get page content
     const parsed = await lib.getLatestRevision(pagename);
@@ -215,8 +218,8 @@ async function markup(pagename, token, checkGlobal, editedTs) {
 
     // Sort registered users and IPs
     var users = UserAN.filter(obj => obj.user).map(obj => obj.user);
-    const ips = users.filter(username => lib.isIPAddress(username)); // An array of IPs
-    users = users.filter(username => !lib.isIPAddress(username)); // An array of registered users
+    const ips = users.filter((username, i, arr) => lib.isIPAddress(username) && arr.indexOf(username) === i); // An array of IPs
+    users = users.filter((username, i, arr) => !lib.isIPAddress(username) && arr.indexOf(username) === i); // An array of registered users
 
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
@@ -234,14 +237,12 @@ async function markup(pagename, token, checkGlobal, editedTs) {
     // Check if the users and IPs in the arrays are globally (b)locked
     if (checkGlobal) {
         let gUsers = UserAN.filter(obj => obj.user && !obj.date).map(obj => obj.user); // Only check users that aren't locally blocked
-        const gIps = gUsers.filter(username => lib.isIPAddress(username));
-        gUsers = gUsers.filter(username => !lib.isIPAddress(username));
+        const gIps = gUsers.filter((username, i, arr) => lib.isIPAddress(username) && arr.indexOf(username) === i);
+        gUsers = gUsers.filter((username, i, arr) => !lib.isIPAddress(username) && arr.indexOf(username) === i);
         queries = [];
         queries.push(getLockedUsers(gUsers), getGloballyBlockedIps(gIps));
         await Promise.all(queries);
     }
-
-    // --- At this point, UserANs to mark up have a 'duration' or 'domain' property ---
 
     // Final check before edit
     var modOnly = false; // True if no user is newly blocked but some UserANs need to be modified
@@ -257,6 +258,7 @@ async function markup(pagename, token, checkGlobal, editedTs) {
     } else {
         return lib.log('Procedure cancelled: There\'s no UserAN to update.');
     }
+    // JSON.parse(JSON.stringify(UserAN)).filter(obj => obj.new).forEach(obj => console.log(obj));
 
     // Get summary
     var summary = '';
@@ -408,12 +410,16 @@ async function convertLogidsToUsernames(arr) {
 
 }
 
-async function convertDiffidsToUsernames(arr) {
-    if (arr.length === 0) return [];
+/**
+ * @param {Array} diffIdsArr 
+ * @returns {Promise}
+ */
+async function convertDiffidsToUsernames(diffIdsArr) {
+    if (diffIdsArr.length === 0) return;
     return new Promise(resolve => {
         lib.api.request({
             action: 'query',
-            revids: arr.slice(0, 500).join('|'),
+            revids: diffIdsArr.slice(0, apilimit).join('|'),
             prop: 'revisions',
             formatversion: '2'
         }).then(res => {
@@ -443,7 +449,7 @@ async function getBlockedUsers(usersArr) {
     const users = JSON.parse(JSON.stringify(usersArr));
     const queries = [];
     while (users.length !== 0) {
-        queries.push(blockQuery(users.splice(0, 500)));
+        queries.push(blockQuery(users.splice(0, apilimit)));
     }
     var result = await Promise.all(queries);
     result = result.filter(res => res);
