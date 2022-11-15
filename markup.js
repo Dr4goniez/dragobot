@@ -207,6 +207,7 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
     });
     const scrapedUsernames = await Promise.all(queries);
     scrapedUsernames.forEach((u, i) => {
+        if (!u) return;
         var logid = logids[i];
         if (!Logids[logid]) Logids[logid] = u;
     });
@@ -295,10 +296,10 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
             }, Object.create(null));                 //  times in the same section)
 
             for (let key in reportsBySection) {
-                summary += ` /*${key}*/ `;
+                summary += `/*${key}*/`;
                 const bool = reportsBySection[key].every((obj, i) => {
                     var tempSummary = (i === 0 ? '' : ', ') + getUserLink(obj);
-                    if ((summary + tempSummary).length <= 500) { // Prevent the summary from exceeding the max word count
+                    if ((summary + tempSummary).length <= 500 - 3) { // Prevent the summary from exceeding the max word count
                         summary += tempSummary;
                         return true; // Go on to the next loop
                     } else {
