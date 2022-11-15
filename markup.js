@@ -217,9 +217,9 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
     unprocessableLogids = unprocessableLogids.concat(logids).filter((el, i, arr) => arr.indexOf(el) === i);
 
     // Sort registered users and IPs
-    var users = UserAN.filter(obj => obj.user).map(obj => obj.user);
-    const ips = users.filter((username, i, arr) => lib.isIPAddress(username) && arr.indexOf(username) === i); // An array of IPs
-    users = users.filter((username, i, arr) => !lib.isIPAddress(username) && arr.indexOf(username) === i); // An array of registered users
+    var users = UserAN.filter(obj => obj.user).map(obj => obj.user).filter((el, i, arr) => arr.indexOf(el) === i);
+    const ips = users.filter(username => lib.isIPAddress(username)); // An array of IPs
+    users = users.filter(username => !lib.isIPAddress(username)); // An array of registered users
 
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
@@ -236,9 +236,9 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
 
     // Check if the users and IPs in the arrays are globally (b)locked
     if (checkGlobal) {
-        let gUsers = UserAN.filter(obj => obj.user && !obj.date).map(obj => obj.user); // Only check users that aren't locally blocked
-        const gIps = gUsers.filter((username, i, arr) => lib.isIPAddress(username) && arr.indexOf(username) === i);
-        gUsers = gUsers.filter((username, i, arr) => !lib.isIPAddress(username) && arr.indexOf(username) === i);
+        let gUsers = UserAN.filter(obj => obj.user && !obj.date).map(obj => obj.user).filter((el, i, arr) => arr.indexOf(el) === i); // Only check users that aren't locally blocked
+        const gIps = gUsers.filter(username => lib.isIPAddress(username));
+        gUsers = gUsers.filter(username => !lib.isIPAddress(username));
         queries = [];
         queries.push(getLockedUsers(gUsers), getGloballyBlockedIps(gIps));
         await Promise.all(queries);
