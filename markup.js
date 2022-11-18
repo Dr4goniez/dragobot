@@ -296,9 +296,12 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
             }, Object.create(null));                 //  times in the same section)
 
             for (let key in reportsBySection) {
-                summary += `/*${key}*/`;
                 const bool = reportsBySection[key].every((obj, i) => {
-                    var tempSummary = (i === 0 ? '' : ', ') + getUserLink(obj);
+                    const userlink = getUserLink(obj);
+                    if (summary.includes(userlink)) return true; // Do nothing if the summary already has a link for the relevant user
+                    const sectionlink = ` /*${key}*/`;
+                    if (!summary.includes(sectionlink)) summary += sectionlink;
+                    var tempSummary = (i === 0 ? '' : ', ') + userlink;
                     if ((summary + tempSummary).length <= 500 - 3) { // Prevent the summary from exceeding the max word count
                         summary += tempSummary;
                         return true; // Go on to the next loop
