@@ -34,7 +34,7 @@ module.exports.getToken = getToken;
 
 /**
  * @param {string} pagename
- * @returns {Promise<boolean|{isRedirect: boolean, basetimestamp: string, curtimestamp: string, content: string, originalContent: string, revid: string}|undefined>}
+ * @returns {Promise<boolean|{isRedirect: boolean, basetimestamp: string, curtimestamp: string, content: string, revid: string}|undefined>}
  * False if page doesn't exit, undefined if error occurs, or else an object
  */
 function getLatestRevision(pagename) {
@@ -55,16 +55,15 @@ function getLatestRevision(pagename) {
             resPgs = resPgs[0];
             if (resPgs.missing) return resolve(false);
 
-            const isRedirect = resPgs.redirect ? true : false;
             const resRev = resPgs.revisions[0];
             resolve({
-                isRedirect: isRedirect,
+                isRedirect: resPgs.redirect ? true : false,
                 basetimestamp: resRev.timestamp,
                 curtimestamp: res.curtimestamp,
                 content: resRev.slots.main.content,
-                originalContent: JSON.parse(JSON.stringify(resRev.slots.main.content)),
                 revid: resRev.revid.toString()
             });
+
         }).catch(err => resolve(log(err.info)));
     });
 }
@@ -86,11 +85,14 @@ module.exports.delay = delay;
  * @returns {Promise}
  */
 function dynamicDelay(ts) {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
         if (!ts) return reject();
         const diffMilliseconds = compareTimestamps(ts, new Date().toJSON()); // Milliseconds after the last edit
-        if (diffMilliseconds < 4200) await delay(4200 - diffMilliseconds);
-        resolve();
+        if (diffMilliseconds < 4400) {
+            delay(4400 - diffMilliseconds).then(() => resolve());
+        } else {
+            resolve();
+        }
     });
 }
 module.exports.dynamicDelay = dynamicDelay;
@@ -101,40 +103,37 @@ module.exports.dynamicDelay = dynamicDelay;
  * @param {string} [ts]
  * @returns {Promise<string|undefined|null>} JSON timestamp if the edit succeeded, or else undefined (null if re-login is needed)
  */
-function editPage(params, ts) {
-    return new Promise(async resolve => {
+async function editPage(params, ts) {
 
-        if (ts) await dynamicDelay(ts);
-        var result = await api.request(params)
-        .then(res => {
-            if (res && res.edit) {
-                if (res.edit.result === 'Success') return true;
-            }
-            return false;
-        }).catch(err => err.response.error.info);
-
-        switch (result) {
-            case true:
-                log(params.title + ': Edit done.');
-                return resolve(new Date().toJSON());
-            case false:
-                log(params.title + ': Edit failed due to an unknown error.');
-                return resolve();
-            default:
-                log(params.title + ': Edit failed: ' + result);
-                const ret = result.indexOf('Invalid CSRF token') !== -1 ? null : undefined;
-                return resolve(ret);
+    if (ts) await dynamicDelay(ts);
+    var result = await api.request(params)
+    .then(res => {
+        if (res && res.edit) {
+            if (res.edit.result === 'Success') return true;
         }
+        return false;
+    }).catch(err => err.response.error.info);
 
-    });
+    switch (result) {
+        case true:
+            log(params.title + ': Edit done.');
+            return new Date().toJSON();
+        case false:
+            log(params.title + ': Edit failed due to an unknown error.');
+            return;
+        default:
+            log(params.title + ': Edit failed: ' + result);
+            return result.indexOf('Invalid CSRF token') !== -1 ? null : undefined;
+    }
+
 }
 module.exports.editPage = editPage;
 
 /**
  * Get an array of pagetitles that have links to a given page, transclusions not included
- * @param {string} pagetitle 
- * @param {Array<integer>} [nsExclude] an array of namespace numbers to exclude
- * @returns {Promise<Array|undefined>}
+ * @param {string} pagetitle
+ * @param {Array<number>} [nsExclude] an array of namespace numbers to exclude
+ * @returns {Promise<Array<string>|undefined>}
  */
 async function getBackLinks(pagetitle, nsExclude) {
 
@@ -174,9 +173,9 @@ module.exports.getBackLinks = getBackLinks;
 
 /**
  * Get an array of pagetitles that have links to a given page, transclusions not included
- * @param {string} cattitle Must start with 'Category:' but automatically added 
- * @param {Array<integer>} [nsExclude] an array of namespace numbers to exclude
- * @returns {Promise<Array|undefined>}
+ * @param {string} cattitle Must start with 'Category:' but automatically added
+ * @param {Array<number>} [nsExclude] an array of namespace numbers to exclude
+ * @returns {Promise<Array<string>|undefined>}
  */
 async function getCatMembers(cattitle, nsExclude) {
 
@@ -221,8 +220,8 @@ module.exports.getCatMembers = getCatMembers;
 
 /**
  * Get a list of pages that transclude a given page
- * @param {string} pagetitle 
- * @returns {Promise<Array>}
+ * @param {string} pagetitle
+ * @returns {Promise<Array<string>>}
  */
 async function getTranscludingPages(pagetitle) {
 
@@ -250,16 +249,13 @@ async function getTranscludingPages(pagetitle) {
                 }
                 resolve();
 
-            }).catch(function(err) {
-                log(err.info);
-                resolve();
-            });
+            }).catch(err => resolve(log(err.info)));
         });
     };
 
     await query();
     return pages;
-    
+
 }
 module.exports.getTranscludingPages = getTranscludingPages;
 
@@ -316,15 +312,15 @@ async function filterOutProtectedPages(pagetitles) {
         });
     };
 
-    const pagetitlesArr = JSON.parse(JSON.stringify(pagetitles));
+    pagetitles = pagetitles.slice();
     const deferreds = [];
-    while (pagetitlesArr.length) {
-        deferreds.push(query(pagetitlesArr.splice(0, 500)));
+    while (pagetitles.length) {
+        deferreds.push(query(pagetitles.splice(0, 500)));
     }
     const result = await Promise.all(deferreds);
 
     const failed = result.some(el => !el);
-    const protected = result.filter(el => el).concat.apply([], result).filter((el, i, arr) => arr.indexOf(el) === i);
+    const protected = result.filter(el => el).flat().undup();
 
     return failed ? null : protected;
 
@@ -333,7 +329,7 @@ module.exports.filterOutProtectedPages = filterOutProtectedPages;
 
 /**
  * Scrape a webpage
- * @param {string} url 
+ * @param {string} url
  * @returns {Promise<cheerio|undefined>}
  */
 async function scrape(url) {
@@ -350,7 +346,7 @@ module.exports.scrape = scrape;
 
 /**
  * Get a username from an account creation logid
- * @param {number|string} logid 
+ * @param {number|string} logid
  * @returns {Promise<string|undefined>}
  */
 async function scrapeUsernameFromLogid(logid) {
@@ -385,28 +381,33 @@ module.exports.scrapeUsernameFromLogid = scrapeUsernameFromLogid;
 
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
 
-/** 
+/**
  * Extract templates from wikitext
  * @param {string} wikitext the wikitext from which templates are extracted
- * @param {string|Array} [templateName] sort out templates by these template names
- * @param {string|Array} [templatePrefix] sort out templates by these template prefixes
- * @returns {Array}
+ * @param {string|Array<string>} [templateName] sort out templates by these template names
+ * @param {string|Array<string>} [templatePrefix] sort out templates by these template prefixes
+ * @returns {Array<string>}
  */
 function findTemplates(wikitext, templateName, templatePrefix) {
+
+    // Remove comments
+    extractCommentOuts(wikitext).forEach(co => {
+        const regex = new RegExp(escapeRegExp(co) + '\\s?');
+        wikitext = wikitext.replace(regex, '');
+    });
 
     // Create an array by splitting the original content with '{{'
     const tempInnerContents = wikitext.split('{{'); // Note: tempInnerContents[0] is always an empty string or a string that has nothing to do with templates
     if (tempInnerContents.length === 0) return [];
 
     // Extract templates from the wikitext
-    var templates = [];
     const nest = [];
-    tempInnerContents.forEach((tempInnerContent, i, arr) => { // Loop through all elements in tempInnerContents (except tempInnerContents[0])
+    var templates = tempInnerContents.reduce((acc, tempInnerContent, i, arr) => { // Loop through all elements in tempInnerContents (except tempInnerContents[0])
 
-        if (i === 0) return;
+        if (i === 0) return acc;
 
+        var temp;
         const tempTailCnt = (tempInnerContent.match(/\}\}/g) || []).length; // The number of '}}' in the split array
-        var temp = ''; // Temporary escape hatch
 
         // There's no '}}' (= nesting other templates)
         if (tempTailCnt === 0) {
@@ -417,7 +418,7 @@ function findTemplates(wikitext, templateName, templatePrefix) {
         } else if (tempTailCnt === 1) {
 
             temp = '{{' + tempInnerContent.split('}}')[0] + '}}';
-            if (!templates.includes(temp)) templates.push(temp);
+            if (!acc.includes(temp)) acc.push(temp);
 
         // There're two or more '}}'s (e.g. 'TL2|...}}...}}'; = templates are nested)
         } else {
@@ -427,7 +428,7 @@ function findTemplates(wikitext, templateName, templatePrefix) {
                 if (j === 0) { // The innermost template
 
                     temp = '{{' + tempInnerContent.split('}}')[j] + '}}'; // Same as when there's one '}}' in the element
-                    if (!templates.includes(temp)) templates.push(temp);
+                    if (!acc.includes(temp)) acc.push(temp);
 
                 } else { // Multi-nested template(s)
 
@@ -436,23 +437,16 @@ function findTemplates(wikitext, templateName, templatePrefix) {
                     const nestedTempInnerContent = tempInnerContent.split('}}'); // Create another array by splitting with '}}'
 
                     temp = '{{' + arr.slice(elNum, i).join('{{') + '{{' + nestedTempInnerContent.slice(0, j + 1).join('}}') + '}}';
-                    if (!templates.includes(temp)) templates.push(temp);
+                    if (!acc.includes(temp)) acc.push(temp);
 
                 }
 
             }
 
         }
+        return acc;
 
-    }); // All templates in the wikitext is stored in 'templates' when the loop is done
-
-    // Remove templates that are part of comments
-    const co = extractCommentOuts(wikitext);
-    if (co) {
-        co.forEach(item => {
-            templates = templates.filter(template => item.indexOf(template) === -1);
-        });
-    }
+    }, []); // All templates in the wikitext is stored in 'templates' when the loop is done
 
     // End here if the templates don't need to be sorted
     if ((!templateName && !templatePrefix) || templates.length === 0) return templates;
@@ -463,7 +457,7 @@ function findTemplates(wikitext, templateName, templatePrefix) {
 
     /**
      * Function to create a regex that makes the first character of a template case-insensitive
-     * @param {string} str 
+     * @param {string} str
      * @returns {string} [Xx]
      */
     const caseInsensitiveFirstLetter = str => '[' + str.substring(0, 1).toUpperCase() + str.substring(0, 1).toLowerCase() + ']';
@@ -486,7 +480,7 @@ function findTemplates(wikitext, templateName, templatePrefix) {
     // Sort out certain templates
     var errHandler = false;
     templates = templates.filter(item => {
-        var name = item.match(/^\{{2}\s*([^\|\{\}\n]+)/);
+        var name = item.match(/^\{{2}\s*([^|{}\n]+)/);
         if (!name) {
             errHandler = true;
             return false;
@@ -501,7 +495,7 @@ function findTemplates(wikitext, templateName, templatePrefix) {
         }
     });
 
-    if (errHandler) log('findTemplates: Detected unprocessable braces');
+    if (errHandler) log('findTemplates: Detected unprocessable braces.');
     return templates;
 
 }
@@ -510,36 +504,30 @@ module.exports.findTemplates = findTemplates;
 /**
  * Find all HTML tags in a string, including innerHTML
  * @param {string} content String in which to search for tags
- * @param {string|Array} [tagnames] Tags to sort out
- * @returns {Array} Array of outerHTMLs
+ * @param {string|Array<string>} [tagnames] Tags to sort out
+ * @returns {Array<string>} Array of outerHTMLs
  */
 function findHtmlTags(content, tagnames) {
 
-    // Copy the content
-    var str = JSON.parse(JSON.stringify(content));
-
     // Remove comments
-    const co = extractCommentOuts(str);
-    if (co) {
-        co.forEach(item => {
-            const regex = new RegExp(escapeRegExp(item) + '\s?');
-            str = str.replace(regex, '');
-        });
-    }
+    extractCommentOuts(content).forEach(co => {
+        const regex = new RegExp(escapeRegExp(co) + '\\s?');
+        content = content.replace(regex, '');
+    });
 
     // Get all <tag> and </tag>s and create an array of objects
     const regex = /(?:<[^\s/>]+[^\S\r\n]*[^>]*>|<\/[^\S\r\n]*[^\s>]+[^\S\r\n]*>)/g;
     // const regex = /(?:<([^\s/>]+)[^\S\r\n]*[^>]*>|<\/[^\S\r\n]*([^\s>]+)[^\S\r\n]*>)/g;
     const mArr = [];
     var m;
-    while (m = regex.exec(str)) {
+    while ((m = regex.exec(content))) {
         const type = m[0].match(/^<[^\S\r\n]*\//) ? 'end' : 'start';
         mArr.push({
-            'tag': m[0], // e.g. <div>, </div>
-            'tagname': m[0].match(/^<\/?[^\S\r\n]*([^\s>]+)[^\S\r\n]*[^>]*>$/)[1], // e.g. div
-            // 'tagname': m[1], // The capturing group doesn'T work for closing tags for some reason
-            'type': type, // 'start' or 'end'
-            'index': m.index // Index of the tag in the content
+            tag: m[0], // e.g. <div>, </div>
+            tagname: m[0].match(/^<\/?[^\S\r\n]*([^\s>]+)[^\S\r\n]*[^>]*>$/)[1], // e.g. div
+            // tagname: m[1], // The capturing group doesn't work for closing tags for some reason
+            type: type, // 'start' or 'end'
+            index: m.index // Index of the tag in the content
         });
     }
 
@@ -556,7 +544,7 @@ function findHtmlTags(content, tagnames) {
                 nestCnt--;
                 return false; // Continue the loop
             } else if (sObj.type !== obj.type && nestCnt === 0) { // If there's a closing tag and if it's what closes the current element
-                tags.push(str.substring(obj.index, sObj.index + sObj.tag.length)); // Push the innerHTML into the array 'tags'
+                tags.push(content.substring(obj.index, sObj.index + sObj.tag.length)); // Push the innerHTML into the array 'tags'
                 return true; // End the loop
             }
             log('findHtmlTags: Unexpected condition detected.');
@@ -576,38 +564,37 @@ function findHtmlTags(content, tagnames) {
 module.exports.findHtmlTags = findHtmlTags;
 
 /**
- * Get strings enclosed by <!-- -->, <nowiki />, <pre />, <syntaxhighlight />, and <source />
- * @param {string} wikitext 
- * @returns {Array|null} 
+ * Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />
+ * @param {string} wikitext
+ * @returns {Array<string>}
  */
 function extractCommentOuts(wikitext) {
-    return wikitext.match(/(<!--[\s\S]*?-->|<nowiki>[\s\S]*?<\/nowiki>|<pre[\s\S]*?<\/pre>|<syntaxhighlight[\s\S]*?<\/syntaxhighlight>|<source[\s\S]*?<\/source>)/gm);
+    return wikitext.match(/<!--[\s\S]*?-->|<nowiki>[\s\S]*?<\/nowiki>|<pre[\s\S]*?<\/pre>|<syntaxhighlight[\s\S]*?<\/syntaxhighlight>|<source[\s\S]*?<\/source>/gm) || [];
 }
 module.exports.extractCommentOuts = extractCommentOuts;
 
 /**
  * Get the parameters of templates as an array
- * @param {string} template 
- * @returns {Array} This doesn't contain the template's name
+ * @param {string} template
+ * @returns {Array<string>} This doesn't contain the template's name
  */
 function getTemplateParams(template) {
 
     // If the template doesn't contain '|', it doesn't have params
-    if (template.indexOf('|') === -1) return [];
+    if (!template.includes('|')) return [];
 
     // Remove the first '{{' and the last '}}' (or '|}}')
-    const frameRegExp = /(?:^\{{2}|\|*\}{2}$)/g;
-    var params = template.replace(frameRegExp, '');
+    var params = template.replace(/^\{{2}|\|*\}{2}$/g, '');
 
     // In case the params nest other templates
     var nested = findTemplates(params);
     if (nested.length !== 0) {
         nested = nested.filter(item => { // Sort out templates that don't nest yet other templates (findTemplates() returns both TL1 and TL2
-            return nested.filter(itemN => itemN !== item).every(itemN => itemN.indexOf(item) === -1); // ↳ in {{TL1| {{TL2}} }} ), but we don't need TL2 
+            return nested.filter(itemN => itemN !== item).every(itemN => !itemN.includes(item)); // ↳ in {{TL1| {{TL2}} }} ), but we don't need TL2
             // ↳ Look at the other elements in the array 'nested' (.filter) and only preserve items that are not part of those items (.every)
         });
         nested.forEach((item, i) => {
-            params = params.split(item).join(`$TL${i}`); // Replace nested templates with '$TLn'
+            params = params.replaceAll(item, `$TL${i}`); // Replace nested templates with '$TLn'
         });
     }
 
@@ -617,12 +604,12 @@ function getTemplateParams(template) {
     if (nested.length !== 0) {
         params.forEach((item, i) => {
             var m;
-            if (m = item.match(/\$TL\d+/g)) { // Find all $TLn in the item
+            if ((m = item.match(/\$TL\d+/g))) { // Find all $TLn in the item
                 for (let j = 0; j < m.length; j += 2) {
                     const index = m[j].match(/\$TL(\d+)/)[1];
                     m.splice(j + 1, 0, index); // Push the index at m[j + 1]
                     const replacee = j === 0 ? item : params[i];
-                    params[i] = replacee.split(m[j]).join(nested[m[j + 1]]);  // Re-replace delimiters with original templates
+                    params[i] = replacee.replaceAll(m[j], nested[m[j + 1]]);  // Re-replace delimiters with original templates
                 }
             }
         });
@@ -635,8 +622,8 @@ module.exports.getTemplateParams = getTemplateParams;
 
 /**
  * Extract all UserANs with open reports as an array
- * @param {string} wikitext 
- * @returns {Array}
+ * @param {string} wikitext
+ * @returns {Array<string>}
  */
 function getOpenUserANs(wikitext) {
 
@@ -650,20 +637,19 @@ function getOpenUserANs(wikitext) {
     if (templates.length === 0) return [];
 
     // Create an array of objects out of the 'templates' array
-    var UserAN = [];
-    templates.forEach(template => {
-        UserAN.push({
-            'template': template,
-            'closed': true
-        });
+    var UserAN = templates.map(tmpl => {
+        return {
+            template: tmpl,
+            closed: true
+        };
     });
 
     // RegExps to evaluate the templates' parameters
     const paramsRegExp = {
-        'bot': /^\s*bot\s*=/, // bot=
-        'type': /^\s*(?:t|[Tt]ype)\s*=/, // t=, type=, or Type=
-        'statusS': /^\s*(?:状態|s|[Ss]tatus)\s*=\s*$/, // 状態=, s=, status=, or Status=
-        'statusSClosed': /^\s*(?:状態|s|[Ss]tatus)\s*=\s*.+/, // Closed statusS
+        bot: /^\s*bot\s*=/, // bot=
+        type: /^\s*(?:t|[Tt]ype)\s*=/, // t=, type=, or Type=
+        statusS: /^\s*(?:状態|s|[Ss]tatus)\s*=\s*$/, // 状態=, s=, status=, or Status=
+        statusSClosed: /^\s*(?:状態|s|[Ss]tatus)\s*=\s*.+/, // Closed statusS
     };
 
     // Find UserANs with open reports by evaluating their parameters
@@ -694,7 +680,7 @@ function getOpenUserANs(wikitext) {
         \***********************************************************************************************************/
 
         if (params.filter(item => item.match(paramsRegExp.statusSClosed)).length > 0) return; // 状態=X param is present: Always closed
-        switch(params.length) {
+        switch (params.length) {
             case 1: // [(1=)username] (open)
                 obj.closed = false;
                 return;
@@ -716,45 +702,40 @@ function getOpenUserANs(wikitext) {
 module.exports.getOpenUserANs = getOpenUserANs;
 
 /**
- * @param {string} pageContent
+ * @param {string} content
  * @returns {Array<{header: string, title: string, level: number, index: number, content: string, deepest: boolean}>} Never undefined
  */
-function parseContentBySection(pageContent) {
+function parseContentBySection(content) {
 
     const regex = {
-        'header': /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/,
-        'headerG': /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/g,
-        'headerEquals': /(?:^={2,5}[^\S\n\r]*|[^\S\n\r]*={2,5}$)/g
+        header: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/,
+        headerG: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/g,
+        headerEquals: /(?:^={2,5}[^\S\n\r]*|[^\S\n\r]*={2,5}$)/g
     };
 
-    const content = JSON.parse(JSON.stringify(pageContent));
     var headers = content.match(regex.headerG);
-    
-    const co = extractCommentOuts(content);
-    if (co) {
-        co.forEach(item => {
-            headers = headers.filter(header => item.indexOf(header) === -1);
-        });
-    }
+    extractCommentOuts(content).forEach(co => {
+        headers = headers.filter(header => !co.includes(header));
+    });
 
     const sections = [];
     sections.push({ // The top section
-        'header': null,
-        'title': null,
-        'level': 1,
-        'index': 0,
-        'content': headers ? content.split(headers[0])[0] : content,
-        'deepest': null
+        header: null,
+        title: null,
+        level: 1,
+        index: 0,
+        content: headers ? content.split(headers[0])[0] : content,
+        deepest: null
     });
     if (headers) {
         headers.forEach(header => {
             sections.push({
-                'header': header,
-                'title': header.replace(regex.headerEquals, ''),
-                'level': header.match(/=/g).length / 2,
-                'index': undefined,
-                'content': undefined,
-                'deepest': undefined
+                header: header,
+                title: header.replace(regex.headerEquals, ''),
+                level: header.match(/=/g).length / 2,
+                index: undefined,
+                content: undefined,
+                deepest: undefined
             });
         });
         sections.forEach((obj, i, arr) => {
@@ -777,24 +758,8 @@ function parseContentBySection(pageContent) {
 module.exports.parseContentBySection = parseContentBySection;
 
 /**
- * Split a string into two
- * @param {string} str 
- * @param {string} delimiter 
- * @param {boolean} lastindex If true, search the delimiter from the bottom of the string
- * @returns {Array}
- */
-function splitInto2(str, delimiter, lastindex) {
-    const index = lastindex ? str.lastIndexOf(delimiter) : str.indexOf(delimiter);
-    if (index === -1) return;
-    const firstPart = str.substring(0, index);
-    const secondPart = str.substring(index + 1);
-    return [firstPart, secondPart];
-}
-module.exports.splitInto2 = splitInto2;
-
-/**
- * @param {string} timestamp1 
- * @param {string} timestamp2 
+ * @param {string} timestamp1
+ * @param {string} timestamp2
  * @param {boolean} [rewind5minutes] if true, rewind timestamp1 by 5 minutes
  * @returns {number} timestamp2 - timestamp1 (in milliseconds)
  */
@@ -809,9 +774,9 @@ function compareTimestamps(timestamp1, timestamp2, rewind5minutes) {
 module.exports.compareTimestamps = compareTimestamps;
 
 /**
- * @param {string} timestamp1 
- * @param {string} timestamp2 
- * @returns {string}
+ * @param {string} timestamp1
+ * @param {string} timestamp2
+ * @returns {string|undefined}
  */
 function getDuration(timestamp1, timestamp2) {
 
@@ -857,8 +822,8 @@ module.exports.getDuration = getDuration;
 
 /**
  * Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!')
- * @param {string} str 
- * @returns 
+ * @param {string} str
+ * @returns {string}
  */
 function escapeRegExp(str) {
     return str.replace(/[\\{}().?*+\-^$[\]|]/g, '\\$&');
@@ -878,7 +843,7 @@ module.exports.lastDay = lastDay;
 
 /**
  * Get the Japanese name of a day of the week from JSON timestamp
- * @param {string} timestamp 
+ * @param {string} timestamp
  * @returns {string}
  */
 function getWeekDayJa(timestamp) {
@@ -889,7 +854,7 @@ module.exports.getWeekDayJa = getWeekDayJa;
 
 /**
  * Check if a string is an IP address
- * @param {string} ip 
+ * @param {string} ip
  * @returns {boolean}
  */
 function isIPAddress(ip) {
@@ -899,7 +864,7 @@ module.exports.isIPAddress = isIPAddress;
 
 /**
  * Check if a string is an IPv4 address
- * @param {string} ip 
+ * @param {string} ip
  * @returns {boolean}
  */
 function isIPv4(ip) {
@@ -909,7 +874,7 @@ module.exports.isIPv4 = isIPv4;
 
 /**
  * Check if a string is an IPv6 address
- * @param {string} ip 
+ * @param {string} ip
  * @returns {boolean}
  */
 function isIPv6(ip) {

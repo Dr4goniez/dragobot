@@ -7,5 +7,5 @@ removeRFP.js
 test.js
 copyPages.js
 catReplace.js
-methods.js
-methods.ts
+tsconfig.json
+.eslintrc.json

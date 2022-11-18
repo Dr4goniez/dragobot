@@ -1,3 +1,4 @@
+require('./methods');
 const lib = require('./lib');
 const {createServer} = require('./server');
 const {markupUserANs} = require('./markup');
@@ -29,9 +30,9 @@ const {removePp} = require('./removePp');
         if (runCnt % 6 === 0) { // Check global block/lock status every 6 runs (1 hour)
             checkGlobal = true;
         }
-        // if (runCnt % 3 === 0) { // Check inappropriate protection templates every 3 runs (30 minutes)
+        if (runCnt % 3 === 0) { // Check inappropriate protection templates every 3 runs (30 minutes)
             checkProtectionTemplates = true;
-        // }
+        }
 
         if (lastRunTs && checkGlobal !== true) { // checkBlocks should be always true if it's the first run and if checkGlobal === true
             checkBlocks = await checkNewBlocks(lastRunTs); // Check if anyone has been manually blocked since the last run, and if not, checkBlocks = false
@@ -81,14 +82,14 @@ const {removePp} = require('./removePp');
     const year = d.getFullYear(),
           month = d.getMonth() + 1,
           lastDay = lib.lastDay(year, month),
-          anchorTs40 = `${year}-${(month.toString().length === 1 ? '0' : '') + month}-${lastDay}T23:40:00Z`,
+          anchorTs40 = `${year}-${month.toString().padStart(2, '0')}-${lastDay}T23:40:00Z`,
           anchorTs30 = anchorTs40.replace(/40:00Z$/, '30:00Z');
     return new Date(anchorTs40) >= d && d > new Date(anchorTs30);
 }
 
 /**
 * Function to check if anyone has been manually blocked since the last run
-* @param {string} ts 
+* @param {string} ts
 * @returns {Promise<boolean>}
 */
 function checkNewBlocks(ts) {

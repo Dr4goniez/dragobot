@@ -1,6 +1,6 @@
 {
   "name": "dragobot",
-  "version": "4.2.8",
+  "version": "4.3.0",
   "description": "A Wikipedia bot.",
   "main": "bot.js",
   "scripts": {
@@ -17,6 +17,12 @@
     "express": "^4.18.2",
     "is-cidr": "^4.0.2",
     "mwbot": "^2.0.0",
-    "net": "^1.0.2"
+    "net": "^1.0.2",
+    "typescript": "^4.9.3"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.43.0",
+    "@typescript-eslint/parser": "^5.43.0",
+    "eslint": "^8.27.0"
   }
 }

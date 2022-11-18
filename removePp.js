@@ -54,13 +54,13 @@ async function removePp(token, botRunTs, editedTs) {
         queries.push(lib.getTranscludingPages(tl));
     }
     const result = await Promise.all(queries);
-    const transcludingPp = result.concat.apply([], result).filter((el, i, arr) => arr.indexOf(el) === i);
+    const transcludingPp = result.flat().undup();
 
     const protected = await lib.filterOutProtectedPages(transcludingPp);
     if (!protected) return lib.log('Failed to filter out protected pages.');
-    var notProtected = transcludingPp.filter(el => protected.indexOf(el) === -1 && !ignore.includes(el));
+    var notProtected = transcludingPp.filter(el => !protected.includes(el) && !ignore.includes(el));
     notProtected = notProtected.filter(el => {
-        return pp.map(tl => 'Template:' + tl + '/').every(pfx => el.indexOf(pfx) === -1); // Remove subpages of pp templates
+        return pp.map(tl => 'Template:' + tl + '/').every(pfx => !el.includes(pfx)); // Remove subpages of pp templates
     });
 
     lib.log(`${notProtected.length} page(s) found.`);
@@ -92,7 +92,7 @@ module.exports.removePp = removePp;
 
 /**
  * Check whether the next procedure starts in 10 seconds
- * @param {string} botRunTs 
+ * @param {string} botRunTs
  * @returns {boolean}
  */
 function needToQuit(botRunTs) {
@@ -103,49 +103,47 @@ function needToQuit(botRunTs) {
 }
 
 /**
- * @param {string} pagetitle 
- * @param {string} token 
- * @param {string} [editedTs] 
+ * @param {string} pagetitle
+ * @param {string} token
+ * @param {string} [editedTs]
  * @returns {Promise<string|null|undefined>} JSON timestamp if the edit succeeded, or else undefined (null if re-login is needed)
  */
 async function editPageWithPp(pagetitle, token, editedTs) {
 
     const lr = await lib.getLatestRevision(pagetitle);
     if (!lr) return lib.log('Failed to parse the page.');
+    var content = lr.content;
 
-    var templates = lib.findTemplates(lr.content, pp);
-    if (templates.length === 0) {
-        return lib.log('No protection templates found.');
-    } else {
+    var templates = lib.findTemplates(content, pp);
+    if (templates.length === 0) return lib.log('No protection templates found.');
 
-        const isDemo = templates.some(el => {
-            const params = lib.getTemplateParams(el);
-            return params.some(param => param.match(/^demolevel\s*=/i));
-        });
-        if (isDemo) {
-            ignore.push(pagetitle);
-            return lib.log('Cancelled: The pp in this page is used as a demo.');
-        }
-
-        // Escape the extracted templates
-        templates = templates.map(function(item) {
-            return lib.escapeRegExp(item);
-        });
-
-        // Replace "{{TEMPLATE}}\n" with an empty string
-        const regex = new RegExp('(?:' + templates.join('|') + ')[^\\S\\n\\r]*\\n?', 'g');
-        lr.content = lr.content.replace(regex, '');
-
-        // Remove empty <noinclude> tags and the like if there's any
-        lr.content = lr.content.replace(/<noinclude>(?:\s)*?<\/noinclude>[^\S\n\r]*\n?/gm, '').replace(/\/\*(?:\s)*?\*\/[^\S\n\r]*\n?/gm, '');
-
+    const isDemo = templates.some(el => {
+        const params = lib.getTemplateParams(el);
+        return params.some(param => param.match(/^demolevel\s*=/i));
+    });
+    if (isDemo) {
+        ignore.push(pagetitle);
+        return lib.log('Cancelled: The pp in this page is used as a demo.');
     }
-    if (lr.content === lr.originalContent) return lib.log('Procedure cancelled: Same content');
+
+    // Escape the extracted templates
+    templates = templates.map(function(item) {
+        return lib.escapeRegExp(item);
+    });
+
+    // Replace "{{TEMPLATE}}\n" with an empty string
+    const regex = new RegExp('(?:' + templates.join('|') + ')[^\\S\\n\\r]*\\n?', 'g');
+    content = content.replace(regex, '');
+
+    // Remove empty <noinclude> tags and the like if there's any
+    content = content.replace(/<noinclude>(?:\s)*?<\/noinclude>[^\S\n\r]*\n?/gm, '').replace(/\/\*(?:\s)*?\*\/[^\S\n\r]*\n?/gm, '');
+
+    if (content === lr.content) return lib.log('Procedure cancelled: Same content');
 
     const params = {
         action: 'edit',
         title: pagetitle,
-        text: lr.content,
+        text: content,
         summary: 'Bot: 保護テンプレートの除去',
         minor: true,
         bot: true,
