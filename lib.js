@@ -594,7 +594,7 @@ function getTemplateParams(template) {
             // ↳ Look at the other elements in the array 'nested' (.filter) and only preserve items that are not part of those items (.every)
         });
         nested.forEach((item, i) => {
-            params = params.replaceAll(item, `$TL${i}`); // Replace nested templates with '$TLn'
+            params = params.split(item).join(`$TL${i}`); // Replace nested templates with '$TLn'
         });
     }
 
@@ -609,7 +609,7 @@ function getTemplateParams(template) {
                     const index = m[j].match(/\$TL(\d+)/)[1];
                     m.splice(j + 1, 0, index); // Push the index at m[j + 1]
                     const replacee = j === 0 ? item : params[i];
-                    params[i] = replacee.replaceAll(m[j], nested[m[j + 1]]);  // Re-replace delimiters with original templates
+                    params[i] = replacee.split(m[j]).join(nested[m[j + 1]]);  // Re-replace delimiters with original templates
                 }
             }
         });

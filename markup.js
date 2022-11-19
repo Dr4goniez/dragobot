@@ -341,7 +341,7 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
     var newContent = lr.content;
 
     // Update UserANs in the source text
-    UserAN.filter(obj => obj.new).forEach(obj => newContent = newContent.replaceAll(obj.old, obj.new));
+    UserAN.filter(obj => obj.new).forEach(obj => newContent = newContent.split(obj.old).join(obj.new));
 
     // Edit the page
     const params = {
