@@ -1,5 +1,6 @@
 my.js
 service.template
+package-lock.json
 archive.js
 newScripts.js
 fixSyntaxError.js
