@@ -36,6 +36,7 @@ async function markupUserANs (token, checkGlobal, editedTs) {
         editedTs = result ? result : editedTs;
         if (result === null) {
             lib.log('Edit token seems to have expired. Re-logging in...');
+            reloggedin = true;
             token = await lib.getToken();
         }
     }
