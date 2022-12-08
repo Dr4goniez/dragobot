@@ -13,6 +13,9 @@ const Diffs = {};
 /** @type {Array} */
 var unprocessableLogids = [];
 var leend, apilimit;
+const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
+      ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット',
+      AN3RR = 'Wikipedia:管理者伝言板/3RR';
 
 /**
  * @param {string} token
@@ -20,17 +23,11 @@ var leend, apilimit;
  * @param {string} [editedTs]
  * @returns {Promise<{editedTs: string|undefined, token: string|null}>} token has a value only if re-logged in
  */
-async function markupUserANs (token, checkGlobal, editedTs) {
-
-    // Pages to maintain
-    const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
-        ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット',
-        AN3RR = 'Wikipedia:管理者伝言板/3RR';
-    const pages = [ANI, ANS, AN3RR];
+async function markupUserANs(token, checkGlobal, editedTs) {
 
     var result,
         reloggedin = false;
-    for (const page of pages) {
+    for (const page of [ANI, ANS, AN3RR]) {
         lib.log(`Checking ${page}...`);
         result = await markup(page, token, checkGlobal, editedTs);
         editedTs = result ? result : editedTs;
@@ -228,7 +225,7 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
 
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
-    queries.push(getBlockedUsers(users), getBlockedIps(ips)); // Get domain/duration/date properties of UserAN if blocked
+    queries.push(getBlockedUsers(users, pagename === ANS), getBlockedIps(ips)); // Get domain/duration/date properties of UserAN if blocked
     const result = await Promise.all(queries); // Wait until all the async procedures finish
     const usersForReblock = result.flat();
     queries = [];
@@ -454,9 +451,10 @@ async function convertDiffidsToUsernames(diffIdsArr) {
 
 /**
  * @param {Array<string>} usersArr
+ * @param {boolean} indefOnly If true, only looks at indef blocks (for ANS)
  * @returns {Promise<Array<string>>} Returns an array of users who need to be reblocked
  */
-async function getBlockedUsers(usersArr) {
+async function getBlockedUsers(usersArr, indefOnly) {
 
     if (usersArr.length === 0) return [];
     usersArr = usersArr.slice();
@@ -487,6 +485,7 @@ async function getBlockedUsers(usersArr) {
                 if (!res || !res.query || !(resBlck = res.query.blocks)) return resolve();
                 if (resBlck.length === 0) return resolve();
 
+                if (indefOnly) resBlck = resBlck.filter(obj => obj.expiry === 'infinity');
                 const needReblock = [];
                 for (const blck of resBlck) {
                     const nousertalk = !blck.allowusertalk,
