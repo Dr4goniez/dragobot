@@ -1,4 +1,5 @@
 const my = require('./my');
+const my2 = require('./my2');
 const MWBot = require('mwbot');
 const api = new MWBot({
     apiUrl: my.apiUrl
@@ -21,8 +22,8 @@ module.exports.log = log;
 function getToken(experiment) {
     return new Promise(resolve => {
         api.loginGetEditToken({
-            username: experiment ? my.username2 : my.username,
-            password: experiment ? my.password2 : my.password
+            username: experiment ? my2.username : my.username,
+            password: experiment ? my2.password : my.password
         }).then(res => {
             if (!res) return resolve(log('An unexpected error occurred on login attempt.'));
             if (res.result === 'Success') log('Successfully logged in.');
