@@ -229,7 +229,6 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
     const result = await Promise.all(queries); // Wait until all the async procedures finish
     const usersForReblock = result.flat();
     queries = [];
-    if (usersForReblock.length !== 0) lib.log(usersForReblock);
     usersForReblock.forEach(user => queries.push(getReblockStatus(user)));
     await Promise.all(queries);
     // UserAN.slice().filter(obj => usersForReblock.includes(obj.user)).forEach(obj => console.log(obj));
