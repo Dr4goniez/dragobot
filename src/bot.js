@@ -1,6 +1,6 @@
 import './methods';
-import { log, lastDay as _lastDay, compareTimestamps } from './lib';
-import { createServer } from './server';
+import { lib } from './lib';
+import { createServer, log } from './server';
 import { markupUserANs } from './markup';
 import { updateRFB } from './updateRFB';
 import { removePp } from './removePp';
@@ -13,7 +13,7 @@ init().then((mw) => {
 
     // The procedure to loop
     var runCnt = 0;
-    var lastRunTs, editedTs, checkBlocks, checkGlobal, checkRFB, checkProtectionTemplates;
+    var lastRunTs, checkBlocks, checkGlobal, checkRFB, checkProtectionTemplates;
     const bot = async () => {
 
         log('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
@@ -37,28 +37,20 @@ init().then((mw) => {
         lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
 
         // ------------------------------ markup ------------------------------
-        var result;
         if (checkBlocks) {
-            result = await markupUserANs(token, checkGlobal, editedTs);
-            if (result.token) token = result.token;
-            editedTs = result.editedTs;
+            await markupUserANs(checkGlobal);
         } else {
             log('Markup cancelled: No new blocks found.');
         }
 
         // ------------------------------ updateRFB ------------------------------
         if (checkRFB) {
-            result = await updateRFB(token, editedTs);
-            editedTs = result ? result : editedTs;
+            await updateRFB();
         }
 
         // ------------------------------ removePp ------------------------------
         if (checkProtectionTemplates) {
-            result = await removePp(token, lastRunTs, editedTs);
-            if (result) {
-                if (result.token) token = result.token;
-                editedTs = result.editedTs ? result.editedTs : editedTs;
-            }
+            await removePp(lastRunTs);
         }
 
     };
@@ -77,7 +69,7 @@ function monthTransitioning() {
     d.setHours(d.getHours() + 9); // JST
     const year = d.getFullYear(),
           month = d.getMonth() + 1,
-          lastDay = _lastDay(year, month),
+          lastDay = lib.lastDay(year, month),
           anchorTs40 = `${year}-${month.toString().padStart(2, '0')}-${lastDay}T23:40:00Z`,
           anchorTs30 = anchorTs40.replace(/40:00Z$/, '30:00Z');
     return new Date(anchorTs40) >= d && d > new Date(anchorTs30);
@@ -104,7 +96,7 @@ function checkNewBlocks(ts) {
             if (resBlck.length === 0) return resolve();
 
             resBlck = resBlck.filter(obj => !obj.automatic);
-            if (resBlck.some(obj => compareTimestamps(ts, obj.timestamp) >= 0)) {
+            if (resBlck.some(obj => lib.compareTimestamps(ts, obj.timestamp) >= 0)) {
                 resolve(true); // Returns true if someone has been manually blocked since the last run
             } else {
                 resolve(false);

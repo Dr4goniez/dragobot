@@ -1,19 +1,13 @@
-/********************** DEPENDENCIES **********************/
-
-const lib = require('./lib');
-
-/********************** SCRIPT BODY **********************/
+import { lib } from './lib';
+import { log } from './server';
 
 /**
  * Monthly update of RFB-related pages
- * @param {string} token
- * @param {string} [editedTs]
- * @returns {Promise<string|undefined>} JSON timestamp if any page is edited, or else undefined
+ * @returns {Promise<void>}
  */
-async function updateRFB(token, editedTs) {
+async function updateRFB() {
 
-    lib.log('Starting monthly update of RFB-replated pages...');
-    var ts = editedTs ? editedTs : undefined;
+    log('Starting monthly update of RFB-replated pages...');
 
     /************************************************************************************
      * List of pages that need to be updated
@@ -50,19 +44,17 @@ async function updateRFB(token, editedTs) {
     const createMonthlySubpage = async () => {
 
         const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
-        lib.log(`Creating ${pagetitle}...`);
+        log(`Creating ${pagetitle}...`);
         const lr = await lib.getLatestRevision(pagetitle);
-        if (lr) return lib.log(`Cancelled: ${pagetitle} already exists.`);
+        if (lr) return log(`Cancelled: ${pagetitle} already exists.`);
         if (lr === undefined) return;
         const params = {
-            action: 'edit',
             title: pagetitle,
             text: '{{投稿ブロック依頼}}\n== ログ ==\n\n== 依頼 ==',
             summary: 'Bot: 月次更新処理',
-            bot: true,
-            token: token
+            bot: true
         };
-        ts = await lib.editPage(params, ts);
+        await lib.edit(params);
 
     };
     await createMonthlySubpage();
@@ -84,34 +76,32 @@ async function updateRFB(token, editedTs) {
      */
     const updateLinks = async (pagetitle, linktype) => {
 
-        lib.log(`Updating links on ${pagetitle}...`);
+        log(`Updating links on ${pagetitle}...`);
         const lr = await lib.getLatestRevision(pagetitle);
-        if (!lr) return lib.log('Failed to get the lastest revision of ' + pagetitle);
+        if (!lr) return log('Failed to get the lastest revision of ' + pagetitle);
 
         var content = lr.content;
         const lkNew = getLink(d[linktype].year, d[linktype].month, true);
         if (content.includes(getLink(d[linktype].year, d[linktype].month))) {
-            return lib.log('Cancelled: Links have already been updated.');
+            return log('Cancelled: Links have already been updated.');
         }
         const linkRegex = /\[\[[Ww]ikipedia:投稿ブロック依頼 \d{4}年\d{1,2}月\|\d{1,2}月\]\]/g;
         var lkOld = content.match(linkRegex);
-        if (!lkOld) return lib.log('Cancelled: No replacee link found.');
+        if (!lkOld) return log('Cancelled: No replacee link found.');
         lkOld = lkOld[lkOld.length - 1];
         content = content.replace(lkOld, lkOld + ' - ' + lkNew);
-        if (content === lr.content) return lib.log(pagetitle + ': Edit cancelled (same content).');
+        if (content === lr.content) return log(pagetitle + ': Edit cancelled (same content).');
 
         const params = {
-            action: 'edit',
             title: pagetitle,
             text: content,
             summary: 'Bot: 月次更新処理',
             bot: true,
             minor: true,
             basetimestamp: lr.basetimestamp,
-            starttimestamp: lr.curtimestamp,
-            token: token
+            starttimestamp: lr.curtimestamp
         };
-        ts = await lib.editPage(params, ts);
+        await lib.edit(params);
 
     };
 
@@ -120,14 +110,14 @@ async function updateRFB(token, editedTs) {
         const linktype = i === 0 ? 'next' : 'current';
         await updateLinks(pages[i], linktype);
     }
-    if (d.next.month !== 1) return ts !== editedTs ? ts : undefined;
+    if (d.next.month !== 1) return;
 
     const createNewAnnualSubpage = async () => {
 
         const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
-        lib.log(`Creating ${pagetitle}...`);
+        log(`Creating ${pagetitle}...`);
         const lr = lib.getLatestRevision(pagetitle);
-        if (lr) return lib.log(`Cancelled: ${pagetitle} already exists.`);
+        if (lr) return log(`Cancelled: ${pagetitle} already exists.`);
         if (lr === undefined) return;
 
         var content = '__NOTOC__\n<!--\n';
@@ -141,14 +131,12 @@ async function updateRFB(token, editedTs) {
         `<noinclude>[[Category:投稿ブロック依頼|済 ${d.next.year}]]</noinclude>`;
 
         const params = {
-            action: 'edit',
             title: pagetitle,
             text: content,
             summary: 'Bot: 年次更新処理',
-            bot: true,
-            token: token
+            bot: true
         };
-        ts = await lib.editPage(params, ts);
+        await lib.edit(params);
 
     };
     await createNewAnnualSubpage();
@@ -156,34 +144,30 @@ async function updateRFB(token, editedTs) {
     const updateArchiveTemplte = async () => {
 
         const pagetitle = 'Template:投稿ブロック依頼過去ログ';
-        lib.log(`Updating links on ${pagetitle}...`);
+        log(`Updating links on ${pagetitle}...`);
         const lr = await lib.getLatestRevision(pagetitle);
-        if (!lr) return lib.log('Failed to get the lastest revision of ' + pagetitle);
+        if (!lr) return log('Failed to get the lastest revision of ' + pagetitle);
 
         var content = lr.content;
         const getAnnualLink = y => `[[Wikipedia:投稿ブロック依頼 ${y}年|${y}年]]`;
         const lkOldYear = getAnnualLink(d.current.year),
               lkNewYear = getAnnualLink(d.next.year);
-        if (content.includes(lkNewYear)) return lib.log('Cancelled: Links have already been updated.');
+        if (content.includes(lkNewYear)) return log('Cancelled: Links have already been updated.');
         content = content.replace(lkOldYear, lkOldYear + ' - ' + lkNewYear);
 
         const params = {
-            action: 'edit',
             title: pagetitle,
             text: content,
             summary: 'Bot: 年次更新処理',
             bot: true,
             minor: true,
             basetimestamp: lr.basetimestamp,
-            starttimestamp: lr.curtimestamp,
-            token: token
+            starttimestamp: lr.curtimestamp
         };
-        ts = await lib.editPage(params, ts);
+        await lib.edit(params);
 
     };
     await updateArchiveTemplte();
 
-    return ts !== editedTs ? ts : undefined;
-
 }
-module.exports.updateRFB = updateRFB;
+export { updateRFB };

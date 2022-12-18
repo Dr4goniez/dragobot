@@ -1,9 +1,9 @@
-import { isIP, isIPv4 as __isIPv4, isIPv6 as __isIPv6 } from 'net';
+import net from 'net';
 import isCidr, { v4, v6 } from 'is-cidr';
-import { load } from 'cheerio';
-import { get } from 'axios';
+import * as cheerio from 'cheerio';
+import axios from 'axios';
 import { log } from './server';
-import { getMw } from './mw';
+import { getMw, init } from './mw';
 
 
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
@@ -46,60 +46,62 @@ function getLatestRevision(pagename) {
 }
 
 /**
- * Make an intentional N-millisecond delay (must be awaited)
+ * Let the code sleep for n milliseconds
  * @param {number} milliseconds
- * @returns {Promise}
+ * @returns {Promise<void>}
  */
-function delay(milliseconds) {
+function sleep(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
+let lastedit;
 /**
- * Make sure to have a 5-second interval between each edit
- * @param {string} ts JSON timestamp
- * @returns {Promise}
+ * Edit a given page, ensuring a 5 second interval since the last edit. If the edit fails because of an expired token, another edit attempt is automatically made after re-login. 
+ * @param {*} params 
+ * @param {boolean} [retry] 
+ * @returns 
  */
-function dynamicDelay(ts) {
-    return new Promise((resolve, reject) => {
-        if (!ts) return reject();
-        const diffMilliseconds = compareTimestamps(ts, new Date().toJSON()); // Milliseconds after the last edit
-        if (diffMilliseconds < 4400) {
-            delay(4400 - diffMilliseconds).then(() => resolve());
-        } else {
-            resolve();
-        }
+async function edit(params, retry) {
+
+    // Initialize the request parameters
+    let mw = getMw();
+    params = Object.assign(params, {
+        action: 'edit',
+        token: mw.editToken,
+        curtimestamp: true,
+        formatversion: '2'
     });
-}
 
-/**
- * Edit a given page
- * @param {object} params
- * @param {string} [ts]
- * @returns {Promise<string|undefined|null>} JSON timestamp if the edit succeeded, or else undefined (null if re-login is needed)
- */
-async function editPage(params, ts) {
+    // Make sure that it's been more than 5 seconds since the last edit
+    if (lastedit) {
+        const diff = compareTimestamps(lastedit, new Date().toJSON());
+        if (diff < 4400) await sleep(4400 - diff);
+    }
 
-    const mw = getMw();
-    if (ts) await dynamicDelay(ts);
-    var result = await mw.request(params)
-    .then(res => {
-        if (res && res.edit) {
-            if (res.edit.result === 'Success') return true;
-        }
-        return false;
-    }).catch(err => err.response.error.info);
-
+    // Edit the page
+    log(`Editing ${params.title}`);
+    const response = await mw.request(params).then(res => res).catch(err => err);
+    const result = response && response.edit === 'Success';
     switch (result) {
         case true:
             log(params.title + ': Edit done.');
-            return new Date().toJSON();
+            lastedit = response.curtimestamp;
+            return response;
         case false:
             log(params.title + ': Edit failed due to an unknown error.');
-            return;
+            return response;
         default:
-            log(params.title + ': Edit failed: ' + result);
-            return result.indexOf('Invalid CSRF token') !== -1 ? null : undefined;
+            log(params.title + ': Edit failed: ' + result.info);
+            if (!result.info.includes('Invalid CSRF token')) return response;
     }
+
+    // Error handler for an expired token
+    if (retry) return null;
+    log('Edit token seems to have expired. Relogging in...');
+    mw = await init();
+    if (!mw) return null;
+    params = Object.assign(params, {token: mw.editToken});
+    return await edit(params, true);
 
 }
 
@@ -308,8 +310,8 @@ async function filterOutProtectedPages(pagetitles) {
  */
 async function scrape(url) {
     try {
-        const res = await get(url);
-        const $ = load(res.data);
+        const res = await axios.get(url);
+        const $ = cheerio.load(res.data);
         return $;
     }
     catch (err) {
@@ -818,7 +820,7 @@ function getWeekDayJa(timestamp) {
  * @returns {boolean}
  */
 function isIPAddress(ip) {
-    return isIP(ip) || isCidr(ip);
+    return net.isIP(ip) || isCidr(ip);
 }
 
 /**
@@ -827,7 +829,7 @@ function isIPAddress(ip) {
  * @returns {boolean}
  */
 function isIPv4(ip) {
-    return __isIPv4(ip) || v4(ip);
+    return net.isIPv4(ip) || v4(ip);
 }
 
 /**
@@ -836,14 +838,13 @@ function isIPv4(ip) {
  * @returns {boolean}
  */
 function isIPv6(ip) {
-    return __isIPv6(ip) || v6(ip);
+    return net.isIPv6(ip) || v6(ip);
 }
 
 export const lib = { 
     getLatestRevision,
-    delay,
-    dynamicDelay,
-    editPage,
+    sleep,
+    edit,
     getBackLinks,
     getCatMembers,
     getTranscludingPages,

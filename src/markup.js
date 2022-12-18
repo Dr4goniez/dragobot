@@ -1,4 +1,6 @@
 import { lib } from './lib';
+import { getMw } from './mw';
+import { log } from './server';
 
 //********************** MAIN FUNCTION **********************/
 
@@ -16,53 +18,34 @@ const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
       AN3RR = 'Wikipedia:管理者伝言板/3RR';
 
 /**
- * @param {string} token
  * @param {boolean} checkGlobal
- * @param {string} [editedTs]
- * @returns {Promise<{editedTs: string|undefined, token: string|null}>} token has a value only if re-logged in
+ * @returns {Promise<void>}
  */
-async function markupUserANs(token, checkGlobal, editedTs) {
-
-    var result,
-        reloggedin = false;
+async function markupUserANs(checkGlobal) {
     for (const page of [ANI, ANS, AN3RR]) {
-        lib.log(`Checking ${page}...`);
-        result = await markup(page, token, checkGlobal, editedTs);
-        editedTs = result ? result : editedTs;
-        if (result === null) {
-            lib.log('Edit token seems to have expired. Re-logging in...');
-            reloggedin = true;
-            token = await lib.getToken();
-        }
+        log(`Checking ${page}...`);
+        await markup(page, checkGlobal);
     }
-
-    return {
-        editedTs: editedTs,
-        token : reloggedin ? token : null
-    };
-
 }
-module.exports.markupUserANs = markupUserANs;
+export { markupUserANs };
 
 /**
  * @param {string} pagename
- * @param {string} token
  * @param {boolean} checkGlobal
- * @param {string} [editedTs] Timestamp of last edit
  * @param {boolean} [noapihighlimit]
- * @returns {Promise<string|undefined|null>} JSON timestamp if the target page is edited, or else undefined (null if re-login is needed)
+ * @returns {Promise} API response of action=edit or null
  */
-async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
+async function markup(pagename, checkGlobal, noapihighlimit) {
 
     apilimit = noapihighlimit ? 50 : 500;
 
     // Get page content
     const parsed = await lib.getLatestRevision(pagename);
-    if (!parsed) return lib.log('Failed to parse the page.');
+    if (!parsed) return log('Failed to parse the page.');
     /** @type {string} */
     const wikitext = parsed.content;
     var templates = lib.getOpenUserANs(wikitext);
-    if (templates.length === 0) return lib.log('Procedure cancelled: There\'s no UserAN to update.');
+    if (templates.length === 0) return log('Procedure cancelled: There\'s no UserAN to update.');
 
     // Remove redundant UserANs
     templates = templates.filter(template => !template.match(/\|\s*bot\s*=\s*no/)); // Remove UserANs with a bot=no parameter
@@ -255,7 +238,7 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
         modOnly = true;
         UserAN.filter(obj => obj.modified).forEach(obj => obj.new = obj.modified); // Get the modified UserANs to replace old ones with
     } else {
-        return lib.log('Procedure cancelled: There\'s no UserAN to update.');
+        return log('Procedure cancelled: There\'s no UserAN to update.');
     }
     // UserAN.slice().filter(obj => obj.new).forEach(obj => console.log(obj));
 
@@ -340,22 +323,20 @@ async function markup(pagename, token, checkGlobal, editedTs, noapihighlimit) {
 
     // Edit the page
     const params = {
-        action: 'edit',
         title: pagename,
         text: newContent,
         summary: summary,
         minor: true,
         basetimestamp: lr.basetimestamp,
         starttimestamp: lr.curtimestamp,
-        token: token
     };
     if (modOnly) params.bot = true;
 
-    const ts = await lib.editPage(params, editedTs);
-    return ts;
+    const editRes = await lib.edit(params);
+    return editRes;
 
 }
-module.exports.markup = markup; // Used only for debugging purposes when called outside the module
+export { markup }; 
 
 //********************** UTILITY FUNCTIONS **********************/
 
@@ -369,6 +350,7 @@ async function convertLogidsToUsernames(logidsArr) {
     logidsArr = logidsArr.slice(); // Create a deep copy
     var cnt = 0;
     var firstTs;
+    const mw = getMw();
     await logidQuery();
     if (firstTs) leend = firstTs;
     return;
@@ -376,7 +358,7 @@ async function convertLogidsToUsernames(logidsArr) {
     function logidQuery(lecontinue) {
         cnt++;
         return new Promise(resolve => {
-            lib.api.request({
+            mw.request({
                 action: 'query',
                 list: 'logevents',
                 leprop: 'ids|title|timestamp',
@@ -411,7 +393,7 @@ async function convertLogidsToUsernames(logidsArr) {
                 }
                 resolve();
 
-            }).catch(err => resolve(lib.log(err)));
+            }).catch(err => resolve(log(err)));
         });
     }
 
@@ -423,27 +405,24 @@ async function convertLogidsToUsernames(logidsArr) {
  */
 async function convertDiffidsToUsernames(diffIdsArr) {
     if (diffIdsArr.length === 0) return;
-    return new Promise(resolve => {
-        lib.api.request({
-            action: 'query',
-            revids: diffIdsArr.slice(0, apilimit).join('|'),
-            prop: 'revisions',
-            formatversion: '2'
-        }).then(res => {
+    const mw = getMw();
+    await mw.request({
+        action: 'query',
+        revids: diffIdsArr.slice(0, apilimit).join('|'),
+        prop: 'revisions',
+        formatversion: '2'
+    }).then(res => {
 
-            var resPgs;
-            if (!res || !res.query || !(resPgs = res.query.pages)) return resolve();
-            if (resPgs.length === 0) return resolve();
+        var resPgs;
+        if (!res || !res.query || !(resPgs = res.query.pages)) return
+        if (resPgs.length === 0) return;
 
-            resPgs.forEach(page => {
-                var revid = page.revisions[0].revid.toString();
-                if (!Diffs[revid]) Diffs[revid] = page.revisions[0].user;
-            });
+        resPgs.forEach(page => {
+            var revid = page.revisions[0].revid.toString();
+            if (!Diffs[revid]) Diffs[revid] = page.revisions[0].user;
+        });
 
-            resolve();
-
-        }).catch(err => resolve(lib.log(err)));
-    });
+    }).catch(err => log(err));
 }
 
 /**
@@ -456,6 +435,7 @@ async function getBlockedUsers(usersArr, indefOnly) {
     if (usersArr.length === 0) return [];
     usersArr = usersArr.slice();
     const queries = [];
+    const mw = getMw();
     while (usersArr.length !== 0) {
         queries.push(blockQuery(usersArr.splice(0, apilimit)));
     }
@@ -469,7 +449,7 @@ async function getBlockedUsers(usersArr, indefOnly) {
      */
     function blockQuery(arr) {
         return new Promise(resolve => {
-            lib.api.request({
+            mw.request({
                 action: 'query',
                 list: 'blocks',
                 bklimit: 'max',
@@ -510,7 +490,7 @@ async function getBlockedUsers(usersArr, indefOnly) {
 
                 resolve(needReblock);
 
-            }).catch((err) => resolve(lib.log(err)));
+            }).catch((err) => resolve(log(err)));
         });
     }
 }
@@ -523,6 +503,7 @@ async function getBlockedIps(ipsArr) {
 
     if (ipsArr.length === 0) return [];
     const queries = [];
+    const mw = getMw();
     ipsArr.forEach(ip => queries.push(blockQuery(ip)));
     var result = await Promise.all(queries);
     result = result.filter(el => el).undup();
@@ -534,7 +515,7 @@ async function getBlockedIps(ipsArr) {
      */
     function blockQuery(ip) {
         return new Promise(resolve => {
-            lib.api.request({
+            mw.request({
                 action: 'query',
                 list: 'blocks',
                 bklimit: '1',
@@ -577,7 +558,7 @@ async function getBlockedIps(ipsArr) {
 
                 resolve(needReblock);
 
-            }).catch((err) => resolve(lib.log(err)));
+            }).catch((err) => resolve(log(err)));
         });
     }
 
@@ -589,7 +570,8 @@ async function getBlockedIps(ipsArr) {
  */
 function getReblockStatus(blockedusername) {
     return new Promise(resolve => {
-        lib.api.request({
+        const mw = getMw();
+        mw.request({
             action: 'query',
             list: 'logevents',
             letype: 'block',
@@ -690,7 +672,7 @@ function getReblockStatus(blockedusername) {
                         case 'nousertalk':
                             return '会話' + (removed ? '〇' : '×');
                         default:
-                            return lib.log('translate() encountered an unrecognized value of ' + str + '.');
+                            return log('translate() encountered an unrecognized value of ' + str + '.');
                     }
                 };
 
@@ -719,7 +701,7 @@ function getReblockStatus(blockedusername) {
             });
             resolve();
 
-        }).catch((err) => resolve(lib.log(err)));
+        }).catch((err) => resolve(log(err)));
     });
 }
 
@@ -732,8 +714,9 @@ async function getLockedUsers(regUsersArr) {
 
     if (regUsersArr.length === 0)  return [];
 
+    const mw = getMw();
     const glockQuery = user => new Promise(resolve => {
-        lib.api.request({
+        mw.request({
             action: 'query',
             list: 'globalallusers',
             agulimit: '1',
@@ -745,7 +728,7 @@ async function getLockedUsers(regUsersArr) {
             if (!res || !res.query || !(resLck = res.query.globalallusers)) return resolve();
             if (resLck.length === 0) return resolve(false); // The array is empty: not locked
             resolve(resLck[0].locked !== undefined); // resLck[0].locked === '' if locked, otherwise undefined
-        }).catch((err) => resolve(lib.log(err)));
+        }).catch((err) => resolve(log(err)));
     });
 
     const lockedDate = getBlockedDate();
@@ -776,9 +759,10 @@ async function getGloballyBlockedIps(ipsArr) {
 
     if (ipsArr.length === 0) return;
 
+    const mw = getMw();
     const gblockQuery = ip => {
         return new Promise(resolve => {
-            lib.api.request({
+            mw.request({
                 action: 'query',
                 list: 'globalblocks',
                 bgip: ip,
@@ -806,7 +790,7 @@ async function getGloballyBlockedIps(ipsArr) {
 
                 resolve();
 
-            }).catch((err) => resolve(lib.log(err)));
+            }).catch((err) => resolve(log(err)));
         });
     };
 
