@@ -1,13 +1,14 @@
 {
   "name": "dragobot",
-  "version": "5.0.4 dev",
+  "version": "5.0.4",
   "description": "A Wikipedia bot.",
-  "main": "src/bot.js",
+  "main": "dist/bot.js",
   "scripts": {
-    "start": "ts-node src/bot.js > log.text 2>&1",
+    "start": "node dist/bot.js > log.text 2>&1",
     "startDev": "ts-node src/bot.js",
     "test": "ts-node src/test.js",
-    "test-ts": "ts-node src/test-ts.ts"
+    "test-ts": "ts-node src/test-ts.ts",
+    "build": "tsc -p ."
   },
   "author": "Dr4goniez",
   "license": "MIT",
