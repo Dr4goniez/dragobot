@@ -6,7 +6,7 @@ import { updateRFB } from './updateRFB';
 import { removePp } from './removePp';
 import { getMw, init } from './mw';
 
-createServer(true);
+createServer();
 init().then((mw) => {
 
     if (!mw) return;
