@@ -6,13 +6,16 @@ service.template
 
 # User information
 src/my.ts
+dist/my.js
 
 # Stores source js files ported to ts
 dump
 
 # Test or draft modules
 src/test.js
+dist/test.js
 src/test-ts.ts
+dist/test-ts.js
 src/mwbot.d.ts
 
 # Personal modules
