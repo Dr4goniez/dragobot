@@ -19,9 +19,4 @@ dist/test-ts.js
 src/mwbot.d.ts
 
 # Personal modules
-src/archive.js
-src/newScripts.js
-src/fixSyntaxError.js
-src/removeRFP.js
-src/copyPages.js
-src/catReplace.js
+personal
