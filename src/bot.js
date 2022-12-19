@@ -1,12 +1,12 @@
 import './methods';
 import { lib } from './lib';
 import { createServer, log } from './server';
-import { markupUserANs } from './markup';
+import { markupANs } from './markup';
 import { updateRFB } from './updateRFB';
 import { removePp } from './removePp';
 import { getMw, init } from './mw';
 
-createServer();
+createServer(true);
 init().then((mw) => {
 
     if (!mw) return;
@@ -38,20 +38,16 @@ init().then((mw) => {
 
         // ------------------------------ markup ------------------------------
         if (checkBlocks) {
-            await markupUserANs(checkGlobal);
+            await markupANs(checkGlobal);
         } else {
             log('Markup cancelled: No new blocks found.');
         }
 
         // ------------------------------ updateRFB ------------------------------
-        if (checkRFB) {
-            await updateRFB();
-        }
+        if (checkRFB) await updateRFB();
 
         // ------------------------------ removePp ------------------------------
-        if (checkProtectionTemplates) {
-            await removePp(lastRunTs);
-        }
+        if (checkProtectionTemplates) await removePp(lastRunTs);
 
     };
 

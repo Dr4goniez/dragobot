@@ -3,7 +3,7 @@ import isCidr, { v4, v6 } from 'is-cidr';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { log } from './server';
-import { getMw, init } from './mw';
+import { getMw, init, isBot } from './mw';
 
 
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
@@ -56,13 +56,13 @@ function sleep(milliseconds) {
 
 let lastedit;
 /**
- * Edit a given page, ensuring a 5 second interval since the last edit. If the edit fails because of an expired token, another edit attempt is automatically made after re-login. When calling this function, the mwbot instance should always be updated afterwards for the case of edit
- * token expiration.
+ * Edit a given page, ensuring a 5 second interval since the last edit. If the edit fails because of an expired token, another edit attempt is automatically made after re-login.
  * @param {*} params 
- * @param {boolean} [retry] 
+ * @param {boolean} [autoInterval = true] True by default
+ * @param {boolean} [retry] Automatically set to true for a second edit attempt after re-login. Don't specify this parameter manually.
  * @returns apiReponse (null if a second edit attempt fails or if the mwbot instance fails to be initialized)
  */
-async function edit(params, retry) {
+async function edit(params, autoInterval = true, retry) {
 
     // Initialize the request parameters
     let mw = getMw();
@@ -74,7 +74,7 @@ async function edit(params, retry) {
     });
 
     // Make sure that it's been more than 5 seconds since the last edit
-    if (lastedit) {
+    if (lastedit && autoInterval) {
         const diff = compareTimestamps(lastedit, new Date().toJSON());
         if (diff < 4400) await sleep(4400 - diff);
     }
@@ -95,7 +95,7 @@ async function edit(params, retry) {
     switch (result) {
         case true:
             log(params.title + ': Edit done.');
-            lastedit = apiReponse.curtimestamp;
+            lastedit = new Date().toJSON();
             return apiReponse;
         case false:
             log(params.title + ': Edit failed due to an unknown error.');
@@ -111,7 +111,7 @@ async function edit(params, retry) {
     mw = await init();
     if (!mw) return null;
     params = Object.assign(params, {token: mw.editToken});
-    return await edit(params, true);
+    return await edit(params, autoInterval, true);
 
 }
 
@@ -302,7 +302,7 @@ async function filterOutProtectedPages(pagetitles) {
     pagetitles = pagetitles.slice();
     const deferreds = [];
     while (pagetitles.length) {
-        deferreds.push(query(pagetitles.splice(0, 500)));
+        deferreds.push(query(pagetitles.splice(0, isBot() ? 500 : 50)));
     }
     const result = await Promise.all(deferreds);
 

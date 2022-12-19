@@ -39,11 +39,12 @@ async function updateRFB() {
             month: curMonth === 12 ? 1 : curMonth + 1
         }
     };
+    const testPagePrefix = ''; // For debugging
 
     // Create [[Wikipedia:投稿ブロック依頼 YYYY年MM月]]
     const createMonthlySubpage = async () => {
 
-        const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
+        const pagetitle = `${testPagePrefix}Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
         log(`Creating ${pagetitle}...`);
         const lr = await lib.getLatestRevision(pagetitle);
         if (lr) return log(`Cancelled: ${pagetitle} already exists.`);
@@ -105,7 +106,7 @@ async function updateRFB() {
 
     };
 
-    const pages = ['Template:投稿ブロック依頼', 'Wikipedia:投稿ブロック依頼'];
+    const pages = [`${testPagePrefix}Template:投稿ブロック依頼`, `${testPagePrefix}Wikipedia:投稿ブロック依頼`];
     for (let i = 0; i < pages.length; i++) {
         const linktype = i === 0 ? 'next' : 'current';
         await updateLinks(pages[i], linktype);
@@ -114,9 +115,9 @@ async function updateRFB() {
 
     const createNewAnnualSubpage = async () => {
 
-        const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
+        const pagetitle = `${testPagePrefix}Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
         log(`Creating ${pagetitle}...`);
-        const lr = lib.getLatestRevision(pagetitle);
+        const lr = await lib.getLatestRevision(pagetitle);
         if (lr) return log(`Cancelled: ${pagetitle} already exists.`);
         if (lr === undefined) return;
 
@@ -143,7 +144,7 @@ async function updateRFB() {
 
     const updateArchiveTemplte = async () => {
 
-        const pagetitle = 'Template:投稿ブロック依頼過去ログ';
+        const pagetitle = `${testPagePrefix}Template:投稿ブロック依頼過去ログ`;
         log(`Updating links on ${pagetitle}...`);
         const lr = await lib.getLatestRevision(pagetitle);
         if (!lr) return log('Failed to get the lastest revision of ' + pagetitle);

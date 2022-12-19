@@ -13,21 +13,21 @@ const Diffs = {};
 /** @type {Array} */
 var unprocessableLogids = [];
 var leend;
-const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
-      ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット',
-      AN3RR = 'Wikipedia:管理者伝言板/3RR';
+const ANI = 'Wikipedia:管理者伝言板/投稿ブロック';
+const ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット';
+const AN3RR = 'Wikipedia:管理者伝言板/3RR';
 
 /**
  * @param {boolean} checkGlobal
  * @returns {Promise<void>}
  */
-async function markupUserANs(checkGlobal) {
+async function markupANs(checkGlobal) {
     for (const page of [ANI, ANS, AN3RR]) {
         log(`Checking ${page}...`);
         await markup(page, checkGlobal);
     }
 }
-export { markupUserANs };
+export { markupANs };
 
 /**
  * @param {string} pagename
@@ -203,7 +203,10 @@ async function markup(pagename, checkGlobal) {
 
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
-    queries.push(getBlockedUsers(users, pagename === ANS), getBlockedIps(ips)); // Get domain/duration/date properties of UserAN if blocked
+    queries.push( // Get domain/duration/date properties of UserAN if blocked
+        getBlockedUsers(users, pagename === ANS),
+        getBlockedIps(ips)
+    );
     const result = await Promise.all(queries); // Wait until all the async procedures finish
     const usersForReblock = result.flat();
     queries = [];

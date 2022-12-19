@@ -1,11 +1,11 @@
 {
   "name": "dragobot",
-  "version": "5.0.3 dev",
+  "version": "5.0.4 dev",
   "description": "A Wikipedia bot.",
-  "main": "dist/bot.js",
+  "main": "src/bot.js",
   "scripts": {
-    "start": "ts-node dist/bot.js > log.text 2>&1",
-    "startDev": "ts-node dist/bot.js",
+    "start": "ts-node src/bot.js > log.text 2>&1",
+    "startDev": "ts-node src/bot.js",
     "test": "ts-node src/test.js",
     "test-ts": "ts-node src/test-ts.ts"
   },

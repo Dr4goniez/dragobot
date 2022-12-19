@@ -1,5 +1,4 @@
 # Files for local development envionments
-tsconfig.json
 .eslintrc.json
 
 # Config file for when the bot runs on the WMF server

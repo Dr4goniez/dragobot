@@ -69,7 +69,6 @@ async function removePp(botRunTs) {
             log('The next procedure starts within 10 seconds: Put off editing the rest of the pages.');
             break;
         }
-        log('Editing ' + page + '...');
         await editPageWithPp(page);
 
     }
@@ -91,7 +90,7 @@ function needToQuit(botRunTs) {
 
 /**
  * @param {string} pagetitle
- * @returns {Promise<string|null|undefined>} JSON timestamp if the edit succeeded, or else undefined (null if re-login is needed)
+ * @returns {Promise} API response of action=edit or null
  */
 async function editPageWithPp(pagetitle) {
 
