@@ -1,5 +1,5 @@
 import { lib } from './lib';
-import { getMw } from './mw';
+import { getMw, isBot } from './mw';
 import { log } from './server';
 
 //********************** MAIN FUNCTION **********************/
@@ -12,7 +12,7 @@ const Logids = {};
 const Diffs = {};
 /** @type {Array} */
 var unprocessableLogids = [];
-var leend, apilimit;
+var leend;
 const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
       ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット',
       AN3RR = 'Wikipedia:管理者伝言板/3RR';
@@ -32,12 +32,9 @@ export { markupUserANs };
 /**
  * @param {string} pagename
  * @param {boolean} checkGlobal
- * @param {boolean} [noapihighlimit]
  * @returns {Promise} API response of action=edit or null
  */
-async function markup(pagename, checkGlobal, noapihighlimit) {
-
-    apilimit = noapihighlimit ? 50 : 500;
+async function markup(pagename, checkGlobal) {
 
     // Get page content
     const parsed = await lib.getLatestRevision(pagename);
@@ -408,7 +405,7 @@ async function convertDiffidsToUsernames(diffIdsArr) {
     const mw = getMw();
     await mw.request({
         action: 'query',
-        revids: diffIdsArr.slice(0, apilimit).join('|'),
+        revids: diffIdsArr.slice(0, isBot() ? 500 : 50).join('|'),
         prop: 'revisions',
         formatversion: '2'
     }).then(res => {
@@ -437,7 +434,7 @@ async function getBlockedUsers(usersArr, indefOnly) {
     const queries = [];
     const mw = getMw();
     while (usersArr.length !== 0) {
-        queries.push(blockQuery(usersArr.splice(0, apilimit)));
+        queries.push(blockQuery(usersArr.splice(0, isBot() ? 500 : 50)));
     }
     var result = await Promise.all(queries);
     result = result.filter(el => el).flat().undup();

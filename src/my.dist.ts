@@ -30,3 +30,8 @@ export const my: My = {
     userinfo,
     userinfo2
 };
+
+// An array of users that have a bot flag. If logged in with one of these accounts, API requests are sent with high API limits.
+export const bots: string[] = [
+    'YourBotUsername'
+];

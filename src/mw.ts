@@ -1,4 +1,4 @@
-import { my } from './my'
+import { my, bots } from './my'
 import { log } from './server';
 import { DynamicObject } from '.';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -37,3 +37,9 @@ export const init = async (identifier?: string | number) => {
 
 /** Get the initialized mw instance. */
 export const getMw = () => mw;
+
+/** Check whether the current user is a bot. Accounts need to be added to my.ts. */
+export const isBot = () => { // Must be a function because mw.state is available only when the Promise of init has been settled
+    if (!mw.state.lgusername) return null;
+    return bots.includes(mw.state.lgusername);
+};

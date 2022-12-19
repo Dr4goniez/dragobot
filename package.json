@@ -1,6 +1,6 @@
 {
   "name": "dragobot",
-  "version": "5.0.2 dev",
+  "version": "5.0.3 dev",
   "description": "A Wikipedia bot.",
   "main": "dist/bot.js",
   "scripts": {
