@@ -4,7 +4,8 @@ import { DynamicObject } from '.';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const MWBot = require('mwbot');
 
-const mw = new MWBot();
+let mw = new MWBot(); // Temporary substituion to prevent type mismatches
+let ID: string | number; // Ensure that init() is run for the same account when called after the initial call
 
 /**
  * Initialize a mwbot instance. This function should be called AFTER the server gets ready.
@@ -13,9 +14,11 @@ const mw = new MWBot();
  */
 export const init = async (identifier?: string | number) => {
 
-    if (!['string', 'number'].includes(typeof identifier)) identifier = '';
-    const userinfo: keyof typeof my = 'userinfo' + identifier;
+    if (typeof identifier === 'undefined') identifier = '';
+    if (!ID) ID = identifier;
+    const userinfo: keyof typeof my = 'userinfo' + ID;
 
+    mw = new MWBot(); // Edit fails if the mwbot instance isn't updated everytime when it's initialized
     const loggedIn = await mw.loginGetEditToken(my[userinfo])
     .then((res: DynamicObject) => {
         return res && res.result === 'Success';

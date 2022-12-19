@@ -56,10 +56,11 @@ function sleep(milliseconds) {
 
 let lastedit;
 /**
- * Edit a given page, ensuring a 5 second interval since the last edit. If the edit fails because of an expired token, another edit attempt is automatically made after re-login. 
+ * Edit a given page, ensuring a 5 second interval since the last edit. If the edit fails because of an expired token, another edit attempt is automatically made after re-login. When calling this function, the mwbot instance should always be updated afterwards for the case of edit
+ * token expiration.
  * @param {*} params 
  * @param {boolean} [retry] 
- * @returns 
+ * @returns apiReponse (null if a second edit attempt fails or if the mwbot instance fails to be initialized)
  */
 async function edit(params, retry) {
 
@@ -79,20 +80,29 @@ async function edit(params, retry) {
     }
 
     // Edit the page
-    log(`Editing ${params.title}`);
-    const response = await mw.request(params).then(res => res).catch(err => err);
-    const result = response && response.edit === 'Success';
+    log(`Editing ${params.title}...`);
+    let apiReponse;
+    /** @type {boolean|undefined} True if edit succeeds, false if it fails because of an unknown error, undefined if it fails because of a known error. */
+    const result = await mw.request(params)
+    .then((res) => {
+        apiReponse = res;
+        return res && res.edit && res.edit.result === 'Success';
+    })
+    .catch((err) => {
+        apiReponse = err;
+        return;
+    });
     switch (result) {
         case true:
             log(params.title + ': Edit done.');
-            lastedit = response.curtimestamp;
-            return response;
+            lastedit = apiReponse.curtimestamp;
+            return apiReponse;
         case false:
             log(params.title + ': Edit failed due to an unknown error.');
-            return response;
+            return apiReponse;
         default:
-            log(params.title + ': Edit failed: ' + result.info);
-            if (!result.info.includes('Invalid CSRF token')) return response;
+            log(params.title + ': Edit failed: ' + apiReponse.info);
+            if (!apiReponse.info.includes('Invalid CSRF token')) return apiReponse;
     }
 
     // Error handler for an expired token

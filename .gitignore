@@ -1,14 +1,25 @@
-service.template
+# Files for local development envionments
 tsconfig.json
 .eslintrc.json
-dump
+
+# Config file for when the bot runs on the WMF server
+service.template
+
+# User information
 src/my.ts
-src/my.js
+
+# Stores source js files ported to ts
+dump
+
+# Test or draft modules
+src/test.js
+src/test-ts.ts
+src/mwbot.d.ts
+
+# Personal modules
 src/archive.js
 src/newScripts.js
 src/fixSyntaxError.js
 src/removeRFP.js
-src/test-ts.ts
-src/test.js
 src/copyPages.js
 src/catReplace.js
