@@ -4,18 +4,26 @@ import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { log } from './server';
 import { getMw, init, isBot } from './mw';
+import { ApiResponse, ApiResponseError, ApiResponseEdit, ApiResponseQueryPagesProtection } from './index';
+import { ApiEditPageParams } from 'types-mediawiki/api_params';
 
 
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
 
 /**
- * @param {string} pagename
- * @returns {Promise<boolean|{isRedirect: boolean, basetimestamp: string, curtimestamp: string, content: string, revid: string}|undefined>}
- * False if page doesn't exit, undefined if error occurs, or else an object
+ * Get the latest revision of a given page.
+ * @returns False if the page doesn't exist, undefined if an error occurs, or else an object
  */
-function getLatestRevision(pagename) {
+function getLatestRevision(pagename: string) {
     const mw = getMw();
-    return new Promise(resolve => {
+    return new Promise<{
+        isRedirect: boolean,
+        basetimestamp: string,
+        curtimestamp: string,
+        content: string,
+        revid: string
+    }|false|undefined>
+    ((resolve) => {
         mw.request({
             action: 'query',
             titles: pagename,
@@ -24,45 +32,45 @@ function getLatestRevision(pagename) {
             rvslots: 'main',
             curtimestamp: 1,
             formatversion: 2
-        }).then(res => {
+        }).then((res: ApiResponse) => {
 
-            var resPgs;
-            if (!res || !res.query || !(resPgs = res.query.pages)) return resolve();
-            if (resPgs.length === 0) return resolve();
+            let resPgs;
+            if (!res || !res.query || !(resPgs = res.query.pages)) return resolve(undefined);
+            if (resPgs.length === 0) return resolve(undefined);
             resPgs = resPgs[0];
             if (resPgs.missing) return resolve(false);
 
+            if (!resPgs.revisions) return resolve(undefined);
             const resRev = resPgs.revisions[0];
             resolve({
                 isRedirect: resPgs.redirect ? true : false,
                 basetimestamp: resRev.timestamp,
-                curtimestamp: res.curtimestamp,
+                curtimestamp: res.curtimestamp!,
                 content: resRev.slots.main.content,
                 revid: resRev.revid.toString()
             });
 
-        }).catch(err => resolve(log(err.info)));
+        }).catch((err: ApiResponseError) => {
+            log(err.info)
+            resolve(undefined);
+        });
     });
 }
 
-/**
- * Let the code sleep for n milliseconds
- * @param {number} milliseconds
- * @returns {Promise<void>}
- */
-function sleep(milliseconds) {
-    return new Promise(resolve => setTimeout(resolve, milliseconds));
+/** Let the code sleep for n milliseconds. */
+function sleep(milliseconds: number) {
+    return new Promise<void>(resolve => setTimeout(resolve, milliseconds));
 }
 
-let lastedit;
+let lastedit: string;
 /**
  * Edit a given page, ensuring a 5 second interval since the last edit. If the edit fails because of an expired token, another edit attempt is automatically made after re-login.
- * @param {*} params 
- * @param {boolean} [autoInterval = true] True by default
- * @param {boolean} [retry] Automatically set to true for a second edit attempt after re-login. Don't specify this parameter manually.
+ * @param arams 
+ * @param autoInterval True by default
+ * @param retry Automatically set to true for a second edit attempt after re-login. Don't specify this parameter manually.
  * @returns apiReponse (null if a second edit attempt fails or if the mwbot instance fails to be initialized)
  */
-async function edit(params, autoInterval = true, retry) {
+async function edit(params: ApiEditPageParams, autoInterval = true, retry?: boolean): Promise<ApiResponse|ApiResponseError|null> {
 
     // Initialize the request parameters
     let mw = getMw();
@@ -81,28 +89,32 @@ async function edit(params, autoInterval = true, retry) {
 
     // Edit the page
     log(`Editing ${params.title}...`);
-    let apiReponse;
-    /** @type {boolean|undefined} True if edit succeeds, false if it fails because of an unknown error, undefined if it fails because of a known error. */
-    const result = await mw.request(params)
-    .then((res) => {
+    interface MergedApiResponse extends ApiResponse {
+        
+    }
+    let apiReponse: ApiResponse;
+    let apiReponseErr: ApiResponseError;
+    /** True if edit succeeds, false if it fails because of an unknown error, undefined if it fails because of a known error. */
+    const result: boolean|undefined = await mw.request(params)
+    .then((res: ApiResponse) => {
         apiReponse = res;
         return res && res.edit && res.edit.result === 'Success';
     })
-    .catch((err) => {
-        apiReponse = err;
+    .catch((err: ApiResponseError) => {
+        apiReponseErr = err;
         return;
     });
     switch (result) {
         case true:
             log(params.title + ': Edit done.');
             lastedit = new Date().toJSON();
-            return apiReponse;
+            return apiReponse!;
         case false:
             log(params.title + ': Edit failed due to an unknown error.');
-            return apiReponse;
+            return apiReponse!;
         default:
-            log(params.title + ': Edit failed: ' + apiReponse.info);
-            if (!apiReponse.info.includes('Invalid CSRF token')) return apiReponse;
+            log(params.title + ': Edit failed: ' + apiReponseErr!.info);
+            if (!apiReponseErr!.info.includes('Invalid CSRF token')) return apiReponseErr!;
     }
 
     // Error handler for an expired token
@@ -116,17 +128,17 @@ async function edit(params, autoInterval = true, retry) {
 }
 
 /**
- * Get an array of pagetitles that have links to a given page, transclusions not included
- * @param {string} pagetitle
- * @param {Array<number>} [nsExclude] an array of namespace numbers to exclude
- * @returns {Promise<Array<string>|undefined>}
+ * Get an array of pagetitles that have links to a given page, transclusions not included.
+ * @param pagetitle
+ * @param nsExclude An array of namespace numbers to exclude
+ * @returns
  */
-async function getBackLinks(pagetitle, nsExclude) {
+async function getBackLinks(pagetitle: string, nsExclude?: number[]): Promise<string[]|undefined> {
 
-    var pages = [];
+    let pages: string[] = [];
     const mw = getMw();
     if (typeof nsExclude === 'undefined') nsExclude = [];
-    const query = blcontinue => {
+    const query = (blcontinue?: string) => {
         return new Promise(resolve => {
             mw.request({
                 action: 'query',
@@ -135,12 +147,12 @@ async function getBackLinks(pagetitle, nsExclude) {
                 bllimit: 'max',
                 blcontinue: blcontinue,
                 formatversion: '2'
-            }).then(async res => {
+            }).then(async (res: ApiResponse) => {
 
-                var resBL, resCont;
+                let resBL, resCont;
                 if (!res || !res.query || !(resBL = res.query.backlinks)) return resolve(log('getBackLinks: Query failed.'));
 
-                const titles = resBL.filter(obj => nsExclude.indexOf(obj.ns) === -1).map(obj => obj.title);
+                const titles = resBL.filter(obj => !nsExclude!.includes(obj.ns)).map(obj => obj.title);
                 pages = pages.concat(titles);
 
                 if (res && res.continue && (resCont = res.continue.blcontinue)) {
@@ -148,7 +160,7 @@ async function getBackLinks(pagetitle, nsExclude) {
                 }
                 resolve(true);
 
-            }).catch(err => resolve(log(err.info)))
+            }).catch((err: ApiResponseError) => resolve(log(err.info)));
         });
     };
 
@@ -158,20 +170,20 @@ async function getBackLinks(pagetitle, nsExclude) {
 }
 
 /**
- * Get an array of pagetitles that have links to a given page, transclusions not included
- * @param {string} cattitle Must start with 'Category:' but automatically added
- * @param {Array<number>} [nsExclude] an array of namespace numbers to exclude
- * @returns {Promise<Array<string>|undefined>}
+ * Get pagetitles that belong to a given category
+ * @param cattitle Must start with 'Category:' but automatically added
+ * @param nsExclude An array of namespace numbers to exclude
+ * @returns
  */
-async function getCatMembers(cattitle, nsExclude) {
+async function getCatMembers(cattitle: string, nsExclude?: number[]): Promise<string[]|undefined> {
 
     if (cattitle && !cattitle.match(/^Category:/)) cattitle = 'Category:' + cattitle;
 
-    var cats = [];
+    let cats: string[] = [];
     if (typeof nsExclude === 'undefined') nsExclude = [];
     const mw = getMw();
-    const query = cmcontinue => {
-        return new Promise(resolve => {
+    const query = (cmcontinue?: string) => {
+        return new Promise<true|void>(resolve => {
             mw.request({
                 action: 'query',
                 list: 'categorymembers',
@@ -180,41 +192,37 @@ async function getCatMembers(cattitle, nsExclude) {
                 cmlimit: 'max',
                 cmcontinue: cmcontinue,
                 formatversion: '2'
-            }).then(async res => {
+            }).then(async (res: ApiResponse) => {
 
-                var resCM, resCont;
+                let resCM, resCont;
                 if (!res || !res.query || !(resCM = res.query.categorymembers)) return resolve(log('getCatMembers: Query failed.'));
 
-                const titles = resCM.filter(obj => nsExclude.indexOf(obj.ns) === -1).map(obj => obj.title);
+                const titles = resCM.filter(obj => !nsExclude!.includes(obj.ns)).map(obj => obj.title);
                 cats = cats.concat(titles);
 
                 if (res && res.continue && (resCont = res.continue.cmcontinue)) {
-                    await getCatMembers(cattitle, resCont);
+                    await query(resCont);
                 }
                 resolve(true);
 
-            }).catch(err => resolve(log(err.info)));
+            }).catch((err: ApiResponseError) => resolve(log(err.info)));
         });
     };
 
-    var result = await query();
-    result = result ? cats : undefined;
+    const response = await query();
+    const result = response ? cats : undefined;
     if (Array.isArray(result) && result.length === 0) log('No page belongs to ' + cattitle);
     return result;
 
 }
 
-/**
- * Get a list of pages that transclude a given page
- * @param {string} pagetitle
- * @returns {Promise<Array<string>>}
- */
-async function getTranscludingPages(pagetitle) {
+/** Get a list of pages that transclude a given page. */
+async function getTranscludingPages(pagetitle: string): Promise<string[]> {
 
-    var pages = [];
+    let pages: string[] = [];
     const mw = getMw();
-    const query = function(eicontinue) {
-        return new Promise(resolve => {
+    const query = function(eicontinue?: string) {
+        return new Promise<void>(resolve => {
             mw.request({
                 action: 'query',
                 list: 'embeddedin',
@@ -223,9 +231,9 @@ async function getTranscludingPages(pagetitle) {
                 eilimit: 'max',
                 eicontinue: eicontinue,
                 formatversion: '2'
-            }).then(async res => {
+            }).then(async (res: ApiResponse) => {
 
-                var resEi, resCont;
+                let resEi, resCont;
                 if (!res || !res.query || !(resEi = res.query.embeddedin)) return resolve();
 
                 const titles = resEi.map(obj => obj.title);
@@ -236,7 +244,7 @@ async function getTranscludingPages(pagetitle) {
                 }
                 resolve();
 
-            }).catch(err => resolve(log(err.info)));
+            }).catch((err: ApiResponseError) => resolve(log(err.info)));
         });
     };
 
@@ -245,33 +253,25 @@ async function getTranscludingPages(pagetitle) {
 
 }
 
-/**
- * Filter protected pages out of a list of pagetitles
- * @param {Array<string>} pagetitles
- * @return {Promise<Array<string>>|null} Protected titles; null if any internal query failed
- */
-async function filterOutProtectedPages(pagetitles) {
+/** Filter protected pages out of a list of pagetitles. Returns undefined if any internal query fails. */
+async function filterOutProtectedPages(pagetitles: string[]): Promise<string[]|undefined> {
 
     const mw = getMw();
-    /**
-     * @param {Array<string>} pagetitlesArr Subject to apihighlimit
-     * @returns {Promise<Array<string>>} Protected titles
-     */
-    const query = function(pagetitlesArr) {
-        return new Promise(resolve => {
+    const query = (pagetitlesArr: string[]) => {
+        return new Promise<string[]|undefined>(resolve => {
             mw.request({
                 action: 'query',
                 titles: pagetitlesArr.join('|'),
                 prop: 'info',
                 inprop: 'protection',
                 formatversion: '2'
-            }).then(res => {
+            }).then((res: ApiResponse) => {
 
-                var resPg;
-                if (!res || !res.query || !(resPg = res.query.pages)) return resolve();
+                let resPg;
+                if (!res || !res.query || !(resPg = res.query.pages)) return resolve(undefined);
 
                 const d = new Date();
-                const isProtected = function(prtArr) {
+                const isProtected = (prtArr: ApiResponseQueryPagesProtection[]) => {
                     return prtArr.some(function(obj) {
                         if (!obj.expiry) return false;
                         if (obj.expiry.match(/^in/)) return true;
@@ -281,7 +281,7 @@ async function filterOutProtectedPages(pagetitles) {
                 };
 
                 const titles = resPg.filter(obj => {
-                    var prtArr;
+                    let prtArr;
                     if (!obj.title) return false;
                     if (!(prtArr = obj.protection) || prtArr.length === 0) {
                         return false;
@@ -292,9 +292,9 @@ async function filterOutProtectedPages(pagetitles) {
 
                 resolve(titles);
 
-            }).catch(err => {
+            }).catch((err: ApiResponseError) => {
                 log(err.info);
-                resolve();
+                resolve(undefined);
             });
         });
     };
@@ -307,18 +307,14 @@ async function filterOutProtectedPages(pagetitles) {
     const result = await Promise.all(deferreds);
 
     const failed = result.some(el => !el);
-    const protectedPages = result.filter(el => el).flat().undup();
+    const protectedPages = result.flat().filter((el): el is string => typeof el === 'string').undup();
 
-    return failed ? null : protectedPages;
+    return failed ? undefined : protectedPages;
 
 }
 
-/**
- * Scrape a webpage
- * @param {string} url
- * @returns {Promise<cheerio|undefined>}
- */
-async function scrape(url) {
+/** Scrape a webpage. */
+async function scrapeWebpage(url: string) {
     try {
         const res = await axios.get(url);
         const $ = cheerio.load(res.data);
@@ -329,22 +325,18 @@ async function scrape(url) {
     }
 }
 
-/**
- * Get a username from an account creation logid
- * @param {number|string} logid
- * @returns {Promise<string|undefined>}
- */
-async function scrapeUsernameFromLogid(logid) {
+/** Get a username from an account creation logid. */
+async function scrapeUsernameFromLogid(logid: string|number): Promise<string|undefined> {
 
     const url = 'https://ja.wikipedia.org/w/index.php?title=%E7%89%B9%E5%88%A5:%E3%83%AD%E3%82%B0&logid=' + logid;
-    const $ = await scrape(url);
+    const $ = await scrapeWebpage(url);
     if (!$) return;
 
-    var $newusers = $('.mw-logline-newusers');
+    let $newusers = $('.mw-logline-newusers');
     if ($newusers.length === 0) return;
     $newusers = $newusers.eq(0);
 
-    var username;
+    let username;
     switch($newusers.attr('data-mw-logaction')) {
         case 'newusers/create':
         case 'newusers/autocreate':
@@ -365,13 +357,13 @@ async function scrapeUsernameFromLogid(logid) {
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
 
 /**
- * Extract templates from wikitext
- * @param {string} wikitext the wikitext from which templates are extracted
- * @param {string|Array<string>} [templateName] sort out templates by these template names
- * @param {string|Array<string>} [templatePrefix] sort out templates by these template prefixes
- * @returns {Array<string>}
+ * Extract templates from wikitext.
+ * @param wikitext
+ * @param templateName Filter out templates by these names.
+ * @param templatePrefix Filter out templates by these name prefixes.
+ * @returns
  */
-function findTemplates(wikitext, templateName, templatePrefix) {
+function findTemplates(wikitext: string, templateName? : string|string[], templatePrefix? : string|string[]): string[] {
 
     // Remove comments
     extractCommentOuts(wikitext).forEach(co => {
@@ -384,12 +376,12 @@ function findTemplates(wikitext, templateName, templatePrefix) {
     if (tempInnerContents.length === 0) return [];
 
     // Extract templates from the wikitext
-    const nest = [];
-    var templates = tempInnerContents.reduce((acc, tempInnerContent, i, arr) => { // Loop through all elements in tempInnerContents (except tempInnerContents[0])
+    const nest: number[] = [];
+    let templates = tempInnerContents.reduce((acc: string[], tempInnerContent, i, arr) => { // Loop through all elements in tempInnerContents (except tempInnerContents[0])
 
         if (i === 0) return acc;
 
-        var temp;
+        let temp: string;
         const tempTailCnt = (tempInnerContent.match(/\}\}/g) || []).length; // The number of '}}' in the split array
 
         // There's no '}}' (= nesting other templates)
@@ -439,36 +431,38 @@ function findTemplates(wikitext, templateName, templatePrefix) {
     if (templatePrefix && typeof templatePrefix === 'string') templatePrefix = [templatePrefix];
 
     /**
-     * Function to create a regex that makes the first character of a template case-insensitive
-     * @param {string} str
-     * @returns {string} [Xx]
+     * Create a regex string that makes a certain character case-insensitive.
+     * @param str
+     * @returns [Xx]
      */
-    const caseInsensitiveFirstLetter = str => '[' + str.substring(0, 1).toUpperCase() + str.substring(0, 1).toLowerCase() + ']';
+    const getCaseInsensitiveCharacterRegex = (str: string) => '[' + str.substring(0, 1).toUpperCase() + str.substring(0, 1).toLowerCase() + ']';
 
     // Create regex for template sorting
     const names = [], prefixes = [];
+    let templateNameRegExp: RegExp;
+    let templatePrefixRegExp: RegExp;
     if (templateName) {
         for (let i = 0; i < templateName.length; i++) {
-            names.push(caseInsensitiveFirstLetter(templateName[i]) + escapeRegExp(templateName[i].substring(1)));
+            names.push(getCaseInsensitiveCharacterRegex(templateName[i]) + escapeRegExp(templateName[i].substring(1)));
         }
-        var templateNameRegExp = new RegExp('^(' + names.join('|') + ')$');
+        templateNameRegExp = new RegExp('^(' + names.join('|') + ')$');
     }
     if (templatePrefix) {
         for (let i = 0; i < templatePrefix.length; i++) {
-            prefixes.push(caseInsensitiveFirstLetter(templatePrefix[i]) + escapeRegExp(templatePrefix[i].substring(1)));
+            prefixes.push(getCaseInsensitiveCharacterRegex(templatePrefix[i]) + escapeRegExp(templatePrefix[i].substring(1)));
         }
-        var templatePrefixRegExp = new RegExp('^(' + prefixes.join('|') + ')');
+        templatePrefixRegExp = new RegExp('^(' + prefixes.join('|') + ')');
     }
 
     // Sort out certain templates
-    var errHandler = false;
+    let errHandler = false;
     templates = templates.filter(item => {
-        var name = item.match(/^\{{2}\s*([^|{}\n]+)/);
-        if (!name) {
+        const head = item.match(/^\{{2}\s*([^|{}\n]+)/);
+        if (!head) {
             errHandler = true;
             return false;
         }
-        name = name[1].trim(); // {{ TEMPLATENAME | ... }} の TEMPLATENAME を抽出
+        const name = head[1].trim(); // {{ TEMPLATENAME | ... }} の TEMPLATENAME を抽出
         if (templateName && templatePrefix) {
             return name.match(templateNameRegExp) || name.match(templatePrefixRegExp);
         } else if (templateName) {
@@ -484,12 +478,12 @@ function findTemplates(wikitext, templateName, templatePrefix) {
 }
 
 /**
- * Find all HTML tags in a string, including innerHTML
- * @param {string} content String in which to search for tags
- * @param {string|Array<string>} [tagnames] Tags to sort out
- * @returns {Array<string>} Array of outerHTMLs
+ * Find all HTML tags in a string, including innerHTML.
+ * @param content String in which to search for tags
+ * @param tagnames Tags to return
+ * @returns Array of outerHTMLs
  */
-function findHtmlTags(content, tagnames) {
+function findHtmlTags(content: string, tagnames?: string|string[]): string[] {
 
     // Remove comments
     extractCommentOuts(content).forEach(co => {
@@ -499,22 +493,20 @@ function findHtmlTags(content, tagnames) {
 
     // Get all <tag> and </tag>s and create an array of objects
     const regex = /(?:<[^\s/>]+[^\S\r\n]*[^>]*>|<\/[^\S\r\n]*[^\s>]+[^\S\r\n]*>)/g;
-    // const regex = /(?:<([^\s/>]+)[^\S\r\n]*[^>]*>|<\/[^\S\r\n]*([^\s>]+)[^\S\r\n]*>)/g;
     const mArr = [];
-    var m;
+    let m;
     while ((m = regex.exec(content))) {
         const type = m[0].match(/^<[^\S\r\n]*\//) ? 'end' : 'start';
         mArr.push({
             tag: m[0], // e.g. <div>, </div>
-            tagname: m[0].match(/^<\/?[^\S\r\n]*([^\s>]+)[^\S\r\n]*[^>]*>$/)[1], // e.g. div
-            // tagname: m[1], // The capturing group doesn't work for closing tags for some reason
+            tagname: m[0].match(/^<\/?[^\S\r\n]*([^\s>]+)[^\S\r\n]*[^>]*>$/)![1], // e.g. div
             type: type, // 'start' or 'end'
             index: m.index // Index of the tag in the content
         });
     }
 
-    var nestCnt = 0,
-        tags = [];
+    let nestCnt = 0;
+    let tags: string[] = [];
     mArr.forEach((obj, i, arr) => {
         if (obj.type === 'end') return; // Loop through all opening tags
         if (!arr[i + 1]) return;
@@ -544,53 +536,50 @@ function findHtmlTags(content, tagnames) {
 
 }
 
-/**
- * Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />
- * @param {string} wikitext
- * @returns {Array<string>}
- */
-function extractCommentOuts(wikitext) {
+/** Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />. */
+function extractCommentOuts(wikitext: string): string[] {
     return wikitext.match(/<!--[\s\S]*?-->|<nowiki>[\s\S]*?<\/nowiki>|<pre[\s\S]*?<\/pre>|<syntaxhighlight[\s\S]*?<\/syntaxhighlight>|<source[\s\S]*?<\/source>/gm) || [];
 }
 
-/**
- * Get the parameters of templates as an array
- * @param {string} template
- * @returns {Array<string>} This doesn't contain the template's name
- */
-function getTemplateParams(template) {
+/** Get the parameters of templates as an array. The template's name is not included. */
+function getTemplateParams(template: string): string[] {
 
     // If the template doesn't contain '|', it doesn't have params
     if (!template.includes('|')) return [];
 
     // Remove the first '{{' and the last '}}' (or '|}}')
-    var params = template.replace(/^\{{2}|\|*\}{2}$/g, '');
+    template = template.replace(/^\{{2}|\|*\}{2}$/g, '');
 
-    // In case the params nest other templates
-    var nested = findTemplates(params);
+    // In case the inner params nest other templates
+    let nested = lib.findTemplates(template);
     if (nested.length !== 0) {
-        nested = nested.filter(item => { // Sort out templates that don't nest yet other templates (findTemplates() returns both TL1 and TL2
-            return nested.filter(itemN => itemN !== item).every(itemN => !itemN.includes(item)); // ↳ in {{TL1| {{TL2}} }} ), but we don't need TL2
-            // ↳ Look at the other elements in the array 'nested' (.filter) and only preserve items that are not part of those items (.every)
+
+        // Remove nested templates from the array
+        nested = nested.filter(item => {
+            return nested.filter(itemN => {
+                return itemN !== item; // Filter out other elements of the array
+            }).every(itemN => {
+                return !itemN.includes(item); // Only return templates that are not included in others
+            });
         });
+
+        // Temporarily replace nested templates with '$TLn' because pipes in them can mess up the output
         nested.forEach((item, i) => {
-            params = params.split(item).join(`$TL${i}`); // Replace nested templates with '$TLn'
+            template = template.split(item).join(`$TL${i}`);
         });
+
     }
 
     // Get an array of parameters
-    params = params.split('|'); // This could be messed up if the nested templates hadn't been replaced
+    const params = template.split('|');
     params.shift(); // Remove the template name
     if (nested.length !== 0) {
+        const regex = /\$TL(\d+)/g;
         params.forEach((item, i) => {
-            var m;
-            if ((m = item.match(/\$TL\d+/g))) { // Find all $TLn in the item
-                for (let j = 0; j < m.length; j += 2) {
-                    const index = m[j].match(/\$TL(\d+)/)[1];
-                    m.splice(j + 1, 0, index); // Push the index at m[j + 1]
-                    const replacee = j === 0 ? item : params[i];
-                    params[i] = replacee.split(m[j]).join(nested[m[j + 1]]);  // Re-replace delimiters with original templates
-                }
+            let m;
+            while (m = regex.exec(item)) {
+                const index = parseInt(m[1]);
+                params[i] = params[i].split(m[0]).join(nested[index]); // Get the repalced nested templates back
             }
         });
     }
@@ -599,12 +588,8 @@ function getTemplateParams(template) {
 
 }
 
-/**
- * Extract all UserANs with open reports as an array
- * @param {string} wikitext
- * @returns {Array<string>}
- */
-function getOpenUserANs(wikitext) {
+/** Extract all UserANs with open reports as an array. */
+function getOpenUserANs(wikitext: string): string[] {
 
     if (!wikitext) {
         log('lib.getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
@@ -615,14 +600,6 @@ function getOpenUserANs(wikitext) {
     const templates = findTemplates(wikitext, 'UserAN');
     if (templates.length === 0) return [];
 
-    // Create an array of objects out of the 'templates' array
-    var UserAN = templates.map(tmpl => {
-        return {
-            template: tmpl,
-            closed: true
-        };
-    });
-
     // RegExps to evaluate the templates' parameters
     const paramsRegExp = {
         bot: /^\s*bot\s*=/, // bot=
@@ -632,11 +609,11 @@ function getOpenUserANs(wikitext) {
     };
 
     // Find UserANs with open reports by evaluating their parameters
-    UserAN.forEach(obj => {
+    const UserAN = templates.filter(template => {
 
         // Get parameters
-        var params = getTemplateParams(obj.template); // This doesn't include the template name
-        if (params.length === 0) return;
+        let params = getTemplateParams(template);
+        if (params.length === 0) return false;
         params = params.filter(item => !item.match(paramsRegExp.bot)); // Remove bot= parameter if there's any
 
         /**********************************************************************************************************\
@@ -658,32 +635,43 @@ function getOpenUserANs(wikitext) {
             Only UserANs with params in one of the four patterns need to be configured with obj.closed = false
         \***********************************************************************************************************/
 
-        if (params.filter(item => item.match(paramsRegExp.statusSClosed)).length > 0) return; // 状態=X param is present: Always closed
+        // 状態=X param is present: Always closed
+        if (params.filter(item => item.match(paramsRegExp.statusSClosed)).length > 0) return false;
+
+        // Change the 'closed' property of the object if the relevant UserAN is an open request
+        let isOpen = false;
+        const hasTypeParam = params.filter(item => item.match(paramsRegExp.type)).length > 0;
+        const hasUnvaluedStatusSParam = params.filter(item => item.match(paramsRegExp.statusS)).length > 0;
         switch (params.length) {
             case 1: // [(1=)username] (open)
-                obj.closed = false;
-                return;
+                isOpen = true;
+                break;
             case 2: // [t=TYPE, (1=)username] (open), [(1=)username, 状態=] (open), [(1=)username, (2=)無期限] (closed)
-                if (params.filter(item => item.match(paramsRegExp.type)).length > 0 || // The template has a type param, or
-                    params.filter(item => item.match(paramsRegExp.statusS)).length > 0) { // the template has a 状態= param: The request is open
-                    obj.closed = false;
-                }
-                return;
+                if (hasTypeParam || hasUnvaluedStatusSParam) isOpen = true;
+                break;
             case 3: // [t=TYPE, (1=)username, 状態=] (open), [t=TYPE, (1=)username, (2=)無期限] (closed), [(1=)username, 状態=, (2=)無期限] (closed)
-                if (params.some(item => item.match(paramsRegExp.type)) && params.some(item => item.match(paramsRegExp.statusS))) obj.closed = false;
+                if (hasTypeParam && hasUnvaluedStatusSParam) isOpen = true;
+                break;
+            default:
         }
+
+        return isOpen;
 
     });
 
-    return UserAN.filter(obj => !obj.closed).map(obj => obj.template);
+    return UserAN;
 
 }
 
-/**
- * @param {string} content
- * @returns {Array<{header: string, title: string, level: number, index: number, content: string, deepest: boolean}>} Never undefined
- */
-function parseContentBySection(content) {
+/** Parse the content of a page into that of each section. */
+function parseContentBySection(content: string): Array<{
+    header: string|null,
+    title: string|null,
+    level: number,
+    index: number,
+    content: string,
+    deepest: boolean|null
+}> {
 
     const regex = {
         header: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/,
@@ -691,57 +679,60 @@ function parseContentBySection(content) {
         headerEquals: /(?:^={2,5}[^\S\n\r]*|[^\S\n\r]*={2,5}$)/g
     };
 
-    var headers = content.match(regex.headerG);
+    // Get headers and exclude those in comment tags
+    const matched = content.match(regex.headerG);
+    let headers = matched ? matched.slice() : [];
     extractCommentOuts(content).forEach(co => {
-        headers = headers.filter(header => !co.includes(header));
+        headers = headers!.filter(header => !co.includes(header));
+    });
+    headers.unshift(''); // For the top section
+
+    // Create an array of objects
+    const sections = headers.map((header, i, arr) => {
+        const isTopSection = i === 0;
+        return {
+            header: isTopSection ? null : header,
+            title: isTopSection ? null : header.replace(regex.headerEquals, ''),
+            level: isTopSection ? 1 : header.match(/=/g)!.length / 2,
+            index: i,
+            content: isTopSection ? (arr.length > 1 ? content.split(headers[1])[0] : content) : '',
+            deepest: isTopSection ? null : false
+        };
     });
 
-    const sections = [];
-    sections.push({ // The top section
-        header: null,
-        title: null,
-        level: 1,
-        index: 0,
-        content: headers ? content.split(headers[0])[0] : content,
-        deepest: null
+    // Get the content property
+    sections.forEach((obj, i, arr) => {
+
+        // For top section
+        if (!obj.header) return;
+
+        // Check if there's any section of the same level or shallower following this section
+        const nextBoundarySection = arr.slice(i + 1).find(objF => objF.level <= obj.level);
+
+        // Get the content of this section
+        let sectionContent: string;
+        if (nextBoundarySection) {
+            sectionContent = content.substring(content.indexOf(obj.header), content.indexOf(nextBoundarySection.header!));
+        } else {
+            sectionContent = content.substring(content.indexOf(obj.header));
+        }
+
+        obj.content = sectionContent;
+        obj.deepest = typeof arr.slice(i + 1).find(objF => sectionContent.includes(objF.header!)) === 'undefined';
+
     });
-    if (headers) {
-        headers.forEach(header => {
-            sections.push({
-                header: header,
-                title: header.replace(regex.headerEquals, ''),
-                level: header.match(/=/g).length / 2,
-                index: undefined,
-                content: undefined,
-                deepest: undefined
-            });
-        });
-        sections.forEach((obj, i, arr) => {
-            if (i === 0) return;
-            var sectionContent;
-            arr.slice(i + 1).some(obj2 => { // Find a higher-level section boundary and get the content between the header and the boundary
-                if (obj2.level <= obj.level) sectionContent = content.substring(content.indexOf(obj.header), content.indexOf(obj2.header));
-                return typeof sectionContent !== 'undefined';
-            });
-            if (!sectionContent) sectionContent = content.substring(content.indexOf(obj.header)); // For last section
-            obj.index = i;
-            obj.content = sectionContent;
-            obj.deepest = obj.content.match(regex.header).length === 1;
-        });
-    }
 
     return sections;
 
 }
 
 /**
- * @param {string} timestamp1
- * @param {string} timestamp2
- * @param {boolean} [rewind5minutes] if true, rewind timestamp1 by 5 minutes
- * @returns {number} timestamp2 - timestamp1 (in milliseconds)
+ * @param timestamp1
+ * @param timestamp2
+ * @param rewind5minutes if true, rewind timestamp1 by 5 minutes
+ * @returns timestamp2 - timestamp1 (in milliseconds)
  */
-function compareTimestamps(timestamp1, timestamp2, rewind5minutes) {
-    if (typeof timestamp1 === 'undefined' || typeof timestamp2 === 'undefined') return;
+function compareTimestamps(timestamp1: string, timestamp2: string, rewind5minutes?: boolean) {
     const ts1 = new Date(timestamp1);
     if (rewind5minutes) ts1.setMinutes(ts1.getMinutes() - 5);
     const ts2 = new Date(timestamp2);
@@ -749,12 +740,11 @@ function compareTimestamps(timestamp1, timestamp2, rewind5minutes) {
     return diff;
 }
 
-/**
- * @param {string} timestamp1
- * @param {string} timestamp2
- * @returns {string|undefined}
+/** 
+ * Subtract timestamp2 by timestamp1 and output the resultant duration in Japanese.
+ * If the time difference is a negative value, undefined is returned.
  */
-function getDuration(timestamp1, timestamp2) {
+function getDuration(timestamp1: string, timestamp2: string) {
 
     const ts1 = new Date(timestamp1);
     const ts2 = new Date(timestamp2);
@@ -795,59 +785,40 @@ function getDuration(timestamp1, timestamp2) {
 
 }
 
-/**
- * Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!')
- * @param {string} str
- * @returns {string}
- */
-function escapeRegExp(str) {
+/** Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!'). */
+function escapeRegExp(str: string) {
     return str.replace(/[\\{}().?*+\-^$[\]|]/g, '\\$&');
 }
 
 /**
- * Get the last day of a given month
- * @param {number|string} year
- * @param {number|string} month 1-12
- * @returns {number}
+ * Get the last day of a given month.
+ * @param year
+ * @param month 1-12
  */
-function lastDay(year, month){
+function lastDay(year: number|string, month: number|string) {
+    if (typeof year === 'string') year = parseInt(year);
+    if (typeof month === 'string') month = parseInt(month);
     return new Date(year, month, 0).getDate();
 }
 
-/**
- * Get the Japanese name of a day of the week from JSON timestamp
- * @param {string} timestamp
- * @returns {string}
- */
-function getWeekDayJa(timestamp) {
+/** Get the Japanese name of a day of the week from JSON timestamp. */
+function getWeekDayJa(timestamp: string) {
     const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
     return daysOfWeek[new Date(timestamp).getDay()];
 }
 
-/**
- * Check if a string is an IP address
- * @param {string} ip
- * @returns {boolean}
- */
-function isIPAddress(ip) {
+/** Check whether a given string is an IP address. */
+function isIPAddress(ip: string) {
     return net.isIP(ip) || isCidr(ip);
 }
 
-/**
- * Check if a string is an IPv4 address
- * @param {string} ip
- * @returns {boolean}
- */
-function isIPv4(ip) {
+/** Check whether a given string is an IPv4 address. */
+function isIPv4(ip: string) {
     return net.isIPv4(ip) || v4(ip);
 }
 
-/**
- * Check if a string is an IPv6 address
- * @param {string} ip
- * @returns {boolean}
- */
-function isIPv6(ip) {
+/** Check whether a given string is an IPv6 address. */
+function isIPv6(ip: string) {
     return net.isIPv6(ip) || v6(ip);
 }
 
@@ -859,7 +830,7 @@ export const lib = {
     getCatMembers,
     getTranscludingPages,
     filterOutProtectedPages,
-    scrape,
+    scrapeWebpage,
     scrapeUsernameFromLogid,
     findTemplates,
     findHtmlTags,
