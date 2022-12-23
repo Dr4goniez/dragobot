@@ -26,7 +26,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+<<<<<<< HEAD
 exports.isIPv6 = exports.isIPv4 = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.compareTimestamps = exports.parseContentBySection = exports.replaceWikitext = exports.parseHtml = exports.parseTemplates = exports.getOpenUserANs = exports.getTemplateParams = exports.extractCommentOuts = exports.findHtmlTags = exports.findTemplates = exports.scrapeUsernameFromLogid = exports.scrapeWebpage = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
+=======
+exports.lib = void 0;
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 const net_1 = __importDefault(require("net"));
 const is_cidr_1 = __importStar(require("is-cidr"));
 const cheerio = __importStar(require("cheerio"));
@@ -74,12 +78,18 @@ function getLatestRevision(pagename) {
         });
     });
 }
+<<<<<<< HEAD
 exports.getLatestRevision = getLatestRevision;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Let the code sleep for n milliseconds. */
 function sleep(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
+<<<<<<< HEAD
 exports.sleep = sleep;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 let lastedit;
 /**
  * Edit a given page, ensuring a 5 second interval since the last edit. If the edit fails because of an expired token, another edit attempt is automatically made after re-login.
@@ -140,7 +150,10 @@ async function edit(params, autoInterval = true, retry) {
     params = Object.assign(params, { token: mw.editToken });
     return await edit(params, autoInterval, true);
 }
+<<<<<<< HEAD
 exports.edit = edit;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /**
  * Get an array of pagetitles that have links to a given page, transclusions not included.
  * @param pagetitle
@@ -177,7 +190,10 @@ async function getBackLinks(pagetitle, nsExclude) {
     const result = await query();
     return result ? pages : undefined;
 }
+<<<<<<< HEAD
 exports.getBackLinks = getBackLinks;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /**
  * Get pagetitles that belong to a given category
  * @param cattitle Must start with 'Category:' but automatically added
@@ -220,7 +236,10 @@ async function getCatMembers(cattitle, nsExclude) {
         (0, server_1.log)('No page belongs to ' + cattitle);
     return result;
 }
+<<<<<<< HEAD
 exports.getCatMembers = getCatMembers;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Get a list of pages that transclude a given page. */
 async function getTranscludingPages(pagetitle) {
     let pages = [];
@@ -251,7 +270,10 @@ async function getTranscludingPages(pagetitle) {
     await query();
     return pages;
 }
+<<<<<<< HEAD
 exports.getTranscludingPages = getTranscludingPages;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Filter protected pages out of a list of pagetitles. Returns undefined if any internal query fails. */
 async function filterOutProtectedPages(pagetitles) {
     const mw = (0, mw_1.getMw)();
@@ -306,7 +328,10 @@ async function filterOutProtectedPages(pagetitles) {
     const protectedPages = result.flat().filter((el) => typeof el === 'string').undup();
     return failed ? undefined : protectedPages;
 }
+<<<<<<< HEAD
 exports.filterOutProtectedPages = filterOutProtectedPages;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Scrape a webpage. */
 async function scrapeWebpage(url) {
     try {
@@ -318,7 +343,10 @@ async function scrapeWebpage(url) {
         return (0, server_1.log)(err);
     }
 }
+<<<<<<< HEAD
 exports.scrapeWebpage = scrapeWebpage;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Get a username from an account creation logid. */
 async function scrapeUsernameFromLogid(logid) {
     const url = 'https://ja.wikipedia.org/w/index.php?title=%E7%89%B9%E5%88%A5:%E3%83%AD%E3%82%B0&logid=' + logid;
@@ -344,7 +372,10 @@ async function scrapeUsernameFromLogid(logid) {
     }
     return username;
 }
+<<<<<<< HEAD
 exports.scrapeUsernameFromLogid = scrapeUsernameFromLogid;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
 /**
  * Extract templates from wikitext.
@@ -453,7 +484,10 @@ function findTemplates(wikitext, templateName, templatePrefix) {
         (0, server_1.log)('findTemplates: Detected unprocessable braces.');
     return templates;
 }
+<<<<<<< HEAD
 exports.findTemplates = findTemplates;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /**
  * Find all HTML tags in a string, including innerHTML.
  * @param content String in which to search for tags
@@ -512,12 +546,18 @@ function findHtmlTags(content, tagnames) {
     tags = tags.filter(item => item.match(tagNameRegex));
     return tags;
 }
+<<<<<<< HEAD
 exports.findHtmlTags = findHtmlTags;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />. */
 function extractCommentOuts(wikitext) {
     return wikitext.match(/<!--[\s\S]*?-->|<nowiki>[\s\S]*?<\/nowiki>|<pre[\s\S]*?<\/pre>|<syntaxhighlight[\s\S]*?<\/syntaxhighlight>|<source[\s\S]*?<\/source>/gm) || [];
 }
+<<<<<<< HEAD
 exports.extractCommentOuts = extractCommentOuts;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Get the parameters of templates as an array. The template's name is not included. */
 function getTemplateParams(template) {
     // If the template doesn't contain '|', it doesn't have params
@@ -526,7 +566,11 @@ function getTemplateParams(template) {
     // Remove the first '{{' and the last '}}' (or '|}}')
     template = template.replace(/^\{{2}|\|*\}{2}$/g, '');
     // In case the inner params nest other templates
+<<<<<<< HEAD
     let nested = findTemplates(template);
+=======
+    let nested = exports.lib.findTemplates(template);
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     if (nested.length !== 0) {
         // Remove nested templates from the array
         nested = nested.filter(item => {
@@ -556,11 +600,18 @@ function getTemplateParams(template) {
     }
     return params;
 }
+<<<<<<< HEAD
 exports.getTemplateParams = getTemplateParams;
 /** Extract all UserANs with open reports as an array. */
 function getOpenUserANs(wikitext) {
     if (!wikitext) {
         (0, server_1.log)('getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
+=======
+/** Extract all UserANs with open reports as an array. */
+function getOpenUserANs(wikitext) {
+    if (!wikitext) {
+        (0, server_1.log)('lib.getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
         return [];
     }
     // Get all UserANs in the wikitext
@@ -624,6 +675,7 @@ function getOpenUserANs(wikitext) {
     });
     return UserAN;
 }
+<<<<<<< HEAD
 exports.getOpenUserANs = getOpenUserANs;
 /**
  * Parse templates in wikitext. Templates within tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source) are not parsed.
@@ -920,6 +972,8 @@ function replaceWikitext(wikitext, replacees, replacers) {
     return wikitext;
 }
 exports.replaceWikitext = replaceWikitext;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Parse the content of a page into that of each section. */
 function parseContentBySection(content) {
     const regex = {
@@ -966,7 +1020,10 @@ function parseContentBySection(content) {
     });
     return sections;
 }
+<<<<<<< HEAD
 exports.parseContentBySection = parseContentBySection;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /**
  * @param timestamp1
  * @param timestamp2
@@ -981,7 +1038,10 @@ function compareTimestamps(timestamp1, timestamp2, rewind5minutes) {
     const diff = ts2.getTime() - ts1.getTime();
     return diff;
 }
+<<<<<<< HEAD
 exports.compareTimestamps = compareTimestamps;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /**
  * Subtract timestamp2 by timestamp1 and output the resultant duration in Japanese.
  * If the time difference is a negative value, undefined is returned.
@@ -1022,12 +1082,18 @@ function getDuration(timestamp1, timestamp2) {
         return seconds + '秒';
     }
 }
+<<<<<<< HEAD
 exports.getDuration = getDuration;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!'). */
 function escapeRegExp(str) {
     return str.replace(/[\\{}().?*+\-^$[\]|]/g, '\\$&');
 }
+<<<<<<< HEAD
 exports.escapeRegExp = escapeRegExp;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /**
  * Get the last day of a given month.
  * @param year
@@ -1040,25 +1106,65 @@ function lastDay(year, month) {
         month = parseInt(month);
     return new Date(year, month, 0).getDate();
 }
+<<<<<<< HEAD
 exports.lastDay = lastDay;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Get the Japanese name of a day of the week from JSON timestamp. */
 function getWeekDayJa(timestamp) {
     const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
     return daysOfWeek[new Date(timestamp).getDay()];
 }
+<<<<<<< HEAD
 exports.getWeekDayJa = getWeekDayJa;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Check whether a given string is an IP address. */
 function isIPAddress(ip) {
     return net_1.default.isIP(ip) || (0, is_cidr_1.default)(ip);
 }
+<<<<<<< HEAD
 exports.isIPAddress = isIPAddress;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Check whether a given string is an IPv4 address. */
 function isIPv4(ip) {
     return net_1.default.isIPv4(ip) || (0, is_cidr_1.v4)(ip);
 }
+<<<<<<< HEAD
 exports.isIPv4 = isIPv4;
+=======
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 /** Check whether a given string is an IPv6 address. */
 function isIPv6(ip) {
     return net_1.default.isIPv6(ip) || (0, is_cidr_1.v6)(ip);
 }
+<<<<<<< HEAD
 exports.isIPv6 = isIPv6;
+=======
+exports.lib = {
+    getLatestRevision,
+    sleep,
+    edit,
+    getBackLinks,
+    getCatMembers,
+    getTranscludingPages,
+    filterOutProtectedPages,
+    scrapeWebpage,
+    scrapeUsernameFromLogid,
+    findTemplates,
+    findHtmlTags,
+    extractCommentOuts,
+    getTemplateParams,
+    getOpenUserANs,
+    parseContentBySection,
+    compareTimestamps,
+    getDuration,
+    escapeRegExp,
+    lastDay,
+    getWeekDayJa,
+    isIPAddress,
+    isIPv4,
+    isIPv6
+};
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6

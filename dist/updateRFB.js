@@ -1,4 +1,5 @@
 "use strict";
+<<<<<<< HEAD
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -25,6 +26,11 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateRFB = void 0;
 const lib = __importStar(require("./lib"));
+=======
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.updateRFB = void 0;
+const lib_1 = require("./lib");
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 const server_1 = require("./server");
 /**
  * Monthly update of RFB-related pages
@@ -65,7 +71,11 @@ async function updateRFB() {
     const createMonthlySubpage = async () => {
         const pagetitle = `${testPagePrefix}Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
         (0, server_1.log)(`Creating ${pagetitle}...`);
+<<<<<<< HEAD
         const lr = await lib.getLatestRevision(pagetitle);
+=======
+        const lr = await lib_1.lib.getLatestRevision(pagetitle);
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
         if (lr)
             return (0, server_1.log)(`Cancelled: ${pagetitle} already exists.`);
         if (lr === undefined)
@@ -76,7 +86,11 @@ async function updateRFB() {
             summary: 'Bot: 月次更新処理',
             bot: true
         };
+<<<<<<< HEAD
         await lib.edit(params);
+=======
+        await lib_1.lib.edit(params);
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     };
     await createMonthlySubpage();
     // Update [[Template:投稿ブロック依頼]] and [[Wikipedia:投稿ブロック依頼]]
@@ -94,7 +108,11 @@ async function updateRFB() {
      */
     const updateLinks = async (pagetitle, linktype) => {
         (0, server_1.log)(`Updating links on ${pagetitle}...`);
+<<<<<<< HEAD
         const lr = await lib.getLatestRevision(pagetitle);
+=======
+        const lr = await lib_1.lib.getLatestRevision(pagetitle);
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
         if (!lr)
             return (0, server_1.log)('Failed to get the lastest revision of ' + pagetitle);
         var content = lr.content;
@@ -119,7 +137,11 @@ async function updateRFB() {
             basetimestamp: lr.basetimestamp,
             starttimestamp: lr.curtimestamp
         };
+<<<<<<< HEAD
         await lib.edit(params);
+=======
+        await lib_1.lib.edit(params);
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     };
     const pages = [`${testPagePrefix}Template:投稿ブロック依頼`, `${testPagePrefix}Wikipedia:投稿ブロック依頼`];
     for (let i = 0; i < pages.length; i++) {
@@ -131,7 +153,11 @@ async function updateRFB() {
     const createNewAnnualSubpage = async () => {
         const pagetitle = `${testPagePrefix}Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
         (0, server_1.log)(`Creating ${pagetitle}...`);
+<<<<<<< HEAD
         const lr = await lib.getLatestRevision(pagetitle);
+=======
+        const lr = await lib_1.lib.getLatestRevision(pagetitle);
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
         if (lr)
             return (0, server_1.log)(`Cancelled: ${pagetitle} already exists.`);
         if (lr === undefined)
@@ -151,13 +177,21 @@ async function updateRFB() {
             summary: 'Bot: 年次更新処理',
             bot: true
         };
+<<<<<<< HEAD
         await lib.edit(params);
+=======
+        await lib_1.lib.edit(params);
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     };
     await createNewAnnualSubpage();
     const updateArchiveTemplte = async () => {
         const pagetitle = `${testPagePrefix}Template:投稿ブロック依頼過去ログ`;
         (0, server_1.log)(`Updating links on ${pagetitle}...`);
+<<<<<<< HEAD
         const lr = await lib.getLatestRevision(pagetitle);
+=======
+        const lr = await lib_1.lib.getLatestRevision(pagetitle);
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
         if (!lr)
             return (0, server_1.log)('Failed to get the lastest revision of ' + pagetitle);
         var content = lr.content;
@@ -175,7 +209,11 @@ async function updateRFB() {
             basetimestamp: lr.basetimestamp,
             starttimestamp: lr.curtimestamp
         };
+<<<<<<< HEAD
         await lib.edit(params);
+=======
+        await lib_1.lib.edit(params);
+>>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     };
     await updateArchiveTemplte();
 }
