@@ -40,13 +40,14 @@ const ignore = [
 ];
 
 /**
- * @param {string} [botRunTs] Timestamp of when the bot started the current procedure: if provided, quit function 10 seconds before the next procedure starts
- * @returns {Promise<void>}
+ * Get a list of pages that have inappropriate protection templates and remove them all.
+ * @param botRunTs Timestamp of when the bot started the current procedure: if provided, quit function 10 seconds before the next procedure starts.
  */
-async function removePp(botRunTs) {
+export async function removePp(botRunTs?: string): Promise<void> {
 
     log('Checking for pages with inappropriate protection templates...');
 
+    // Get the titles of all pages that transclude protection templates
     const queries = [];
     for (const tl of pp.map(el => 'Template:' + el)) {
         queries.push(lib.getTranscludingPages(tl));
@@ -54,73 +55,63 @@ async function removePp(botRunTs) {
     const result = await Promise.all(queries);
     const transcludingPp = result.flat().undup();
 
+    // Filter out unprotected pages 
     const protectedPages = await lib.filterOutProtectedPages(transcludingPp);
     if (!protectedPages) return log('Failed to filter out protected pages.');
-    var notProtected = transcludingPp.filter(el => !protectedPages.includes(el) && !ignore.includes(el));
+    let notProtected = transcludingPp.filter(el => !protectedPages.includes(el) && !ignore.includes(el));
     notProtected = notProtected.filter(el => {
-        return pp.map(tl => 'Template:' + tl + '/').every(pfx => !el.includes(pfx)); // Remove subpages of pp templates
+        // Remove subpages of pp templates
+        return pp.map(tl => 'Template:' + tl + '/').every(pfx => !el.includes(pfx));
     });
 
     log(`${notProtected.length} page(s) found.`);
     if (notProtected.length === 0) return;
 
+    // Edit all the unprotected pages with protection templates
     for (const page of notProtected) {
         if (botRunTs && needToQuit(botRunTs)) {
             log('The next procedure starts within 10 seconds: Put off editing the rest of the pages.');
             break;
         }
         await editPageWithPp(page);
-
     }
 
 }
-export { removePp };
 
-/**
- * Check whether the next procedure starts in 10 seconds
- * @param {string} botRunTs
- * @returns {boolean}
+/** 
+ * Check whether the next procedure starts in 10 seconds.
+ * @param botRunTs The time at which the current procedure started; JSON timestamp
  */
-function needToQuit(botRunTs) {
+function needToQuit(botRunTs: string): boolean {
     const d = new Date();
     const dLimit = new Date(botRunTs);
     dLimit.setSeconds(dLimit.getSeconds() + 590); // 9m50s
     return d > dLimit;
 }
 
-/**
- * @param {string} pagetitle
- * @returns {Promise} API response of action=edit or null
- */
-async function editPageWithPp(pagetitle) {
+/** Remove protection templates from a given page. */
+export async function editPageWithPp(pagetitle: string): Promise<void> {
 
     const lr = await lib.getLatestRevision(pagetitle);
     if (!lr) return log('Failed to parse the page.');
-    var content = lr.content;
+    let content = lr.content;
 
-    var templates = lib.findTemplates(content, pp);
+    const templates = lib.parseTemplates(content, {
+        templatePredicate: (template) => {
+            return pp.includes(template.name) && !template.arguments.some((obj: lib.TemplateArgument) => /demolevel/i.test(obj.name));
+        }
+    })
+    .map((template) => {
+        // Filter out the template texts and convert them into RegExps
+        return new RegExp(lib.escapeRegExp(template.text) + '[^\\S\\n\\r]*\\n?');
+    });
     if (templates.length === 0) return log('No protection templates found.');
 
-    const isDemo = templates.some(el => {
-        const params = lib.getTemplateParams(el);
-        return params.some(param => param.match(/^demolevel\s*=/i));
-    });
-    if (isDemo) {
-        ignore.push(pagetitle);
-        return log('Cancelled: The pp in this page is used as a demo.');
-    }
-
-    // Escape the extracted templates
-    templates = templates.map(function(item) {
-        return lib.escapeRegExp(item);
-    });
-
     // Replace "{{TEMPLATE}}\n" with an empty string
-    const regex = new RegExp('(?:' + templates.join('|') + ')[^\\S\\n\\r]*\\n?', 'g');
-    content = content.replace(regex, '');
+    content = lib.replaceWikitext(content, templates, '');
 
     // Remove empty <noinclude> tags and the like if there's any
-    content = content.replace(/<noinclude>(?:\s)*?<\/noinclude>[^\S\n\r]*\n?/gm, '').replace(/\/\*(?:\s)*?\*\/[^\S\n\r]*\n?/gm, '');
+    content = content.replace(/<noinclude>\s*?<\/noinclude>[^\S\n\r]*\n?/gm, '').replace(/\/\*\s*?\*\/[^\S\n\r]*\n?/gm, '');
 
     if (content === lr.content) return log('Procedure cancelled: Same content');
 
@@ -133,9 +124,6 @@ async function editPageWithPp(pagetitle) {
         basetimestamp: lr.basetimestamp,
         starttimestamp: lr.curtimestamp
     };
-
-    const editRes = await lib.edit(params);
-    return editRes;
+    await lib.edit(params);
 
 }
-export { editPageWithPp };

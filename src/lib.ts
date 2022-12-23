@@ -664,7 +664,7 @@ export function getOpenUserANs(wikitext: string): string[] {
 }
 
 // interfaces for parseTemplates()
-interface Template {
+export interface Template {
     /** The whole text of the template, starting with '{{' and ending with '}}'. */
     text: string;
     /** Name of the template. The first letter is always in upper case. */
@@ -674,12 +674,12 @@ interface Template {
     /** Nest level of the template. If it's not part of another template, the value is 0. */
     nestlevel: number;
 }
-interface TemplateArgument {
+export interface TemplateArgument {
     text: string;
     name: string;
     value: string;
 }
-interface TemplateConfig {
+export interface TemplateConfig {
 	/** Also parse templates within subtemplates. True by default. */
 	recursive?: boolean;
 	/** Include template in result only if its name matches this predicate. (Should not be specified together with templatePredicate.)  */
@@ -871,7 +871,7 @@ function replacePipesBack(string: string) {
 }
 
 // interfaces for parseHtml()
-interface Html {
+export interface Html {
     /** OuterHTML of the tag. */
     text: string;
     /** Name of the tag in lower case. */
@@ -879,7 +879,7 @@ interface Html {
     /** Nest level of the tag. If it's not part of another tag, the value is 0. */
     nestlevel: number;
 }
-interface HtmlConfig {
+export interface HtmlConfig {
 	/** Also parse tags within tags. True by default. */
 	recursive?: boolean;
 	/**
@@ -978,11 +978,24 @@ export function parseHtml(html: string, config?: HtmlConfig, nestlevel = 0): Htm
 
 /**
  * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source).
- * The replacees array and the replacers array must have the same number of elements in them.
+ * The replacees array and the replacers array must have the same number of elements in them. This restriction does not apply only if the replacees are to be 
+ * replaced with one unique replacer, and the 'replacers' argument is a string or an array containing only one element. 
  */
-export function replaceWikitext(wikitext: string, replacees: string[], replacers: string[]): string {
+export function replaceWikitext(wikitext: string, replacees: (string|RegExp)[], replacers: string|string[]): string {
 
-    if (replacees.length !== replacers.length) throw 'replaceWikitext: replacees and replacers must have the same number of elements in them.';
+    let replacersArr: string[] = [];
+    if (typeof replacers === 'string') {
+        replacersArr.push(replacers);
+    } else {
+        replacersArr = replacers.slice(); // Deep copy
+    }
+    if (replacees.length !== replacersArr.length && replacersArr.length === 1) {
+        replacees.forEach((el, i) => {
+            if (i === 0) return;
+            replacersArr.push(replacersArr[0]);
+        });
+    }
+    if (replacees.length !== replacersArr.length) throw 'replaceWikitext: replacees and replacers must have the same number of elements in them.';
 
     // Extract transclusion-preventing tags in the wikitext
     const commentTags =
@@ -1003,7 +1016,7 @@ export function replaceWikitext(wikitext: string, replacees: string[], replacers
 
     // Replace all
     for (let i = 0; i < replacees.length; i++) {
-        wikitext = wikitext.split(replacees[i]).join(replacers[i]);
+        wikitext = wikitext.split(replacees[i]).join(replacersArr[i]);
     }
 
     // Get the comment tags back
