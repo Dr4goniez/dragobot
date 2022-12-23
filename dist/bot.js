@@ -1,5 +1,4 @@
 "use strict";
-<<<<<<< HEAD
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -26,11 +25,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 require("./methods");
 const lib = __importStar(require("./lib"));
-=======
-Object.defineProperty(exports, "__esModule", { value: true });
-require("./methods");
-const lib_1 = require("./lib");
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 const server_1 = require("./server");
 const markup_1 = require("./markup");
 const updateRFB_1 = require("./updateRFB");
@@ -84,11 +78,7 @@ const mw_1 = require("./mw");
 function monthTransitioning() {
     const d = new Date();
     d.setHours(d.getHours() + 9); // JST
-<<<<<<< HEAD
     const year = d.getFullYear(), month = d.getMonth() + 1, lastDay = lib.lastDay(year, month), anchorTs40 = `${year}-${month.toString().padStart(2, '0')}-${lastDay}T23:40:00Z`, anchorTs30 = anchorTs40.replace(/40:00Z$/, '30:00Z');
-=======
-    const year = d.getFullYear(), month = d.getMonth() + 1, lastDay = lib_1.lib.lastDay(year, month), anchorTs40 = `${year}-${month.toString().padStart(2, '0')}-${lastDay}T23:40:00Z`, anchorTs30 = anchorTs40.replace(/40:00Z$/, '30:00Z');
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     return new Date(anchorTs40) >= d && d > new Date(anchorTs30);
 }
 /**
@@ -112,11 +102,7 @@ function checkNewBlocks(ts) {
             if (resBlck.length === 0)
                 return resolve();
             resBlck = resBlck.filter(obj => !obj.automatic);
-<<<<<<< HEAD
             if (resBlck.some(obj => lib.compareTimestamps(ts, obj.timestamp) >= 0)) {
-=======
-            if (resBlck.some(obj => lib_1.lib.compareTimestamps(ts, obj.timestamp) >= 0)) {
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                 resolve(true); // Returns true if someone has been manually blocked since the last run
             }
             else {

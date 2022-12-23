@@ -1,5 +1,4 @@
 "use strict";
-<<<<<<< HEAD
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -26,11 +25,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.markup = exports.markupANs = void 0;
 const lib = __importStar(require("./lib"));
-=======
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.markup = exports.markupANs = void 0;
-const lib_1 = require("./lib");
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
 const mw_1 = require("./mw");
 const server_1 = require("./server");
 //********************** MAIN FUNCTION **********************/
@@ -64,20 +58,12 @@ exports.markupANs = markupANs;
  */
 async function markup(pagename, checkGlobal) {
     // Get page content
-<<<<<<< HEAD
     const parsed = await lib.getLatestRevision(pagename);
-=======
-    const parsed = await lib_1.lib.getLatestRevision(pagename);
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     if (!parsed)
         return (0, server_1.log)('Failed to parse the page.');
     /** @type {string} */
     const wikitext = parsed.content;
-<<<<<<< HEAD
     var templates = lib.getOpenUserANs(wikitext);
-=======
-    var templates = lib_1.lib.getOpenUserANs(wikitext);
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     if (templates.length === 0)
         return (0, server_1.log)('Procedure cancelled: There\'s no UserAN to update.');
     // Remove redundant UserANs
@@ -113,11 +99,7 @@ async function markup(pagename, checkGlobal) {
     };
     // Set the 'type', 'user', 'section', and 'timestamp' properties of the object
     UserAN.forEach(obj => {
-<<<<<<< HEAD
         var params = lib.getTemplateParams(obj.old);
-=======
-        var params = lib_1.lib.getTemplateParams(obj.old);
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
         params = params.filter(item => !item.match(paramsRegExp.bot) && !item.match(paramsRegExp.statusS)); // Remove bot= and 状態= params
         /**********************************************************************************************************\
             A full list of open UserANs' parameter combinations
@@ -133,11 +115,7 @@ async function markup(pagename, checkGlobal) {
             const userParam = params[0].trim2();
             obj.user = userParam;
             obj.type = 'user2';
-<<<<<<< HEAD
             if (lib.isIPAddress(userParam)) {
-=======
-            if (lib_1.lib.isIPAddress(userParam)) {
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                 obj.modified = `{{UserAN|t=IP2|${userParam}}}`;
                 obj.type = 'ip2';
             }
@@ -145,22 +123,14 @@ async function markup(pagename, checkGlobal) {
         else { // If the template has a t= param
             obj.type = params.filter(item => item.match(paramsRegExp.type))[0].replace(paramsRegExp.type, '').trim2().toLowerCase();
             let userParam = params.filter(item => !item.match(paramsRegExp.type))[0].replace(paramsRegExp.user, '').trim2();
-<<<<<<< HEAD
             if (lib.isIPv6(userParam))
-=======
-            if (lib_1.lib.isIPv6(userParam))
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                 userParam = userParam.toUpperCase();
             switch (obj.type) {
                 case 'user2':
                 case 'unl':
                 case 'usernolink':
                     obj.user = userParam;
-<<<<<<< HEAD
                     if (lib.isIPAddress(userParam)) {
-=======
-                    if (lib_1.lib.isIPAddress(userParam)) {
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                         obj.modified = `{{UserAN|t=IP2|${userParam}}}`;
                         obj.type = 'ip2';
                     }
@@ -168,11 +138,7 @@ async function markup(pagename, checkGlobal) {
                 case 'ip2':
                 case 'ipuser2':
                     obj.user = userParam;
-<<<<<<< HEAD
                     if (!lib.isIPAddress(userParam)) {
-=======
-                    if (!lib_1.lib.isIPAddress(userParam)) {
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                         obj.modified = `{{UserAN|${userParam}}}`;
                         obj.type = 'user2';
                     }
@@ -191,11 +157,7 @@ async function markup(pagename, checkGlobal) {
                     obj.none = userParam;
                     break;
                 default: // Invalid type
-<<<<<<< HEAD
                     if (lib.isIPAddress(userParam)) {
-=======
-                    if (lib_1.lib.isIPAddress(userParam)) {
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                         obj.user = userParam;
                         obj.type = 'ip2';
                         obj.modified = `{{UserAN|t=IP2|${userParam}}}`;
@@ -238,11 +200,7 @@ async function markup(pagename, checkGlobal) {
     logids = collectLogids();
     queries = [];
     logids.forEach(logid => {
-<<<<<<< HEAD
         queries.push(lib.scrapeUsernameFromLogid(logid));
-=======
-        queries.push(lib_1.lib.scrapeUsernameFromLogid(logid));
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     });
     const scrapedUsernames = await Promise.all(queries);
     scrapedUsernames.forEach((u, i) => {
@@ -260,13 +218,8 @@ async function markup(pagename, checkGlobal) {
     unprocessableLogids = unprocessableLogids.concat(logids).undup();
     // Sort registered users and IPs
     var users = UserAN.filter(obj => obj.user).map(obj => obj.user).undup();
-<<<<<<< HEAD
     const ips = users.filter(username => lib.isIPAddress(username)); // An array of IPs
     users = users.filter(username => !lib.isIPAddress(username)); // An array of registered users
-=======
-    const ips = users.filter(username => lib_1.lib.isIPAddress(username)); // An array of IPs
-    users = users.filter(username => !lib_1.lib.isIPAddress(username)); // An array of registered users
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     // Check if the users and IPs in the arrays are locally blocked
     queries = [];
     queries.push(// Get domain/duration/date properties of UserAN if blocked
@@ -281,13 +234,8 @@ async function markup(pagename, checkGlobal) {
     // Check if the users and IPs in the arrays are globally (b)locked
     if (checkGlobal) {
         let gUsers = UserAN.filter(obj => obj.user && !obj.date).map(obj => obj.user).undup(); // Only check users that aren't locally blocked
-<<<<<<< HEAD
         const gIps = gUsers.filter(username => lib.isIPAddress(username));
         gUsers = gUsers.filter(username => !lib.isIPAddress(username));
-=======
-        const gIps = gUsers.filter(username => lib_1.lib.isIPAddress(username));
-        gUsers = gUsers.filter(username => !lib_1.lib.isIPAddress(username));
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
         queries = [];
         queries.push(getLockedUsers(gUsers), getGloballyBlockedIps(gIps));
         await Promise.all(queries);
@@ -380,11 +328,7 @@ async function markup(pagename, checkGlobal) {
         summary = ' UserANの修正';
     }
     // Get the latest revision and its timestamp(s)
-<<<<<<< HEAD
     const lr = await lib.getLatestRevision(pagename);
-=======
-    const lr = await lib_1.lib.getLatestRevision(pagename);
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     if (!lr)
         return 'Failed to get the latest revision.';
     var newContent = lr.content;
@@ -401,11 +345,7 @@ async function markup(pagename, checkGlobal) {
     };
     if (modOnly)
         params.bot = true;
-<<<<<<< HEAD
     const editRes = await lib.edit(params);
-=======
-    const editRes = await lib_1.lib.edit(params);
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
     return editRes;
 }
 exports.markup = markup;
@@ -535,15 +475,9 @@ async function getBlockedUsers(usersArr, indefOnly) {
                 for (const blck of resBlck) {
                     const nousertalk = !blck.allowusertalk, noemail = blck.noemail, partial = blck.restrictions && !Array.isArray(blck.restrictions), indef = blck.expiry === 'infinity';
                     UserAN.filter(obj => obj.user === blck.user).forEach(obj => {
-<<<<<<< HEAD
                         const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true) >= 0;
                         if (newlyReported) {
                             obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry);
-=======
-                        const newlyReported = lib_1.lib.compareTimestamps(obj.timestamp, blck.timestamp, true) >= 0;
-                        if (newlyReported) {
-                            obj.duration = indef ? '無期限' : lib_1.lib.getDuration(blck.timestamp, blck.expiry);
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                             obj.date = getBlockedDate(blck.timestamp);
                             obj.domain = partial ? '部分ブロック ' : '';
                             if (nousertalk && noemail) {
@@ -602,15 +536,9 @@ async function getBlockedIps(ipsArr) {
                 const nousertalk = !resBlck.allowusertalk, noemail = resBlck.noemail, hardblock = !resBlck.anononly, partial = resBlck.restrictions && !Array.isArray(resBlck.restrictions), indef = resBlck.expiry === 'infinity', rangeblock = resBlck.user !== ip && resBlck.user.substring(resBlck.user.length - 3) !== ip.substring(ip.length - 3);
                 var needReblock;
                 UserAN.filter(obj => obj.user === ip).forEach(obj => {
-<<<<<<< HEAD
                     const newlyReported = lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true) >= 0;
                     if (newlyReported) {
                         obj.duration = indef ? '無期限' : lib.getDuration(resBlck.timestamp, resBlck.expiry);
-=======
-                    const newlyReported = lib_1.lib.compareTimestamps(obj.timestamp, resBlck.timestamp, true) >= 0;
-                    if (newlyReported) {
-                        obj.duration = indef ? '無期限' : lib_1.lib.getDuration(resBlck.timestamp, resBlck.expiry);
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                         if (rangeblock)
                             obj.duration = resBlck.user.substring(resBlck.user.length - 3) + 'で' + obj.duration;
                         obj.date = getBlockedDate(resBlck.timestamp);
@@ -674,11 +602,7 @@ function getReblockStatus(blockedusername) {
                 const base = resLgev.reduce((acc, obj) => {
                     if (acc.length !== 0)
                         return acc; // that was applied more than 1 hour before the latest reblock
-<<<<<<< HEAD
                     if (obj.action === 'block' || lib.compareTimestamps(obj.timestamp, resLgev[0].timestamp) > 1 * 60 * 60 * 1000) {
-=======
-                    if (obj.action === 'block' || lib_1.lib.compareTimestamps(obj.timestamp, resLgev[0].timestamp) > 1 * 60 * 60 * 1000) {
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                         acc.push(obj);
                     }
                     return acc;
@@ -697,11 +621,7 @@ function getReblockStatus(blockedusername) {
                 if ((i = obj.params.flags.indexOf('noautoblock')) !== -1)
                     obj.params.flags.splice(i, 1);
                 // If the user is an IP, change 'anononly' to 'hardblock'
-<<<<<<< HEAD
                 if (lib.isIPAddress(blockedusername)) {
-=======
-                if (lib_1.lib.isIPAddress(blockedusername)) {
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                     if ((i = obj.params.flags.indexOf('anononly')) !== -1) {
                         obj.params.flags.splice(i, 1);
                     }
@@ -766,17 +686,10 @@ function getReblockStatus(blockedusername) {
             }
             // Set properties of the UserAN array
             UserAN.filter(obj => obj.user === blockedusername).forEach(obj => {
-<<<<<<< HEAD
                 const newlyReported = lib.compareTimestamps(obj.timestamp, b2nd.timestamp, true) >= 0;
                 if (newlyReported) {
                     obj.domain = domain;
                     obj.duration = duration === 'infinity' ? '無期限' : duration ? lib.getDuration(b2nd.timestamp, duration) : duration;
-=======
-                const newlyReported = lib_1.lib.compareTimestamps(obj.timestamp, b2nd.timestamp, true) >= 0;
-                if (newlyReported) {
-                    obj.domain = domain;
-                    obj.duration = duration === 'infinity' ? '無期限' : duration ? lib_1.lib.getDuration(b2nd.timestamp, duration) : duration;
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                     if (domain)
                         obj.duration = ' ' + obj.duration;
                     obj.flags = (domain || duration ? ' ' : '') + flags;
@@ -856,19 +769,11 @@ async function getGloballyBlockedIps(ipsArr) {
                 resGblck = resGblck[0];
                 const indef = (resGblck.expiry === 'infinity');
                 UserAN.filter(obj => obj.user === ip).forEach(obj => {
-<<<<<<< HEAD
                     const newlyReported = lib.compareTimestamps(obj.timestamp, resGblck.timestamp, true) >= 0;
                     var duration;
                     if (newlyReported) {
                         if (!indef)
                             duration = lib.getDuration(resGblck.timestamp, resGblck.expiry);
-=======
-                    const newlyReported = lib_1.lib.compareTimestamps(obj.timestamp, resGblck.timestamp, true) >= 0;
-                    var duration;
-                    if (newlyReported) {
-                        if (!indef)
-                            duration = lib_1.lib.getDuration(resGblck.timestamp, resGblck.expiry);
->>>>>>> e20741e67557995b05ae68e0e9417acdb9ee60c6
                         obj.duration = indef ? '無期限' : duration;
                         obj.date = getBlockedDate(resGblck.timestamp);
                         obj.domain = 'グローバルブロック ';
