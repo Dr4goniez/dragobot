@@ -1,6 +1,6 @@
 {
   "name": "dragobot",
-  "version": "5.1.0",
+  "version": "5.1.1",
   "description": "A Wikipedia bot.",
   "main": "dist/bot.js",
   "scripts": {
@@ -9,6 +9,7 @@
     "startDev-ts": "ts-node src/bot.js",
     "test": "ts-node src/test.js",
     "test-ts": "ts-node src/test-ts.ts",
+    "wkt": "ts-node src/wikitext.ts",
     "build": "tsc -p ."
   },
   "author": "Dr4goniez",
@@ -23,6 +24,7 @@
     "net": "^1.0.2"
   },
   "devDependencies": {
+    "@types/cheerio": "^0.22.31",
     "@types/express": "^4.17.15",
     "@types/node": "^18.11.17",
     "@typescript-eslint/eslint-plugin": "^5.43.0",

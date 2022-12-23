@@ -14,7 +14,7 @@ import { ApiEditPageParams } from 'types-mediawiki/api_params';
  * Get the latest revision of a given page.
  * @returns False if the page doesn't exist, undefined if an error occurs, or else an object
  */
-function getLatestRevision(pagename: string) {
+export function getLatestRevision(pagename: string) {
     const mw = getMw();
     return new Promise<{
         isRedirect: boolean,
@@ -58,7 +58,7 @@ function getLatestRevision(pagename: string) {
 }
 
 /** Let the code sleep for n milliseconds. */
-function sleep(milliseconds: number) {
+export function sleep(milliseconds: number) {
     return new Promise<void>(resolve => setTimeout(resolve, milliseconds));
 }
 
@@ -70,7 +70,7 @@ let lastedit: string;
  * @param retry Automatically set to true for a second edit attempt after re-login. Don't specify this parameter manually.
  * @returns apiReponse (null if a second edit attempt fails or if the mwbot instance fails to be initialized)
  */
-async function edit(params: ApiEditPageParams, autoInterval = true, retry?: boolean): Promise<ApiResponse|ApiResponseError|null> {
+export async function edit(params: ApiEditPageParams, autoInterval = true, retry?: boolean): Promise<ApiResponse|ApiResponseError|null> {
 
     // Initialize the request parameters
     let mw = getMw();
@@ -133,7 +133,7 @@ async function edit(params: ApiEditPageParams, autoInterval = true, retry?: bool
  * @param nsExclude An array of namespace numbers to exclude
  * @returns
  */
-async function getBackLinks(pagetitle: string, nsExclude?: number[]): Promise<string[]|undefined> {
+export async function getBackLinks(pagetitle: string, nsExclude?: number[]): Promise<string[]|undefined> {
 
     let pages: string[] = [];
     const mw = getMw();
@@ -175,7 +175,7 @@ async function getBackLinks(pagetitle: string, nsExclude?: number[]): Promise<st
  * @param nsExclude An array of namespace numbers to exclude
  * @returns
  */
-async function getCatMembers(cattitle: string, nsExclude?: number[]): Promise<string[]|undefined> {
+export async function getCatMembers(cattitle: string, nsExclude?: number[]): Promise<string[]|undefined> {
 
     if (cattitle && !cattitle.match(/^Category:/)) cattitle = 'Category:' + cattitle;
 
@@ -217,7 +217,7 @@ async function getCatMembers(cattitle: string, nsExclude?: number[]): Promise<st
 }
 
 /** Get a list of pages that transclude a given page. */
-async function getTranscludingPages(pagetitle: string): Promise<string[]> {
+export async function getTranscludingPages(pagetitle: string): Promise<string[]> {
 
     let pages: string[] = [];
     const mw = getMw();
@@ -254,7 +254,7 @@ async function getTranscludingPages(pagetitle: string): Promise<string[]> {
 }
 
 /** Filter protected pages out of a list of pagetitles. Returns undefined if any internal query fails. */
-async function filterOutProtectedPages(pagetitles: string[]): Promise<string[]|undefined> {
+export async function filterOutProtectedPages(pagetitles: string[]): Promise<string[]|undefined> {
 
     const mw = getMw();
     const query = (pagetitlesArr: string[]) => {
@@ -314,7 +314,7 @@ async function filterOutProtectedPages(pagetitles: string[]): Promise<string[]|u
 }
 
 /** Scrape a webpage. */
-async function scrapeWebpage(url: string) {
+export async function scrapeWebpage(url: string) {
     try {
         const res = await axios.get(url);
         const $ = cheerio.load(res.data);
@@ -326,7 +326,7 @@ async function scrapeWebpage(url: string) {
 }
 
 /** Get a username from an account creation logid. */
-async function scrapeUsernameFromLogid(logid: string|number): Promise<string|undefined> {
+export async function scrapeUsernameFromLogid(logid: string|number): Promise<string|undefined> {
 
     const url = 'https://ja.wikipedia.org/w/index.php?title=%E7%89%B9%E5%88%A5:%E3%83%AD%E3%82%B0&logid=' + logid;
     const $ = await scrapeWebpage(url);
@@ -363,7 +363,7 @@ async function scrapeUsernameFromLogid(logid: string|number): Promise<string|und
  * @param templatePrefix Filter out templates by these name prefixes.
  * @returns
  */
-function findTemplates(wikitext: string, templateName? : string|string[], templatePrefix? : string|string[]): string[] {
+export function findTemplates(wikitext: string, templateName? : string|string[], templatePrefix? : string|string[]): string[] {
 
     // Remove comments
     extractCommentOuts(wikitext).forEach(co => {
@@ -483,7 +483,7 @@ function findTemplates(wikitext: string, templateName? : string|string[], templa
  * @param tagnames Tags to return
  * @returns Array of outerHTMLs
  */
-function findHtmlTags(content: string, tagnames?: string|string[]): string[] {
+export function findHtmlTags(content: string, tagnames?: string|string[]): string[] {
 
     // Remove comments
     extractCommentOuts(content).forEach(co => {
@@ -537,12 +537,12 @@ function findHtmlTags(content: string, tagnames?: string|string[]): string[] {
 }
 
 /** Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />. */
-function extractCommentOuts(wikitext: string): string[] {
+export function extractCommentOuts(wikitext: string): string[] {
     return wikitext.match(/<!--[\s\S]*?-->|<nowiki>[\s\S]*?<\/nowiki>|<pre[\s\S]*?<\/pre>|<syntaxhighlight[\s\S]*?<\/syntaxhighlight>|<source[\s\S]*?<\/source>/gm) || [];
 }
 
 /** Get the parameters of templates as an array. The template's name is not included. */
-function getTemplateParams(template: string): string[] {
+export function getTemplateParams(template: string): string[] {
 
     // If the template doesn't contain '|', it doesn't have params
     if (!template.includes('|')) return [];
@@ -551,7 +551,7 @@ function getTemplateParams(template: string): string[] {
     template = template.replace(/^\{{2}|\|*\}{2}$/g, '');
 
     // In case the inner params nest other templates
-    let nested = lib.findTemplates(template);
+    let nested = findTemplates(template);
     if (nested.length !== 0) {
 
         // Remove nested templates from the array
@@ -589,10 +589,10 @@ function getTemplateParams(template: string): string[] {
 }
 
 /** Extract all UserANs with open reports as an array. */
-function getOpenUserANs(wikitext: string): string[] {
+export function getOpenUserANs(wikitext: string): string[] {
 
     if (!wikitext) {
-        log('lib.getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
+        log('getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
         return [];
     }
 
@@ -663,8 +663,360 @@ function getOpenUserANs(wikitext: string): string[] {
 
 }
 
+// interfaces for parseTemplates()
+interface Template {
+    /** The whole text of the template, starting with '{{' and ending with '}}'. */
+    text: string;
+    /** Name of the template. The first letter is always in upper case. */
+    name: string;
+    /** Parsed template arguments as an array. */
+    arguments: TemplateArgument[];
+    /** Nest level of the template. If it's not part of another template, the value is 0. */
+    nestlevel: number;
+}
+interface TemplateArgument {
+    text: string;
+    name: string;
+    value: string;
+}
+interface TemplateConfig {
+	/** Also parse templates within subtemplates. True by default. */
+	recursive?: boolean;
+	/** Include template in result only if its name matches this predicate. (Should not be specified together with templatePredicate.)  */
+	namePredicate?: (name: string) => boolean;
+	/** Include template in result only if it matches this predicate. (Should not be specified together with namePredicate.) */
+	templatePredicate?: (template: Template) => boolean;
+}
+
+/**
+ * Parse templates in wikitext. Templates within tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source) are not parsed.
+ * @param wikitext 
+ * @param config
+ * @param nestlevel Used module-internally. Don't specify this parameter manually.
+ * @returns
+ * @license siddharthvp@github - This function includes modifications from the original.
+ * @link https://github.com/siddharthvp/mwn/blob/ccc6fb8/src/wikitext.ts#L77
+ */
+export function parseTemplates(wikitext: string, config?: TemplateConfig, nestlevel: number = 0): Template[] {
+
+    // Initialize config
+    config = Object.assign({
+        recursive: true,
+        namePredicate: null,
+        templatePredicate: null
+    }, config || {});
+
+    // Number of unclosed braces
+    let numUnclosed = 0;
+
+    // Are we in a {{{parameter}}}, or between wikitags that prevent transclusions?
+    let inParameter = false;
+    let inTag = false;
+    const tagNames: string[] = [];
+
+    let parsed: Template[] = [];
+    let startIdx, endIdx;
+
+    // Look at every character of the wikitext one by one. This loop only extracts the outermost templates.
+    for (let i = 0; i < wikitext.length; i++) {
+        const slicedWkt = wikitext.slice(i);
+        let matchedTag;
+        if (!inParameter && !inTag) {
+            if (/^\{\{\{(?!\{)/.test(slicedWkt)) {
+                inParameter = true;
+                i += 2;
+            } else if (/^\{\{/.test(slicedWkt)) {
+                if (numUnclosed === 0) {
+					startIdx = i;
+				}
+				numUnclosed += 2;
+				i++;
+            } else if (/^\}\}/.test(slicedWkt)) {
+                if (numUnclosed === 2) {
+					endIdx = i + 2;
+                    const templateText = wikitext.slice(startIdx, endIdx); // Pipes could have been replaced with a control character if they're part of nested templates
+                    const templateTextPipesBack = replacePipesBack(templateText);
+                    parsed.push({
+                        text: templateTextPipesBack,
+                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim()),
+                        arguments: parseTemplateArguments(templateText),
+                        nestlevel: nestlevel
+                    });
+				}
+				numUnclosed -= 2;
+				i++;
+            } else if (wikitext[i] === '|' && numUnclosed > 2) { // numUnclosed > 2 means we're in a nested template
+				// Swap out pipes with \x01 character.
+				wikitext = strReplaceAt(wikitext, i, '\x01');
+			} else if ((matchedTag = slicedWkt.match(/^(?:<!--|<(nowiki|pre|syntaxhighlist|source) ?[^>]*?>)/))) {
+				inTag = true;
+                tagNames.push(matchedTag[1] ? matchedTag[1] : 'comment');
+				i += matchedTag[0].length - 1;
+			}
+        } else {
+            // we are in a {{{parameter}}} or tag 
+			if (wikitext[i] === '|' && numUnclosed > 2) {
+				wikitext = strReplaceAt(wikitext, i, '\x01');
+			} else if ((matchedTag = slicedWkt.match(/^(?:-->|<\/(nowiki|pre|syntaxhighlist|source) ?[^>]*?>)/))) {
+				inTag = false;
+                tagNames.pop();
+				i += matchedTag[0].length - 1;
+			} else if (/^\}\}\}/.test(slicedWkt)) {
+				inParameter = false;
+				i += 2;
+			}
+        }     
+    }
+
+    if (config) {
+        // Get nested templates?
+        if (config.recursive) {
+            let subtemplates = parsed
+                .map((template) => {
+                    return template.text.slice(2, -2);
+                })
+                .filter((templateWikitext) => {
+                    return /\{\{.*\}\}/s.test(templateWikitext);
+                })
+                .map((templateWikitext) => {
+                    return parseTemplates(templateWikitext, config, nestlevel + 1);
+                })
+                .flat();
+            parsed = parsed.concat(subtemplates);
+        }
+        // Filter the array by template name(s)?
+        if (config.namePredicate) {
+            parsed = parsed.filter(({name}) => config!.namePredicate!(name));
+        }
+        // Filter the array by a user-defined condition?
+        if (config.templatePredicate) {
+            parsed = parsed.filter((Template) => config!.templatePredicate!(Template));
+        }
+    }
+
+	return parsed;
+
+}
+
+/** 
+ * This function should never be called externally because it presupposes that pipes in nested templates have been replaced with the control character '\x01',
+ * and otherwise it doesn't work as expeceted.
+ */
+function parseTemplateArguments(template: string): TemplateArgument[] {
+
+    if (!template.includes('|')) return [];
+    
+    let innerContent = template.slice(2, -2); // Remove braces
+
+    // Swap out pipes in links with \x01 control character
+    // [[File: ]] can have multiple pipes, so might need multiple passes
+    const wikilinkRegex = /(\[\[[^\]]*?)\|(.*?\]\])/g;
+    while (wikilinkRegex.test(innerContent)) {
+        innerContent = innerContent.replace(wikilinkRegex, '$1\x01$2');
+    }
+
+    let args = innerContent.split('|');
+    args.shift(); // Remove template name
+    let unnamedArgCount = 0;
+
+    const parsedArgs: TemplateArgument[] = args.map((arg) => {
+
+        // Replace {{=}}s with a (unique) control character
+        // The magic words could have spaces before/after the equal sign in an inconsistent way
+        // We need the input string back as it was before replacement, so mandane replaceAll isn't a solution here 
+        const magicWordEquals = arg.match(/\{\{\s*=\s*\}\}/g) || [];
+        magicWordEquals.forEach((equal, i) => arg = arg.replace(equal, `$EQ${i}`));
+
+        let argName: string, argValue: string;
+        const indexOfEqual = arg.indexOf('=');
+        if (indexOfEqual >= 0) { // The argument is named
+            argName = arg.slice(0, indexOfEqual).trim();
+            argValue = arg.slice(indexOfEqual + 1).trim();
+            if (argName === unnamedArgCount.toString()) unnamedArgCount++;
+        } else { // The argument is unnamed
+            argName = (++unnamedArgCount).toString();
+            argValue = arg.trim();
+        }
+
+        // Get the replaced {{=}}s back
+        magicWordEquals.forEach((equal, i) => {
+            const replacee = `$EQ${i}`;
+            arg = arg.replace(replacee, equal);
+            argName = argName.replace(replacee, equal);
+            argValue = argValue.replace(replacee, equal);
+        });
+
+        return {
+            text: replacePipesBack(arg),
+            name: replacePipesBack(argName),
+            value: replacePipesBack(argValue)
+        }
+
+    });
+
+    return parsedArgs;
+
+}
+
+function capitalizeFirstLetter(string: string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+function strReplaceAt(string: string, index: number, char: string): string {
+	return string.slice(0, index) + char + string.slice(index + 1);
+}
+
+function replacePipesBack(string: string) {
+    return string.replace(/\x01/g, '|');
+}
+
+// interfaces for parseHtml()
+interface Html {
+    /** OuterHTML of the tag. */
+    text: string;
+    /** Name of the tag in lower case. */
+    name: string;
+    /** Nest level of the tag. If it's not part of another tag, the value is 0. */
+    nestlevel: number;
+}
+interface HtmlConfig {
+	/** Also parse tags within tags. True by default. */
+	recursive?: boolean;
+	/**
+     * Include tag in result only if its name matches this predicate, where \<!-- --> tags are named as 'comment'.
+     * (Should not be specified together with htmlPredicate.)
+     */
+	namePredicate?: (name: string) => boolean;
+	/** Include tag in result only if it matches this predicate. (Should not be specified together with namePredicate.) */
+	htmlPredicate?: (Html: Html) => boolean;
+}
+
+export function parseHtml(html: string, config?: HtmlConfig, nestlevel = 0): Html[] {
+
+    // Initialize config
+    config = Object.assign({
+        recursive: true,
+        namePredicate: null,
+        htmlPredicate: null
+    }, config || {});
+
+
+    const openingTagRegex = /^(?:<!--|<([a-z]+) ?[^>]*?>)/i;
+    const closingTagRegex = /^(?:-->|<\/([a-z]+) ?[^>]*?>)/i;
+    let curTagName: string, tempTagName: string;
+    let matched;
+    let inTag = false;
+    let numUnclosed = 0;
+
+    let parsed: Html[] = [];
+    let startIdx, endIdx;
+
+    for (let i = 0; i < html.length; i++) {
+        const slicedHtml = html.slice(i);
+        if (numUnclosed === 0) {
+            if ((matched = slicedHtml.match(openingTagRegex))) {
+                inTag = true;
+                startIdx = i;
+                curTagName = matched[1] ? matched[1].toLowerCase() : 'comment';
+                numUnclosed++;
+                i += matched[0].length - 1;
+            }
+        } else {
+            if ((matched = slicedHtml.match(openingTagRegex))) {
+                tempTagName = matched[1] ? matched[1].toLowerCase() : 'comment';
+                if (tempTagName === curTagName!) numUnclosed++;
+                i += matched[0].length - 1;
+            } else if ((matched = slicedHtml.match(closingTagRegex))) {
+                tempTagName = matched[1] ? matched[1].toLowerCase() : 'comment';
+                if (tempTagName === curTagName! && numUnclosed === 1) {
+                    inTag = false;
+                    endIdx = i + matched[0].length;
+                    parsed.push({
+                        text: html.slice(startIdx, endIdx),
+                        name: curTagName,
+                        nestlevel: nestlevel
+                    });
+                    curTagName = '';
+                    numUnclosed--;
+                }
+                i += matched[0].length - 1;
+            }
+        }        
+    }
+
+    if (config) {
+        // Get nested tags?
+        if (config.recursive) {
+            let nestedTags = parsed
+                .map((subhtml) => {
+                    // Get rid of the first '<' and the last '>' to make sure that another call of parseHtml() doesn't parse itself
+                    return subhtml.text.slice(1, -1);
+                })
+                .filter((subhtml) => {
+                    // Filter out tags that nest other tags
+                    return /<!--.*?(?=-->)|<([a-z]+) ?[^>]*?>.*?(?=<\/\1[^>]*?>)/si.test(subhtml);
+                })
+                .map((subhtml) => {
+                    return parseHtml(subhtml, config, nestlevel + 1);
+                }) // Array of arrays of objects here
+                .flat(); // Shrink the result to an array of objects
+            parsed = parsed.concat(nestedTags);
+        }
+        // Filter the array by tag name(s)?
+        if (config.namePredicate) {
+            parsed = parsed.filter(({name}) => config!.namePredicate!(name));
+        }
+        // Filter the array by a user-defined condition?
+        if (config.htmlPredicate) {
+            parsed = parsed.filter((Html) => config!.htmlPredicate!(Html));
+        }
+    }
+
+    return parsed;
+
+}
+
+/**
+ * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source).
+ * The replacees array and the replacers array must have the same number of elements in them.
+ */
+export function replaceWikitext(wikitext: string, replacees: string[], replacers: string[]): string {
+
+    if (replacees.length !== replacers.length) throw 'replaceWikitext: replacees and replacers must have the same number of elements in them.';
+
+    // Extract transclusion-preventing tags in the wikitext
+    const commentTags =
+        parseHtml(wikitext, {
+            namePredicate: (name) => ['comment', 'nowiki', 'pre', 'syntaxhighlight', 'source'].includes(name)
+        })
+        .filter((Html, i, arr) => {
+            // Get rid of comment tags that are nested inside bigger comment tags
+            const arrayExcludingCurrentItem = arr.slice(0, i).concat(arr.slice(i + 1));
+            return arrayExcludingCurrentItem.every((obj: Html) => !obj.text.includes(Html.text));
+        })
+        .map((Html) => Html.text);
+
+    // Temporarily replace comment tags with a (unique) control character
+    commentTags.forEach((tag, i) => {
+        wikitext = wikitext.replace(tag, `$CO${i}`);
+    });
+
+    // Replace all
+    for (let i = 0; i < replacees.length; i++) {
+        wikitext = wikitext.split(replacees[i]).join(replacers[i]);
+    }
+
+    // Get the comment tags back
+    commentTags.forEach((tag, i) => {
+        wikitext = wikitext.replace(`$CO${i}`, tag);
+    });
+
+    return wikitext;
+
+}
+
 /** Parse the content of a page into that of each section. */
-function parseContentBySection(content: string): Array<{
+export function parseContentBySection(content: string): Array<{
     header: string|null,
     title: string|null,
     level: number,
@@ -732,7 +1084,7 @@ function parseContentBySection(content: string): Array<{
  * @param rewind5minutes if true, rewind timestamp1 by 5 minutes
  * @returns timestamp2 - timestamp1 (in milliseconds)
  */
-function compareTimestamps(timestamp1: string, timestamp2: string, rewind5minutes?: boolean) {
+export function compareTimestamps(timestamp1: string, timestamp2: string, rewind5minutes?: boolean) {
     const ts1 = new Date(timestamp1);
     if (rewind5minutes) ts1.setMinutes(ts1.getMinutes() - 5);
     const ts2 = new Date(timestamp2);
@@ -744,7 +1096,7 @@ function compareTimestamps(timestamp1: string, timestamp2: string, rewind5minute
  * Subtract timestamp2 by timestamp1 and output the resultant duration in Japanese.
  * If the time difference is a negative value, undefined is returned.
  */
-function getDuration(timestamp1: string, timestamp2: string) {
+export function getDuration(timestamp1: string, timestamp2: string) {
 
     const ts1 = new Date(timestamp1);
     const ts2 = new Date(timestamp2);
@@ -786,7 +1138,7 @@ function getDuration(timestamp1: string, timestamp2: string) {
 }
 
 /** Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!'). */
-function escapeRegExp(str: string) {
+export function escapeRegExp(str: string) {
     return str.replace(/[\\{}().?*+\-^$[\]|]/g, '\\$&');
 }
 
@@ -795,55 +1147,29 @@ function escapeRegExp(str: string) {
  * @param year
  * @param month 1-12
  */
-function lastDay(year: number|string, month: number|string) {
+export function lastDay(year: number|string, month: number|string) {
     if (typeof year === 'string') year = parseInt(year);
     if (typeof month === 'string') month = parseInt(month);
     return new Date(year, month, 0).getDate();
 }
 
 /** Get the Japanese name of a day of the week from JSON timestamp. */
-function getWeekDayJa(timestamp: string) {
+export function getWeekDayJa(timestamp: string) {
     const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
     return daysOfWeek[new Date(timestamp).getDay()];
 }
 
 /** Check whether a given string is an IP address. */
-function isIPAddress(ip: string) {
+export function isIPAddress(ip: string) {
     return net.isIP(ip) || isCidr(ip);
 }
 
 /** Check whether a given string is an IPv4 address. */
-function isIPv4(ip: string) {
+export function isIPv4(ip: string) {
     return net.isIPv4(ip) || v4(ip);
 }
 
 /** Check whether a given string is an IPv6 address. */
-function isIPv6(ip: string) {
+export function isIPv6(ip: string) {
     return net.isIPv6(ip) || v6(ip);
 }
-
-export const lib = { 
-    getLatestRevision,
-    sleep,
-    edit,
-    getBackLinks,
-    getCatMembers,
-    getTranscludingPages,
-    filterOutProtectedPages,
-    scrapeWebpage,
-    scrapeUsernameFromLogid,
-    findTemplates,
-    findHtmlTags,
-    extractCommentOuts,
-    getTemplateParams,
-    getOpenUserANs,
-    parseContentBySection,
-    compareTimestamps,
-    getDuration,
-    escapeRegExp,
-    lastDay,
-    getWeekDayJa,
-    isIPAddress,
-    isIPv4,
-    isIPv6
-};

@@ -1,5 +1,5 @@
 import './methods';
-import { lib } from './lib';
+import * as lib from './lib';
 import { createServer, log } from './server';
 import { markupANs } from './markup';
 import { updateRFB } from './updateRFB';

@@ -1,4 +1,4 @@
-import { lib } from './lib';
+import * as lib from './lib';
 import { getMw, isBot } from './mw';
 import { log } from './server';
 
