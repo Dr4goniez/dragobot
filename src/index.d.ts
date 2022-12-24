@@ -1,6 +1,6 @@
 export interface DynamicObject {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any
+    [key: string]: any;
 }
 
 // ******************* General API responses *******************
@@ -8,38 +8,38 @@ export interface ApiResponse {
     // General properties
     warnings?: {
         [key: string]: {
-            warnings: string
+            warnings: string;
         }
-    },
-    batchcomplete?: boolean,
-    requestid?: string,
-    servedby?: string,
-    curtimestamp?: string,
-    uselang?: string,
-    errorlang?: string,
+    };
+    batchcomplete?: boolean;
+    requestid?: string;
+    servedby?: string;
+    curtimestamp?: string;
+    uselang?: string;
+    errorlang?: string;
     limits?: {
-        [key: string]: number
-    },
-    error?: ApiResponseError,
+        [key: string]: number;
+    };
+    error?: ApiResponseError;
     continue?: {
-        [key: string]: string
-    },
-    normalized?: ApiResponseNormalized[],
+        [key: string]: string;
+    };
+    normalized?: ApiResponseNormalized[];
     // Action-specific properties
-    edit?: ApiResponseEdit,
-    login?: ApiResponseLogin,
-    purge?: ApiResponsePurge[],
-    query?: ApiResponseQuery
+    edit?: ApiResponseEdit;
+    login?: ApiResponseLogin;
+    purge?: ApiResponsePurge[];
+    query?: ApiResponseQuery;
 }
 export interface ApiResponseError {
-    code: string,
-    info: string,
-    docref: string
+    code: string;
+    info: string;
+    docref: string;
 }
 export interface ApiResponseNormalized {
-    fromencoded?: boolean,
-    from: string,
-    to: string
+    fromencoded?: boolean;
+    from: string;
+    to: string;
 }
 
 // ******************* Actions (ApiResponse[Action]) *******************
@@ -73,13 +73,13 @@ export interface ApiResponseNormalized {
 // export interface ApiResponseEchomarkseen {}
 // export interface ApiResponseEchomute {}
 export interface ApiResponseEdit {
-    result: string,
-    pageid: number,
-    title: string,
-    contentmodel: string,
-    oldrevid: number,
-    newrevid: number,
-    newtimestamp: string
+    result: string;
+    pageid: number;
+    title: string;
+    contentmodel: string;
+    oldrevid: number;
+    newrevid: number;
+    newtimestamp: string;
 }
 // export interface ApiResponseEditmassmessagelist {}
 // export interface ApiResponseEmailuser {}
@@ -107,10 +107,10 @@ export interface ApiResponseEdit {
 // export interface ApiResponseLanguagesearch {}
 // export interface ApiResponseLinkaccount {}
 export interface ApiResponseLogin {  
-    lguserid?: number,
-    result: string,
-    lgusername: string,
-    lgtoken?: string
+    lguserid?: number;
+    result: string;
+    lgusername: string;
+    lgtoken?: string;
 }
 // export interface ApiResponseLogout {}
 // export interface ApiResponseManagetags {}
@@ -125,10 +125,10 @@ export interface ApiResponseLogin {
 // export interface ApiResponsePatrol {}
 // export interface ApiResponseProtect {}
 export interface ApiResponsePurge {
-    ns: number,
-    title: string,
-    missing?: boolean,
-    purged?: boolean
+    ns: number;
+    title: string;
+    missing?: boolean;
+    purged?: boolean;
 }
 // export interface ApiResponseQuery {} // Defined below
 // export interface ApiResponseRemoveauthenticationdata {}
@@ -169,123 +169,123 @@ export interface ApiResponsePurge {
 
 // ******************* Action: Query *******************
 export interface ApiResponseQuery {
-    normalized?: ApiResponseNormalized[],
-    pageids?: string[],
-    pages?: ApiResponseQueryPages[],
-    // abusefilters?: ApiResponseQueryListAbusefilters,
-    // abuselog?: ApiResponseQueryListAbuselog,
-    // allcategories?: ApiResponseQueryListAllcategories,
-    // alldeletedrevisions?: ApiResponseQueryListAlldeletedrevisions,
-    // allfileusages?: ApiResponseQueryListAllfileusages,
-    // allimages?: ApiResponseQueryListAllimages,
-    // alllinks?: ApiResponseQueryListAlllinks,
-    // allpages?: ApiResponseQueryListAllpages,
-    // allredirects?: ApiResponseQueryListAllredirects,
-    // allrevisions?: ApiResponseQueryListAllrevisions,
-    // alltransclusions?: ApiResponseQueryListAlltransclusions,
-    // allusers?: ApiResponseQueryListAllusers,
-    betafeatures?: ApiResponseQueryListBetafeatures,
-    backlinks?: ApiResponseQueryListBacklinks[],
-    // blocks?: ApiResponseQueryListBlocks,
-    categorymembers?: ApiResponseQueryListCategorymembers[],
-    // centralnoticeactivecampaigns?: ApiResponseQueryListCentralnoticeactivecampaigns,
-    // centralnoticelogs?: ApiResponseQueryListCentralnoticelogs,
-    // checkuser?: ApiResponseQueryListCheckuser,
-    // checkuserlog?: ApiResponseQueryListCheckuserlog,
-    embeddedin?: ApiResponseQueryListEmbeddedin[],
-    // extdistrepos?: ApiResponseQueryListExtdistrepos,
-    // exturlusage?: ApiResponseQueryListExturlusage,
-    // filearchive?: ApiResponseQueryListFilearchive,
-    // gadgetcategories?: ApiResponseQueryListGadgetcategories,
-    // gadgets?: ApiResponseQueryListGadgets,
-    // globalallusers?: ApiResponseQueryListGlobalallusers,
-    // globalblocks?: ApiResponseQueryListGlobalblocks,
-    // globalgroups?: ApiResponseQueryListGlobalgroups,
-    // imageusage?: ApiResponseQueryListImageusage,
-    // iwbacklinks?: ApiResponseQueryListIwbacklinks,
-    // langbacklinks?: ApiResponseQueryListLangbacklinks,
-    // linterrors?: ApiResponseQueryListLinterrors,
-    // logevents?: ApiResponseQueryListLogevents,
-    // messagecollection?: ApiResponseQueryListMessagecollection,
-    // mostviewed?: ApiResponseQueryListMostviewed,
-    // mystashedfiles?: ApiResponseQueryListMystashedfiles,
-    // pagepropnames?: ApiResponseQueryListPagepropnames,
-    // pageswithprop?: ApiResponseQueryListPageswithprop,
-    // prefixsearch?: ApiResponseQueryListPrefixsearch,
-    // protectedtitles?: ApiResponseQueryListProtectedtitles,
-    // querypage?: ApiResponseQueryListQuerypage,
-    // random?: ApiResponseQueryListRandom,
-    // recentchanges?: ApiResponseQueryListRecentchanges,
-    // search?: ApiResponseQueryListSearch,
-    // tags?: ApiResponseQueryListTags,
-    // threads?: ApiResponseQueryListThreads,
-    // usercontribs?: ApiResponseQueryListUsercontribs,
-    // users?: ApiResponseQueryListUsers,
-    // watchlist?: ApiResponseQueryListWatchlist,
-    // watchlistraw?: ApiResponseQueryListWatchlistraw,
-    // wblistentityusage?: ApiResponseQueryListWblistentityusage,
-    // wikisets?: ApiResponseQueryListWikisets,
+    normalized?: ApiResponseNormalized[];
+    pageids?: string[];
+    pages?: ApiResponseQueryPages[];
+    // abusefilters?: ApiResponseQueryListAbusefilters;
+    // abuselog?: ApiResponseQueryListAbuselog;
+    // allcategories?: ApiResponseQueryListAllcategories;
+    // alldeletedrevisions?: ApiResponseQueryListAlldeletedrevisions;
+    // allfileusages?: ApiResponseQueryListAllfileusages;
+    // allimages?: ApiResponseQueryListAllimages;
+    // alllinks?: ApiResponseQueryListAlllinks;
+    // allpages?: ApiResponseQueryListAllpages;
+    // allredirects?: ApiResponseQueryListAllredirects;
+    // allrevisions?: ApiResponseQueryListAllrevisions;
+    // alltransclusions?: ApiResponseQueryListAlltransclusions;
+    // allusers?: ApiResponseQueryListAllusers;
+    betafeatures?: ApiResponseQueryListBetafeatures;
+    backlinks?: ApiResponseQueryListBacklinks[];
+    blocks?: ApiResponseQueryListBlocks[];
+    categorymembers?: ApiResponseQueryListCategorymembers[];
+    // centralnoticeactivecampaigns?: ApiResponseQueryListCentralnoticeactivecampaigns;
+    // centralnoticelogs?: ApiResponseQueryListCentralnoticelogs;
+    // checkuser?: ApiResponseQueryListCheckuser;
+    // checkuserlog?: ApiResponseQueryListCheckuserlog;
+    embeddedin?: ApiResponseQueryListEmbeddedin[];
+    // extdistrepos?: ApiResponseQueryListExtdistrepos;
+    // exturlusage?: ApiResponseQueryListExturlusage;
+    // filearchive?: ApiResponseQueryListFilearchive;
+    // gadgetcategories?: ApiResponseQueryListGadgetcategories;
+    // gadgets?: ApiResponseQueryListGadgets;
+    // globalallusers?: ApiResponseQueryListGlobalallusers;
+    // globalblocks?: ApiResponseQueryListGlobalblocks;
+    // globalgroups?: ApiResponseQueryListGlobalgroups;
+    // imageusage?: ApiResponseQueryListImageusage;
+    // iwbacklinks?: ApiResponseQueryListIwbacklinks;
+    // langbacklinks?: ApiResponseQueryListLangbacklinks;
+    // linterrors?: ApiResponseQueryListLinterrors;
+    // logevents?: ApiResponseQueryListLogevents;
+    // messagecollection?: ApiResponseQueryListMessagecollection;
+    // mostviewed?: ApiResponseQueryListMostviewed;
+    // mystashedfiles?: ApiResponseQueryListMystashedfiles;
+    // pagepropnames?: ApiResponseQueryListPagepropnames;
+    // pageswithprop?: ApiResponseQueryListPageswithprop;
+    // prefixsearch?: ApiResponseQueryListPrefixsearch;
+    // protectedtitles?: ApiResponseQueryListProtectedtitles;
+    // querypage?: ApiResponseQueryListQuerypage;
+    // random?: ApiResponseQueryListRandom;
+    // recentchanges?: ApiResponseQueryListRecentchanges;
+    // search?: ApiResponseQueryListSearch;
+    // tags?: ApiResponseQueryListTags;
+    // threads?: ApiResponseQueryListThreads;
+    // usercontribs?: ApiResponseQueryListUsercontribs;
+    // users?: ApiResponseQueryListUsers;
+    // watchlist?: ApiResponseQueryListWatchlist;
+    // watchlistraw?: ApiResponseQueryListWatchlistraw;
+    // wblistentityusage?: ApiResponseQueryListWblistentityusage;
+    // wikisets?: ApiResponseQueryListWikisets;
 }
 export interface ApiResponseQueryPages {
-    pageid?: number,
-    ns: number,
-    title: string,
-    missing?: boolean,
-    revisions?: ApiResponseQueryPagesRevisions[],
-    contentmodel?: string,
-    pagelanguage?: string,
-    pagelanguagehtmlcode?: string,
-    pagelanguagedir?: string,
-    touched?: string,
-    lastrevid?: number,
-    length?: number,
-    redirect?: boolean,
-    protection?: ApiResponseQueryPagesProtection[],
-    restrictiontypes?: string[],
-    watched?: boolean,
-    watchers?: number,
-    visitingwatchers?: number,
-    notificationtimestamp?: string,
-    talkid?: number,
-    associatedpage?: string,
-    fullurl?: string,
-    editurl?: string,
-    canonicalurl?: string,
-    readable?: boolean,
-    preload?: string,
-    displaytitle?: string,
+    pageid?: number;
+    ns: number;
+    title: string;
+    missing?: boolean;
+    revisions?: ApiResponseQueryPagesRevisions[];
+    contentmodel?: string;
+    pagelanguage?: string;
+    pagelanguagehtmlcode?: string;
+    pagelanguagedir?: string;
+    touched?: string;
+    lastrevid?: number;
+    length?: number;
+    redirect?: boolean;
+    protection?: ApiResponseQueryPagesProtection[];
+    restrictiontypes?: string[];
+    watched?: boolean;
+    watchers?: number;
+    visitingwatchers?: number;
+    notificationtimestamp?: string;
+    talkid?: number;
+    associatedpage?: string;
+    fullurl?: string;
+    editurl?: string;
+    canonicalurl?: string;
+    readable?: boolean;
+    preload?: string;
+    displaytitle?: string;
     varianttitles?: {
-        [key: string]: string
-    },
-    linkclasses?: any[]
+        [key: string]: string;
+    };
+    linkclasses?: any[];
 }
 export interface ApiResponseQueryPagesRevisions {
-    revid: number,
-    parentid: number,
-    minor: boolean,
-    user: string,
-    userid: number,
-    timestamp: string,
-    size: number,
-    sha1: string,
-    roles: string[],
+    revid: number;
+    parentid: number;
+    minor: boolean;
+    user: string;
+    userid: number;
+    timestamp: string;
+    size: number;
+    sha1: string;
+    roles: string[];
     slots: {
         [key: string]: {
-            size: number,
-            sha1: string,
-            contentmodel: string,
-            contentformat: string,
-            content: string
+            size: number;
+            sha1: string;
+            contentmodel: string;
+            contentformat: string;
+            content: string;
         }
-    },
-    comment: string,
-    parsedcomment: string,
-    tags: string[],
+    };
+    comment: string;
+    parsedcomment: string;
+    tags: string[];
 }
 export interface ApiResponseQueryPagesProtection {
-    type: string,
-    level: string,
-    expiry: string
+    type: string;
+    level: string;
+    expiry: string;
 }
 
 // ******************* Action: Query => List *******************
@@ -302,34 +302,62 @@ export interface ApiResponseQueryPagesProtection {
 // export interface ApiResponseQueryListAlltransclusions {}
 // export interface ApiResponseQueryListAllusers {}
 export interface ApiResponseQueryListBacklinks {
-    pageid: number,
-    ns: number,
-    title: string
+    pageid: number;
+    ns: number;
+    title: string;
 }
 export interface ApiResponseQueryListBetafeatures {
     [key: string]: {
-        name: string,
-        count: number
+        name: string;
+        count: number;
     }
 }
-// export interface ApiResponseQueryListBlocks {}
+export interface ApiResponseQueryListBlocks {
+    id: number;
+    user: string;
+    userid?: number;
+    by: string;
+    byid?: number;
+    timestamp: string;
+    expiry: string;
+    reason: string;
+    rangestart?: string;
+    rangeend?: string;
+    automatic: boolean;
+    anononly: boolean;
+    nocreate: boolean;
+    autoblock: boolean;
+    noemail: boolean;
+    hidden: boolean;
+    allowusertalk: boolean;
+    partial: boolean;
+    restrictions?: [] | {
+        pages?: Array<{
+            id: number;
+            ns: number;
+            title: string;
+        }>;
+        namespaces?: number[];
+        actions?: string[];
+    };
+}
 export interface ApiResponseQueryListCategorymembers {
-    pageid: number,
-    ns: number,
-    title: string,
-    sortkey?: string,
-    sortkeyprefix?: string,
-    type?: string,
-    timestamp?: string
+    pageid: number;
+    ns: number;
+    title: string;
+    sortkey?: string;
+    sortkeyprefix?: string;
+    type?: string;
+    timestamp?: string;
 }
 // export interface ApiResponseQueryListCentralnoticeactivecampaigns {}
 // export interface ApiResponseQueryListCentralnoticelogs {}
 // export interface ApiResponseQueryListCheckuser {}
 // export interface ApiResponseQueryListCheckuserlog {}
 export interface ApiResponseQueryListEmbeddedin {
-    pageid: number
-    ns: number,
-    title: string
+    pageid: number;
+    ns: number;
+    title: string;
 }
 // export interface ApiResponseQueryListExtdistrepos {}
 // export interface ApiResponseQueryListExturlusage {}

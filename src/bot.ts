@@ -5,6 +5,7 @@ import { markupANs } from './markup';
 import { updateRFB } from './updateRFB';
 import { removePp } from './removePp';
 import { getMw, init } from './mw';
+import { ApiResponse, ApiResponseError, ApiResponseQueryListBlocks } from '.';
 
 createServer();
 init().then((mw) => {
@@ -12,11 +13,11 @@ init().then((mw) => {
     if (!mw) return;
 
     // The procedure to loop
-    var runCnt = 0;
-    var lastRunTs, checkBlocks, checkGlobal, checkRFB, checkProtectionTemplates;
+    let runCnt = 0;
+    let lastRunTs: string, checkBlocks, checkGlobal, checkRFB, checkProtectionTemplates;
     const bot = async () => {
 
-        log('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
+        log('Current time: ' + lib.getCurTimestamp());
         checkBlocks = true;
         checkGlobal = false;
         checkRFB = monthTransitioning();
@@ -34,7 +35,7 @@ init().then((mw) => {
             checkBlocks = await checkNewBlocks(lastRunTs); // Check if anyone has been manually blocked since the last run, and if not, checkBlocks = false
         }
 
-        lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
+        lastRunTs = lib.getCurTimestamp();
 
         // ------------------------------ markup ------------------------------
         if (checkBlocks) {
@@ -57,10 +58,10 @@ init().then((mw) => {
 });
 
 /**
- * Check if the current month is transitioning to the next
- * @return {boolean} True if the current time is between 23:30 and 23:40 on the last day of the month (JST)
+ * Check whether the current month is transitioning to the next.
+ * @return True if the current time is between 23:30 and 23:40 on the last day of the month (JST)
  */
-function monthTransitioning() {
+function monthTransitioning(): boolean {
     const d = new Date();
     d.setHours(d.getHours() + 9); // JST
     const year = d.getFullYear(),
@@ -71,12 +72,8 @@ function monthTransitioning() {
     return new Date(anchorTs40) >= d && d > new Date(anchorTs30);
 }
 
-/**
-* Function to check if anyone has been manually blocked since the last run
-* @param {string} ts
-* @returns {Promise<boolean>}
-*/
-function checkNewBlocks(ts) {
+/** Check whether anyone has been manually blocked since the last run. */
+function checkNewBlocks(lastRunTs: string): Promise<boolean|undefined> {
     const mw = getMw();
     return new Promise(resolve => {
         mw.request({
@@ -85,19 +82,22 @@ function checkNewBlocks(ts) {
             bklimit: '50',
             bkprop: 'timestamp|flags',
             formatversion: '2'
-        }).then(res => {
+        }).then((res: ApiResponse) => {
 
-            var resBlck;
-            if (!res || !res.query || !(resBlck = res.query.blocks)) return resolve();
-            if (resBlck.length === 0) return resolve();
+            let resBlck: ApiResponseQueryListBlocks[]|undefined;
+            if (!res || !res.query || !(resBlck = res.query.blocks)) return resolve(undefined);
+            if (resBlck.length === 0) return resolve(undefined);
 
             resBlck = resBlck.filter(obj => !obj.automatic);
-            if (resBlck.some(obj => lib.compareTimestamps(ts, obj.timestamp) >= 0)) {
+            if (resBlck.some(obj => lib.compareTimestamps(lastRunTs, obj.timestamp) >= 0)) {
                 resolve(true); // Returns true if someone has been manually blocked since the last run
             } else {
                 resolve(false);
             }
 
-        }).catch(err => resolve(log(err)));
+        }).catch((err: ApiResponseError) => {
+            log(err);
+            resolve(undefined);
+        });
     });
 }

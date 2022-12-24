@@ -1105,6 +1105,11 @@ export function compareTimestamps(timestamp1: string, timestamp2: string, rewind
     return diff;
 }
 
+/** Get a JSON timestamp of the current time. Milliseconds omitted. */
+export function getCurTimestamp() {
+    return new Date().toJSON().split('.')[0] + 'Z';
+}
+
 /** 
  * Subtract timestamp2 by timestamp1 and output the resultant duration in Japanese.
  * If the time difference is a negative value, undefined is returned.
