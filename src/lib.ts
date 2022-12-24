@@ -1054,7 +1054,7 @@ export function parseContentBySection(content: string): Array<{
 
     // Create an array of objects
     const sections = headers.map((header, i, arr) => {
-        const isTopSection = i === 0;
+        const isTopSection: boolean = i === 0;
         return {
             header: isTopSection ? null : header,
             title: isTopSection ? null : header.replace(regex.headerEquals, ''),
