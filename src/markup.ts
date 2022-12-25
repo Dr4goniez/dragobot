@@ -535,7 +535,8 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
     // Check if the users and IPs in the arrays are globally (b)locked
     if (checkGlobal) {
 
-        let gUsers = UserAN.filter(obj => obj.user && !obj.date).map(obj => obj.user).undup(); // Only check users that aren't locally blocked
+        // Only check users that aren't locally blocked
+        let gUsers = UserAN.filter(obj => obj.user && !obj.date).map(obj => obj.user).filter((el, i, arr) => arr.indexOf(el) === i);
         const gIps = gUsers.filter(username => lib.isIPAddress(username));
         gUsers = gUsers.filter(username => !lib.isIPAddress(username));
 

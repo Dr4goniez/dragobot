@@ -305,7 +305,7 @@ export async function filterOutProtectedPages(pagetitles: string[]): Promise<str
     const result = await Promise.all(deferreds);
 
     const failed = result.some(el => !el);
-    const protectedPages = result.flat().filter((el): el is string => typeof el === 'string').undup();
+    const protectedPages = result.flat().filter((el): el is string => typeof el === 'string').filter((el, i, arr) => arr.indexOf(el) === i);
 
     return failed ? undefined : protectedPages;
 

@@ -1,4 +1,3 @@
-import './methods';
 import * as lib from './lib';
 import { createServer, log } from './server';
 import { markupANs } from './markup';
