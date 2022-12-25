@@ -68,7 +68,7 @@ const ANI = 'Wikipedia:管理者伝言板/投稿ブロック',
 
 export async function markupANs(checkGlobal: boolean) {
     for (const page of [ANI, ANS, AN3RR]) {
-        console.log(`Checking ${page}...`);
+        log(`Checking ${page}...`);
         await markup(page, checkGlobal);
     }
 }
@@ -122,7 +122,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
         }
     });
-    if (templates.length === 0) return console.log('Procedure cancelled: There\'s no UserAN to update.');
+    if (templates.length === 0) return log('Procedure cancelled: There\'s no UserAN to update.');
 
     // Initialize the 'UserAN' array of objects
     UserAN = templates.reduce((acc: UserANInfo[], obj) => {
@@ -359,9 +359,6 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
             resBlckIps = resBlckIps.concat(res.query.blocks);
         }
     }
-    // console.log(JSON.stringify(resBlckIps.map(obj => obj.user), null, 4));
-    // console.log(JSON.stringify(queriedIps, null, 4));
-    // return;
 
     for (let i = 0; i < resBlckIps.length; i++) {
         const ip = queriedIps[i];
@@ -623,7 +620,6 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
     } else {
         return log('Procedure cancelled: There\'s no UserAN to update.');
     }
-    // UserAN.slice().filter(obj => obj.new).forEach(obj => console.log(obj));
 
     // Get summary
     let summary = 'Bot:';
