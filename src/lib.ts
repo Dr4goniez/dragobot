@@ -87,9 +87,6 @@ export async function edit(params: ApiParamsEditPage, autoInterval = true, retry
 
     // Edit the page
     log(`Editing ${params.title}...`);
-    interface MergedApiResponse extends ApiResponse {
-        
-    }
     let apiReponse: ApiResponse;
     let apiReponseErr: ApiResponseError;
     /** True if edit succeeds, false if it fails because of an unknown error, undefined if it fails because of a known error. */
@@ -327,7 +324,7 @@ export async function scrapeWebpage(url: string) {
 export function continuedRequest(params: DynamicObject, limit = 10): Promise<ApiResponse[]> {
 
     const mw = getMw();
-    let responses: ApiResponse[] = [];
+    const responses: ApiResponse[] = [];
 
     const query = (params: DynamicObject, count: number): Promise<ApiResponse[]> => {
         return mw.request(params)
@@ -453,7 +450,7 @@ export interface TemplateConfig {
  * @license siddharthvp@github - This function includes modifications from the original.
  * @link https://github.com/siddharthvp/mwn/blob/ccc6fb8/src/wikitext.ts#L77
  */
-export function parseTemplates(wikitext: string, config?: TemplateConfig, nestlevel: number = 0): Template[] {
+export function parseTemplates(wikitext: string, config?: TemplateConfig, nestlevel = 0): Template[] {
 
     // Initialize config
     config = Object.assign({
@@ -527,7 +524,7 @@ export function parseTemplates(wikitext: string, config?: TemplateConfig, nestle
     if (config) {
         // Get nested templates?
         if (config.recursive) {
-            let subtemplates = parsed
+            const subtemplates = parsed
                 .map((template) => {
                     return template.text.slice(2, -2);
                 })
@@ -571,7 +568,7 @@ function parseTemplateArguments(template: string): TemplateArgument[] {
         innerContent = innerContent.replace(wikilinkRegex, '$1\x01$2');
     }
 
-    let args = innerContent.split('|');
+    const args = innerContent.split('|');
     args.shift(); // Remove template name
     let unnamedArgCount = 0;
 
@@ -623,6 +620,7 @@ function strReplaceAt(string: string, index: number, char: string): string {
 }
 
 function replacePipesBack(string: string) {
+    // eslint-disable-next-line no-control-regex
     return string.replace(/\x01/g, '|');
 }
 
@@ -700,7 +698,7 @@ export function parseHtml(html: string, config?: HtmlConfig, nestlevel = 0): Htm
     if (config) {
         // Get nested tags?
         if (config.recursive) {
-            let nestedTags = parsed
+            const nestedTags = parsed
                 .map((subhtml) => {
                     // Get rid of the first '<' and the last '>' to make sure that another call of parseHtml() doesn't parse itself
                     return subhtml.text.slice(1, -1);
@@ -874,13 +872,13 @@ export function getDuration(timestamp1: string, timestamp2: string) {
     const diff = ts2.getTime() - ts1.getTime();
     if (diff < 0) return;
 
-    var seconds = Math.floor(diff / 1000),
-        minutes = Math.floor(seconds / 60),
-        hours = Math.floor(minutes / 60),
-        days = Math.floor(hours / 24),
-        weeks = Math.floor(days / 7),
-        months = Math.floor(days / 30),
-        years = Math.floor(days / 365);
+    let seconds = Math.floor(diff / 1000);
+    let minutes = Math.floor(seconds / 60);
+    let hours = Math.floor(minutes / 60);
+    let days = Math.floor(hours / 24);
+    let weeks = Math.floor(days / 7);
+    let months = Math.floor(days / 30);
+    let years = Math.floor(days / 365);
 
     seconds %= 60;
     minutes %= 60;

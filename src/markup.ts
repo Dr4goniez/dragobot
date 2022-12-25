@@ -309,7 +309,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
     const queryResultIps: (ApiResponse|null)[] = blockQueryResult[1];
 
     // Update the UserAN array for blocked registered users
-    let resBlckUsers = queryResultUsers
+    const resBlckUsers = queryResultUsers
         .filter(obj => obj && obj.query && obj.query.blocks)
         .map(obj => obj!.query!.blocks!)
         .flat();
@@ -449,13 +449,13 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
             // Remove 'nocreate' and 'noautoblock' because they're irrelevant
             let elementIdx;
-            if ((elementIdx = obj.params.flags.indexOf('nocreate')) !== -1) obj.params.flags.splice(i, 1);
-            if ((elementIdx = obj.params.flags.indexOf('noautoblock')) !== -1) obj.params.flags.splice(i, 1);
+            if ((elementIdx = obj.params.flags.indexOf('nocreate')) !== -1) obj.params.flags.splice(elementIdx, 1);
+            if ((elementIdx = obj.params.flags.indexOf('noautoblock')) !== -1) obj.params.flags.splice(elementIdx, 1);
 
             // If the user is an IP, change 'anononly' to 'hardblock'
             if (lib.isIPAddress(username)) {
                 if ((elementIdx = obj.params.flags.indexOf('anononly')) !== -1) {
-                    obj.params.flags.splice(i, 1);
+                    obj.params.flags.splice(elementIdx, 1);
                 } else {
                     obj.params.flags.unshift('hardblock');
                 }
@@ -631,7 +631,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
         /** Creates a contribs link from an object that is an element of the 'UserAN' array. */
         const getUserLink = (obj: UserANInfo) => {
-            let condition = obj.reblocked || obj.domain + obj.duration;
+            const condition = obj.reblocked || obj.domain + obj.duration;
             if (obj.type.match(/^(?:user2|unl|usernolink)$/)) {
                 const maxLetterCnt = containsJapaneseCharacter(obj.user) ? 10 : 20;
                 if (obj.user.length > maxLetterCnt) {
@@ -655,7 +655,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
         }
         const reportsBySection: ReportsBySection = UserAN
             .filter(obj => obj.new && obj.date) // Filter out UserANs that need to be marked up
-            .reduce((acc, obj, i) => {
+            .reduce((acc, obj) => {
                 if (!acc[obj.section]) acc[obj.section] = []; // Create key and set an empty array as its value
                 // Push the current object only if the array doesn't contain an object whose 'user' property is the same as the current object's
                 //  'user' property. This prevents the output from having multiple occurrences of the same username. (One user could be reported
@@ -678,7 +678,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
                     summary += sectionLink;
                     sectionLinkAdded = true;
                 }
-                let tempSummary = (sectionLinkAdded ? '' : ', ') + userlink;
+                const tempSummary = (sectionLinkAdded ? '' : ', ') + userlink;
                 if ((summary + tempSummary).length <= 500 - 3) { // Prevent the summary from exceeding the max word count
                     summary += tempSummary;
                     return true; // Go on to the next loop
@@ -722,7 +722,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 /** Query the API and update Logids.list. */
 async function queryAccountCreations() {
 
-    let params: ApiParamsQueryLogEvents = {
+    const params: ApiParamsQueryLogEvents = {
         action: 'query',
         list: 'logevents',
         leprop: 'ids|title|timestamp',

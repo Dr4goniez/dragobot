@@ -263,7 +263,7 @@ export interface ApiResponseQueryPages {
     varianttitles?: {
         [key: string]: string;
     };
-    linkclasses?: any[];
+    linkclasses?: string[];
 }
 export interface ApiResponseQueryPagesRevisions {
     revid: number;
