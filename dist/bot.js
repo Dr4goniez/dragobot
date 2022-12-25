@@ -23,7 +23,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-require("./methods");
 const lib = __importStar(require("./lib"));
 const server_1 = require("./server");
 const markup_1 = require("./markup");
@@ -35,10 +34,10 @@ const mw_1 = require("./mw");
     if (!mw)
         return;
     // The procedure to loop
-    var runCnt = 0;
-    var lastRunTs, checkBlocks, checkGlobal, checkRFB, checkProtectionTemplates;
+    let runCnt = 0;
+    let lastRunTs, checkBlocks, checkGlobal, checkRFB, checkProtectionTemplates;
     const bot = async () => {
-        (0, server_1.log)('Current time: ' + new Date().toJSON().replace(/\.\d{3}Z$/, 'Z'));
+        (0, server_1.log)('Current time: ' + lib.getCurTimestamp());
         checkBlocks = true;
         checkGlobal = false;
         checkRFB = monthTransitioning();
@@ -53,7 +52,7 @@ const mw_1 = require("./mw");
         if (lastRunTs && checkGlobal !== true) { // checkBlocks should be always true if it's the first run and if checkGlobal === true
             checkBlocks = await checkNewBlocks(lastRunTs); // Check if anyone has been manually blocked since the last run, and if not, checkBlocks = false
         }
-        lastRunTs = new Date().toJSON().replace(/\.\d{3}Z$/, 'Z');
+        lastRunTs = lib.getCurTimestamp();
         // ------------------------------ markup ------------------------------
         if (checkBlocks) {
             await (0, markup_1.markupANs)(checkGlobal);
@@ -72,8 +71,8 @@ const mw_1 = require("./mw");
     setInterval(bot, 10 * 60 * 1000);
 });
 /**
- * Check if the current month is transitioning to the next
- * @return {boolean} True if the current time is between 23:30 and 23:40 on the last day of the month (JST)
+ * Check whether the current month is transitioning to the next.
+ * @return True if the current time is between 23:30 and 23:40 on the last day of the month (JST)
  */
 function monthTransitioning() {
     const d = new Date();
@@ -81,12 +80,8 @@ function monthTransitioning() {
     const year = d.getFullYear(), month = d.getMonth() + 1, lastDay = lib.lastDay(year, month), anchorTs40 = `${year}-${month.toString().padStart(2, '0')}-${lastDay}T23:40:00Z`, anchorTs30 = anchorTs40.replace(/40:00Z$/, '30:00Z');
     return new Date(anchorTs40) >= d && d > new Date(anchorTs30);
 }
-/**
-* Function to check if anyone has been manually blocked since the last run
-* @param {string} ts
-* @returns {Promise<boolean>}
-*/
-function checkNewBlocks(ts) {
+/** Check whether anyone has been manually blocked since the last run. */
+function checkNewBlocks(lastRunTs) {
     const mw = (0, mw_1.getMw)();
     return new Promise(resolve => {
         mw.request({
@@ -95,19 +90,22 @@ function checkNewBlocks(ts) {
             bklimit: '50',
             bkprop: 'timestamp|flags',
             formatversion: '2'
-        }).then(res => {
-            var resBlck;
+        }).then((res) => {
+            let resBlck;
             if (!res || !res.query || !(resBlck = res.query.blocks))
-                return resolve();
+                return resolve(undefined);
             if (resBlck.length === 0)
-                return resolve();
+                return resolve(undefined);
             resBlck = resBlck.filter(obj => !obj.automatic);
-            if (resBlck.some(obj => lib.compareTimestamps(ts, obj.timestamp) >= 0)) {
+            if (resBlck.some(obj => lib.compareTimestamps(lastRunTs, obj.timestamp) >= 0)) {
                 resolve(true); // Returns true if someone has been manually blocked since the last run
             }
             else {
                 resolve(false);
             }
-        }).catch(err => resolve((0, server_1.log)(err)));
+        }).catch((err) => {
+            (0, server_1.log)(err);
+            resolve(undefined);
+        });
     });
 }

@@ -74,7 +74,7 @@ async function removePp(botRunTs) {
         queries.push(lib.getTranscludingPages(tl));
     }
     const result = await Promise.all(queries);
-    const transcludingPp = result.flat().undup();
+    const transcludingPp = result.flat().filter((el, i, arr) => arr.indexOf(el) === i);
     // Filter out unprotected pages 
     const protectedPages = await lib.filterOutProtectedPages(transcludingPp);
     if (!protectedPages)

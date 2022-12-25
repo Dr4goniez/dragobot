@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isIPv6 = exports.isIPv4 = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.compareTimestamps = exports.parseContentBySection = exports.replaceWikitext = exports.parseHtml = exports.parseTemplates = exports.getOpenUserANs = exports.getTemplateParams = exports.extractCommentOuts = exports.findHtmlTags = exports.findTemplates = exports.scrapeUsernameFromLogid = exports.scrapeWebpage = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
+exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseContentBySection = exports.replaceWikitext = exports.parseHtml = exports.parseTemplates = exports.extractCommentOuts = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
 const net_1 = __importDefault(require("net"));
 const is_cidr_1 = __importStar(require("is-cidr"));
 const cheerio = __importStar(require("cheerio"));
@@ -83,7 +83,7 @@ exports.sleep = sleep;
 let lastedit;
 /**
  * Edit a given page, ensuring a 5 second interval since the last edit. If the edit fails because of an expired token, another edit attempt is automatically made after re-login.
- * @param arams
+ * @param params Automatically added params: { action: 'edit', token: mw.editToken, formatversion: '2' }
  * @param autoInterval True by default
  * @param retry Automatically set to true for a second edit attempt after re-login. Don't specify this parameter manually.
  * @returns apiReponse (null if a second edit attempt fails or if the mwbot instance fails to be initialized)
@@ -91,10 +91,9 @@ let lastedit;
 async function edit(params, autoInterval = true, retry) {
     // Initialize the request parameters
     let mw = (0, mw_1.getMw)();
-    params = Object.assign(params, {
+    Object.assign(params, {
         action: 'edit',
         token: mw.editToken,
-        curtimestamp: true,
         formatversion: '2'
     });
     // Make sure that it's been more than 5 seconds since the last edit
@@ -137,7 +136,7 @@ async function edit(params, autoInterval = true, retry) {
     mw = await (0, mw_1.init)();
     if (!mw)
         return null;
-    params = Object.assign(params, { token: mw.editToken });
+    Object.assign(params, { token: mw.editToken });
     return await edit(params, autoInterval, true);
 }
 exports.edit = edit;
@@ -303,7 +302,7 @@ async function filterOutProtectedPages(pagetitles) {
     }
     const result = await Promise.all(deferreds);
     const failed = result.some(el => !el);
-    const protectedPages = result.flat().filter((el) => typeof el === 'string').undup();
+    const protectedPages = result.flat().filter((el) => typeof el === 'string').filter((el, i, arr) => arr.indexOf(el) === i);
     return failed ? undefined : protectedPages;
 }
 exports.filterOutProtectedPages = filterOutProtectedPages;
@@ -319,312 +318,94 @@ async function scrapeWebpage(url) {
     }
 }
 exports.scrapeWebpage = scrapeWebpage;
-/** Get a username from an account creation logid. */
-async function scrapeUsernameFromLogid(logid) {
-    const url = 'https://ja.wikipedia.org/w/index.php?title=%E7%89%B9%E5%88%A5:%E3%83%AD%E3%82%B0&logid=' + logid;
-    const $ = await scrapeWebpage(url);
-    if (!$)
-        return;
-    let $newusers = $('.mw-logline-newusers');
-    if ($newusers.length === 0)
-        return;
-    $newusers = $newusers.eq(0);
-    let username;
-    switch ($newusers.attr('data-mw-logaction')) {
-        case 'newusers/create':
-        case 'newusers/autocreate':
-        case 'newusers/create2': // Created by an existing user
-        case 'newusers/byemail': // Created by an existing user and password sent off
-            username = $newusers.children('a.mw-userlink').eq(0).text();
-            break;
-        case 'newusers/forcecreatelocal':
-            username = $newusers.children('a').last().text().replace(/^利用者:/, '');
-            break;
-        default:
-    }
-    return username;
+/** Send an API request that automatically continues until the limit is reached. Works only for calls that have a 'continue' property in the response. */
+function continuedRequest(params, limit = 10) {
+    const mw = (0, mw_1.getMw)();
+    const responses = [];
+    const query = (params, count) => {
+        return mw.request(params)
+            .then((res) => {
+            responses.push(res);
+            if (res.continue && count < limit) {
+                return query(Object.assign(params, res.continue), count + 1);
+            }
+            else {
+                return responses;
+            }
+        }).catch((err) => {
+            (0, server_1.log)(`continuedRequest: Request failed (reason: ${err.info}, loop count: ${count}).`);
+            return responses;
+        });
+    };
+    return query(params, 1);
 }
-exports.scrapeUsernameFromLogid = scrapeUsernameFromLogid;
-// ****************************** SYNCHRONOUS FUNCTIONS ******************************
+exports.continuedRequest = continuedRequest;
 /**
- * Extract templates from wikitext.
- * @param wikitext
- * @param templateName Filter out templates by these names.
- * @param templatePrefix Filter out templates by these name prefixes.
- * @returns
+ * Send API requests involving a multi-value field all at once. The multi-value field needs to be an array, which is internally converted to a pipe-separated
+ * string by splicing the array by 500 (or 50 for users without apihighlimits). The name(s) of the multi-value field(s) must also be provided. If the splicing
+ * number needs to be configured, pass the relevant number to the third argument.
+ * @param params
+ * @param batchParam The name of the multi-value field (can be an array if there are more than one multi-value field, but the values must be the same.)
+ * @param limit Optional splicing number (default: 500/50). The '**limit' property of the params is automatically set to 'max' if this argument has the
+ * value of either 500 or 50, which means that 'max' is selected when no value is passed to this argument, but the parameter is not modified if a unique
+ * value is specified for this argument.
+ * @returns Always an array; Elements are either ApiResponse (success) or null (failure). If the batchParam is an empty array, Promise<[]> (empty array)
+ * is returned.
  */
-function findTemplates(wikitext, templateName, templatePrefix) {
-    // Remove comments
-    extractCommentOuts(wikitext).forEach(co => {
-        const regex = new RegExp(escapeRegExp(co) + '\\s?');
-        wikitext = wikitext.replace(regex, '');
-    });
-    // Create an array by splitting the original content with '{{'
-    const tempInnerContents = wikitext.split('{{'); // Note: tempInnerContents[0] is always an empty string or a string that has nothing to do with templates
-    if (tempInnerContents.length === 0)
-        return [];
-    // Extract templates from the wikitext
-    const nest = [];
-    let templates = tempInnerContents.reduce((acc, tempInnerContent, i, arr) => {
-        if (i === 0)
-            return acc;
-        let temp;
-        const tempTailCnt = (tempInnerContent.match(/\}\}/g) || []).length; // The number of '}}' in the split array
-        // There's no '}}' (= nesting other templates)
-        if (tempTailCnt === 0) {
-            nest.push(i); // Save the index of the element in the array
-            // There's one '}}' in the element of the array (= the left part of '}}' is the whole of the template's parameters)
-        }
-        else if (tempTailCnt === 1) {
-            temp = '{{' + tempInnerContent.split('}}')[0] + '}}';
-            if (!acc.includes(temp))
-                acc.push(temp);
-            // There're two or more '}}'s (e.g. 'TL2|...}}...}}'; = templates are nested)
+function massRequest(params, batchParam, limit = (0, mw_1.isBot)() ? 500 : 50) {
+    // Get the array to be used for the batch operation
+    let batchArray;
+    if (Array.isArray(batchParam)) {
+        const sameArrayProvided = Object.keys(params)
+            .filter(key => batchParam.includes(key))
+            .map(key => params[key]) // Get multi-value fields as an array
+            .every((multiValueFieldArray, i, arr) => {
+            return Array.isArray(multiValueFieldArray) && arr.every(allMultiValueFieldArray => arraysEqual(multiValueFieldArray, allMultiValueFieldArray));
+        });
+        if (!sameArrayProvided)
+            throw new Error('massRequest: Batch fields have different arrays.');
+        batchArray = params[batchParam[0]];
+    }
+    else {
+        batchArray = params[batchParam];
+        if (!Array.isArray(batchArray))
+            throw new Error('massRequest: Batch field in query must be an array.');
+    }
+    if (batchArray.length === 0) {
+        const fieldNames = Array.isArray(batchParam) ? batchParam.join(', ') : batchParam;
+        console.log(`massRequest: Batch field is an empty array. (${fieldNames})`);
+        return Promise.resolve([]);
+    }
+    batchArray = batchArray.slice(); // Deep copy
+    // Set the '**limit' parameter as 'max' if there's any
+    const limitKey = Object.keys(params).filter((key) => /limit$/.test(key));
+    if (limitKey.length !== 0 && [500, 50].includes(limit))
+        params[limitKey[0]] = 'max';
+    // Send API requests
+    const mw = (0, mw_1.getMw)();
+    const result = [];
+    while (batchArray.length !== 0) {
+        const splicedBatchArrayPiped = batchArray.splice(0, limit).join('|');
+        if (typeof batchParam === 'string') {
+            params[batchParam] = splicedBatchArrayPiped;
         }
         else {
-            for (let j = 0; j < tempTailCnt; j++) {
-                if (j === 0) { // The innermost template
-                    temp = '{{' + tempInnerContent.split('}}')[j] + '}}'; // Same as when there's one '}}' in the element
-                    if (!acc.includes(temp))
-                        acc.push(temp);
-                }
-                else { // Multi-nested template(s)
-                    const elNum = nest[nest.length - 1]; // The index of the element that involves the start of the nest
-                    nest.pop(); // The index won't be reused after reference
-                    const nestedTempInnerContent = tempInnerContent.split('}}'); // Create another array by splitting with '}}'
-                    temp = '{{' + arr.slice(elNum, i).join('{{') + '{{' + nestedTempInnerContent.slice(0, j + 1).join('}}') + '}}';
-                    if (!acc.includes(temp))
-                        acc.push(temp);
-                }
-            }
+            Object.keys(params).forEach(key => {
+                if (batchParam.includes(key))
+                    params[key] = splicedBatchArrayPiped;
+            });
         }
-        return acc;
-    }, []); // All templates in the wikitext is stored in 'templates' when the loop is done
-    // End here if the templates don't need to be sorted
-    if ((!templateName && !templatePrefix) || templates.length === 0)
-        return templates;
-    // Convert passed parameters to arrays if they are strings
-    if (templateName && typeof templateName === 'string')
-        templateName = [templateName];
-    if (templatePrefix && typeof templatePrefix === 'string')
-        templatePrefix = [templatePrefix];
-    /**
-     * Create a regex string that makes a certain character case-insensitive.
-     * @param str
-     * @returns [Xx]
-     */
-    const getCaseInsensitiveCharacterRegex = (str) => '[' + str.substring(0, 1).toUpperCase() + str.substring(0, 1).toLowerCase() + ']';
-    // Create regex for template sorting
-    const names = [], prefixes = [];
-    let templateNameRegExp;
-    let templatePrefixRegExp;
-    if (templateName) {
-        for (let i = 0; i < templateName.length; i++) {
-            names.push(getCaseInsensitiveCharacterRegex(templateName[i]) + escapeRegExp(templateName[i].substring(1)));
-        }
-        templateNameRegExp = new RegExp('^(' + names.join('|') + ')$');
+        result.push(mw.request(params).then((res) => res).catch((err) => (0, server_1.log)(err.info)));
     }
-    if (templatePrefix) {
-        for (let i = 0; i < templatePrefix.length; i++) {
-            prefixes.push(getCaseInsensitiveCharacterRegex(templatePrefix[i]) + escapeRegExp(templatePrefix[i].substring(1)));
-        }
-        templatePrefixRegExp = new RegExp('^(' + prefixes.join('|') + ')');
-    }
-    // Sort out certain templates
-    let errHandler = false;
-    templates = templates.filter(item => {
-        const head = item.match(/^\{{2}\s*([^|{}\n]+)/);
-        if (!head) {
-            errHandler = true;
-            return false;
-        }
-        const name = head[1].trim(); // {{ TEMPLATENAME | ... }} の TEMPLATENAME を抽出
-        if (templateName && templatePrefix) {
-            return name.match(templateNameRegExp) || name.match(templatePrefixRegExp);
-        }
-        else if (templateName) {
-            return name.match(templateNameRegExp);
-        }
-        else if (templatePrefix) {
-            return name.match(templatePrefixRegExp);
-        }
-    });
-    if (errHandler)
-        (0, server_1.log)('findTemplates: Detected unprocessable braces.');
-    return templates;
+    return Promise.all(result);
 }
-exports.findTemplates = findTemplates;
-/**
- * Find all HTML tags in a string, including innerHTML.
- * @param content String in which to search for tags
- * @param tagnames Tags to return
- * @returns Array of outerHTMLs
- */
-function findHtmlTags(content, tagnames) {
-    // Remove comments
-    extractCommentOuts(content).forEach(co => {
-        const regex = new RegExp(escapeRegExp(co) + '\\s?');
-        content = content.replace(regex, '');
-    });
-    // Get all <tag> and </tag>s and create an array of objects
-    const regex = /(?:<[^\s/>]+[^\S\r\n]*[^>]*>|<\/[^\S\r\n]*[^\s>]+[^\S\r\n]*>)/g;
-    const mArr = [];
-    let m;
-    while ((m = regex.exec(content))) {
-        const type = m[0].match(/^<[^\S\r\n]*\//) ? 'end' : 'start';
-        mArr.push({
-            tag: m[0],
-            tagname: m[0].match(/^<\/?[^\S\r\n]*([^\s>]+)[^\S\r\n]*[^>]*>$/)[1],
-            type: type,
-            index: m.index // Index of the tag in the content
-        });
-    }
-    let nestCnt = 0;
-    let tags = [];
-    mArr.forEach((obj, i, arr) => {
-        if (obj.type === 'end')
-            return; // Loop through all opening tags
-        if (!arr[i + 1])
-            return;
-        arr.filter((fObj, fi) => i < fi && fObj.tagname === obj.tagname).some(sObj => {
-            if (sObj.type === obj.type) { // If there's a starting tag, that's a nested tag (e.g. <div2> in <div> ... <div2> ... </div>)
-                nestCnt++;
-                return false; // Continue the loop
-            }
-            else if (sObj.type !== obj.type && nestCnt !== 0) { // If there's a closing tag and if it's for a nested opening tag
-                nestCnt--;
-                return false; // Continue the loop
-            }
-            else if (sObj.type !== obj.type && nestCnt === 0) { // If there's a closing tag and if it's what closes the current element
-                tags.push(content.substring(obj.index, sObj.index + sObj.tag.length)); // Push the innerHTML into the array 'tags'
-                return true; // End the loop
-            }
-            (0, server_1.log)('findHtmlTags: Unexpected condition detected.');
-        });
-        nestCnt = 0; // Reset
-    });
-    if (!tagnames)
-        return tags;
-    // Sort out tags if the relevant parameter is passed to the function
-    if (typeof tagnames === 'string')
-        tagnames = [tagnames];
-    const tagNameRegex = new RegExp(`^<(?:${tagnames.join('|')})[^\\S\\r\\n]*[^>]*>`); // Matches e.g. <div class="CLASS"> if tagnames === ['div']
-    tags = tags.filter(item => item.match(tagNameRegex));
-    return tags;
-}
-exports.findHtmlTags = findHtmlTags;
+exports.massRequest = massRequest;
+// ****************************** SYNCHRONOUS FUNCTIONS ******************************
 /** Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />. */
 function extractCommentOuts(wikitext) {
     return wikitext.match(/<!--[\s\S]*?-->|<nowiki>[\s\S]*?<\/nowiki>|<pre[\s\S]*?<\/pre>|<syntaxhighlight[\s\S]*?<\/syntaxhighlight>|<source[\s\S]*?<\/source>/gm) || [];
 }
 exports.extractCommentOuts = extractCommentOuts;
-/** Get the parameters of templates as an array. The template's name is not included. */
-function getTemplateParams(template) {
-    // If the template doesn't contain '|', it doesn't have params
-    if (!template.includes('|'))
-        return [];
-    // Remove the first '{{' and the last '}}' (or '|}}')
-    template = template.replace(/^\{{2}|\|*\}{2}$/g, '');
-    // In case the inner params nest other templates
-    let nested = findTemplates(template);
-    if (nested.length !== 0) {
-        // Remove nested templates from the array
-        nested = nested.filter(item => {
-            return nested.filter(itemN => {
-                return itemN !== item; // Filter out other elements of the array
-            }).every(itemN => {
-                return !itemN.includes(item); // Only return templates that are not included in others
-            });
-        });
-        // Temporarily replace nested templates with '$TLn' because pipes in them can mess up the output
-        nested.forEach((item, i) => {
-            template = template.split(item).join(`$TL${i}`);
-        });
-    }
-    // Get an array of parameters
-    const params = template.split('|');
-    params.shift(); // Remove the template name
-    if (nested.length !== 0) {
-        const regex = /\$TL(\d+)/g;
-        params.forEach((item, i) => {
-            let m;
-            while (m = regex.exec(item)) {
-                const index = parseInt(m[1]);
-                params[i] = params[i].split(m[0]).join(nested[index]); // Get the repalced nested templates back
-            }
-        });
-    }
-    return params;
-}
-exports.getTemplateParams = getTemplateParams;
-/** Extract all UserANs with open reports as an array. */
-function getOpenUserANs(wikitext) {
-    if (!wikitext) {
-        (0, server_1.log)('getOpenUserANs: The wikitext passed as an argument is an empty string or undefined.');
-        return [];
-    }
-    // Get all UserANs in the wikitext
-    const templates = findTemplates(wikitext, 'UserAN');
-    if (templates.length === 0)
-        return [];
-    // RegExps to evaluate the templates' parameters
-    const paramsRegExp = {
-        bot: /^\s*bot\s*=/,
-        type: /^\s*(?:t|[Tt]ype)\s*=/,
-        statusS: /^\s*(?:状態|s|[Ss]tatus)\s*=\s*$/,
-        statusSClosed: /^\s*(?:状態|s|[Ss]tatus)\s*=\s*.+/, // Closed statusS
-    };
-    // Find UserANs with open reports by evaluating their parameters
-    const UserAN = templates.filter(template => {
-        // Get parameters
-        let params = getTemplateParams(template);
-        if (params.length === 0)
-            return false;
-        params = params.filter(item => !item.match(paramsRegExp.bot)); // Remove bot= parameter if there's any
-        /**********************************************************************************************************\
-            A full list of parameter combinations
-                params.length === 1
-                - [(1=)username] (open)
-                params.length === 2
-                - [t=TYPE, (1=)username] (open)
-                - [(1=)username, 状態=] (open)
-                - [(1=)username, 状態=X] (closed) => UserANs with a 状態=X paremeter are always closed
-                - [(1=)username, (2=)無期限] (closed)
-                params.length === 3
-                - [t=TYPE, (1=)username, 状態=] (open)
-                - [t=TYPE, (1=)username, 状態=X] (closed) => UserANs with a 状態=X paremeter are always closed
-                - [t=TYPE, (1=)username, (2=)無期限] (closed)
-                - [(1=)username, 状態=, (2=)無期限] (closed)
-                params.length === 4
-                - [t=TYPE, (1=)username, 状態=, (2=)無期限] (closed)
-            Only UserANs with params in one of the four patterns need to be configured with obj.closed = false
-        \***********************************************************************************************************/
-        // 状態=X param is present: Always closed
-        if (params.filter(item => item.match(paramsRegExp.statusSClosed)).length > 0)
-            return false;
-        // Change the 'closed' property of the object if the relevant UserAN is an open request
-        let isOpen = false;
-        const hasTypeParam = params.filter(item => item.match(paramsRegExp.type)).length > 0;
-        const hasUnvaluedStatusSParam = params.filter(item => item.match(paramsRegExp.statusS)).length > 0;
-        switch (params.length) {
-            case 1: // [(1=)username] (open)
-                isOpen = true;
-                break;
-            case 2: // [t=TYPE, (1=)username] (open), [(1=)username, 状態=] (open), [(1=)username, (2=)無期限] (closed)
-                if (hasTypeParam || hasUnvaluedStatusSParam)
-                    isOpen = true;
-                break;
-            case 3: // [t=TYPE, (1=)username, 状態=] (open), [t=TYPE, (1=)username, (2=)無期限] (closed), [(1=)username, 状態=, (2=)無期限] (closed)
-                if (hasTypeParam && hasUnvaluedStatusSParam)
-                    isOpen = true;
-                break;
-            default:
-        }
-        return isOpen;
-    });
-    return UserAN;
-}
-exports.getOpenUserANs = getOpenUserANs;
 /**
  * Parse templates in wikitext. Templates within tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source) are not parsed.
  * @param wikitext
@@ -709,7 +490,7 @@ function parseTemplates(wikitext, config, nestlevel = 0) {
     if (config) {
         // Get nested templates?
         if (config.recursive) {
-            let subtemplates = parsed
+            const subtemplates = parsed
                 .map((template) => {
                 return template.text.slice(2, -2);
             })
@@ -748,7 +529,7 @@ function parseTemplateArguments(template) {
     while (wikilinkRegex.test(innerContent)) {
         innerContent = innerContent.replace(wikilinkRegex, '$1\x01$2');
     }
-    let args = innerContent.split('|');
+    const args = innerContent.split('|');
     args.shift(); // Remove template name
     let unnamedArgCount = 0;
     const parsedArgs = args.map((arg) => {
@@ -791,6 +572,7 @@ function strReplaceAt(string, index, char) {
     return string.slice(0, index) + char + string.slice(index + 1);
 }
 function replacePipesBack(string) {
+    // eslint-disable-next-line no-control-regex
     return string.replace(/\x01/g, '|');
 }
 function parseHtml(html, config, nestlevel = 0) {
@@ -804,7 +586,6 @@ function parseHtml(html, config, nestlevel = 0) {
     const closingTagRegex = /^(?:-->|<\/([a-z]+) ?[^>]*?>)/i;
     let curTagName, tempTagName;
     let matched;
-    let inTag = false;
     let numUnclosed = 0;
     let parsed = [];
     let startIdx, endIdx;
@@ -812,7 +593,6 @@ function parseHtml(html, config, nestlevel = 0) {
         const slicedHtml = html.slice(i);
         if (numUnclosed === 0) {
             if ((matched = slicedHtml.match(openingTagRegex))) {
-                inTag = true;
                 startIdx = i;
                 curTagName = matched[1] ? matched[1].toLowerCase() : 'comment';
                 numUnclosed++;
@@ -829,7 +609,6 @@ function parseHtml(html, config, nestlevel = 0) {
             else if ((matched = slicedHtml.match(closingTagRegex))) {
                 tempTagName = matched[1] ? matched[1].toLowerCase() : 'comment';
                 if (tempTagName === curTagName && numUnclosed === 1) {
-                    inTag = false;
                     endIdx = i + matched[0].length;
                     parsed.push({
                         text: html.slice(startIdx, endIdx),
@@ -846,7 +625,7 @@ function parseHtml(html, config, nestlevel = 0) {
     if (config) {
         // Get nested tags?
         if (config.recursive) {
-            let nestedTags = parsed
+            const nestedTags = parsed
                 .map((subhtml) => {
                 // Get rid of the first '<' and the last '>' to make sure that another call of parseHtml() doesn't parse itself
                 return subhtml.text.slice(1, -1);
@@ -982,6 +761,11 @@ function compareTimestamps(timestamp1, timestamp2, rewind5minutes) {
     return diff;
 }
 exports.compareTimestamps = compareTimestamps;
+/** Get a JSON timestamp of the current time. Milliseconds omitted. */
+function getCurTimestamp() {
+    return new Date().toJSON().split('.')[0] + 'Z';
+}
+exports.getCurTimestamp = getCurTimestamp;
 /**
  * Subtract timestamp2 by timestamp1 and output the resultant duration in Japanese.
  * If the time difference is a negative value, undefined is returned.
@@ -992,7 +776,13 @@ function getDuration(timestamp1, timestamp2) {
     const diff = ts2.getTime() - ts1.getTime();
     if (diff < 0)
         return;
-    var seconds = Math.floor(diff / 1000), minutes = Math.floor(seconds / 60), hours = Math.floor(minutes / 60), days = Math.floor(hours / 24), weeks = Math.floor(days / 7), months = Math.floor(days / 30), years = Math.floor(days / 365);
+    let seconds = Math.floor(diff / 1000);
+    let minutes = Math.floor(seconds / 60);
+    let hours = Math.floor(minutes / 60);
+    let days = Math.floor(hours / 24);
+    let weeks = Math.floor(days / 7);
+    let months = Math.floor(days / 30);
+    let years = Math.floor(days / 365);
     seconds %= 60;
     minutes %= 60;
     hours %= 24;
@@ -1053,12 +843,33 @@ function isIPAddress(ip) {
 }
 exports.isIPAddress = isIPAddress;
 /** Check whether a given string is an IPv4 address. */
-function isIPv4(ip) {
+function isIPv4Address(ip) {
     return net_1.default.isIPv4(ip) || (0, is_cidr_1.v4)(ip);
 }
-exports.isIPv4 = isIPv4;
+exports.isIPv4Address = isIPv4Address;
 /** Check whether a given string is an IPv6 address. */
-function isIPv6(ip) {
+function isIPv6Address(ip) {
     return net_1.default.isIPv6(ip) || (0, is_cidr_1.v6)(ip);
 }
-exports.isIPv6 = isIPv6;
+exports.isIPv6Address = isIPv6Address;
+/** Split a string into two at the first (or last if bottomup === true) occurrence of a delimiter. If the passed string doesn't contain the delimiter, either the first (bottomup) or the second (!bottomup) element will be an empty string. The delimiter between the two segments won't be included in them. */
+function split2(str, delimiter, bottomup) {
+    const chunks = str.split(delimiter);
+    if (bottomup) {
+        return [chunks.pop(), chunks.join(delimiter)].reverse();
+    }
+    else {
+        return [chunks.shift(), chunks.join(delimiter)];
+    }
+}
+exports.split2 = split2;
+/** Check whether two arrays are equal. Neither array should contain objects nor other arrays. */
+function arraysEqual(array1, array2, orderInsensitive = false) {
+    if (orderInsensitive) {
+        return array1.every(el => array2.includes(el)) && array1.length === array2.length;
+    }
+    else {
+        return array1.every((el, i) => array2[i] === el) && array1.length === array2.length;
+    }
+}
+exports.arraysEqual = arraysEqual;
