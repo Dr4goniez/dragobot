@@ -39,7 +39,7 @@ const Diffids = {
 const ANI = 'Wikipedia:管理者伝言板/投稿ブロック', ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット', AN3RR = 'Wikipedia:管理者伝言板/3RR';
 async function markupANs(checkGlobal) {
     for (const page of [ANI, ANS, AN3RR]) {
-        console.log(`Checking ${page}...`);
+        (0, server_1.log)(`Checking ${page}...`);
         await markup(page, checkGlobal);
     }
 }
@@ -85,7 +85,7 @@ async function markup(pagetitle, checkGlobal) {
         }
     });
     if (templates.length === 0)
-        return console.log('Procedure cancelled: There\'s no UserAN to update.');
+        return (0, server_1.log)('Procedure cancelled: There\'s no UserAN to update.');
     // Initialize the 'UserAN' array of objects
     UserAN = templates.reduce((acc, obj) => {
         const params = obj.arguments
@@ -309,9 +309,6 @@ async function markup(pagetitle, checkGlobal) {
             resBlckIps = resBlckIps.concat(res.query.blocks);
         }
     }
-    // console.log(JSON.stringify(resBlckIps.map(obj => obj.user), null, 4));
-    // console.log(JSON.stringify(queriedIps, null, 4));
-    // return;
     for (let i = 0; i < resBlckIps.length; i++) {
         const ip = queriedIps[i];
         const blck = resBlckIps[i];
@@ -562,7 +559,6 @@ async function markup(pagetitle, checkGlobal) {
     else {
         return (0, server_1.log)('Procedure cancelled: There\'s no UserAN to update.');
     }
-    // UserAN.slice().filter(obj => obj.new).forEach(obj => console.log(obj));
     // Get summary
     let summary = 'Bot:';
     if (!modOnly) {
