@@ -1,15 +1,14 @@
 {
   "name": "dragobot",
-  "version": "5.1.6",
+  "version": "5.1.7",
   "description": "A Wikipedia bot.",
   "main": "dist/bot.js",
   "scripts": {
     "start": "node dist/bot.js > log.text 2>&1",
-    "startDev": "node dist/bot.js",
-    "startDev-ts": "ts-node src/bot.js",
+    "start-dev": "node dist/bot.js",
+    "start-ts": "ts-node src/bot.ts",
     "test": "ts-node src/test.js",
     "test-ts": "ts-node src/test-ts.ts",
-    "wkt": "ts-node src/wikitext.ts",
     "build": "tsc -p ."
   },
   "author": "Dr4goniez",
@@ -30,7 +29,6 @@
     "@typescript-eslint/eslint-plugin": "^5.43.0",
     "@typescript-eslint/parser": "^5.43.0",
     "eslint": "^8.27.0",
-    "eslint-plugin-import": "^2.26.0",
     "ts-node": "^10.9.1",
     "types-mediawiki": "^1.3.0",
     "typescript": "^4.9.4"
