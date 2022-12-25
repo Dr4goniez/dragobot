@@ -714,7 +714,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
     };
     if (modOnly) editParams.bot = true;
     lib.edit(editParams);
-    console.log(JSON.stringify(UserAN, null, 4));
+
 }
 
 //********************** UTILITY FUNCTIONS **********************/

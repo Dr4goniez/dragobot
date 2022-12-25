@@ -376,7 +376,7 @@ export function massRequest(params: DynamicObject, batchParam: string|string[], 
     }
     if (batchArray.length === 0) {
         const fieldNames = Array.isArray(batchParam) ? batchParam.join(', ') : batchParam;
-        log(`massRequest: Batch field is an empty array. (${fieldNames})`);
+        console.log(`massRequest: Batch field is an empty array. (${fieldNames})`);
         return Promise.resolve([]);
     }
     batchArray = batchArray.slice(); // Deep copy
