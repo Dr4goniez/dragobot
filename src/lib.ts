@@ -411,11 +411,6 @@ export function massRequest(params: DynamicObject, batchParam: string|string[], 
 
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
 
-/** Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />. */
-export function extractCommentOuts(wikitext: string): string[] {
-    return wikitext.match(/<!--[\s\S]*?-->|<nowiki>[\s\S]*?<\/nowiki>|<pre[\s\S]*?<\/pre>|<syntaxhighlight[\s\S]*?<\/syntaxhighlight>|<source[\s\S]*?<\/source>/gm) || [];
-}
-
 // interfaces for parseTemplates()
 export interface Template {
     /** The whole text of the template, starting with '{{' and ending with '}}'. */
@@ -818,6 +813,23 @@ export function parseHtml(html: string, config?: HtmlConfig): Html[] {
 }
 
 /**
+ * Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />, not including those nested
+ * inside other occurrences of these tags.
+ */
+export function getCommentTags(wikitext: string): string[] {
+    const namePredicate = (name: string) => {
+        return ['comment', 'nowiki', 'pre', 'syntaxhighlight', 'source'].includes(name);
+    };
+    const commentTags = parseHtml(wikitext, {namePredicate: namePredicate})
+        .filter((Html, i, arr) => {
+            // Get rid of comment tags that are nested inside bigger comment tags
+            return !arr.some((Html2) => Html2.index.start < Html.index.start && Html.index.end < Html2.index.end);
+        })
+        .map((Html) => Html.text);
+    return commentTags;
+}
+
+/**
  * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source).
  * The replacees array and the replacers array must have the same number of elements in them. This restriction does not apply only if the replacees are to be 
  * replaced with one unique replacer, and the 'replacers' argument is a string or an array containing only one element. 
@@ -839,16 +851,7 @@ export function replaceWikitext(wikitext: string, replacees: (string|RegExp)[], 
     if (replacees.length !== replacersArr.length) throw 'replaceWikitext: replacees and replacers must have the same number of elements in them.';
 
     // Extract transclusion-preventing tags in the wikitext
-    const commentTags =
-        parseHtml(wikitext, {
-            namePredicate: (name) => ['comment', 'nowiki', 'pre', 'syntaxhighlight', 'source'].includes(name)
-        })
-        .filter((Html, i, arr) => {
-            // Get rid of comment tags that are nested inside bigger comment tags
-            const arrayExcludingCurrentItem = arr.slice(0, i).concat(arr.slice(i + 1));
-            return arrayExcludingCurrentItem.every((obj: Html) => !obj.text.includes(Html.text));
-        })
-        .map((Html) => Html.text);
+    const commentTags = getCommentTags(wikitext);
 
     // Temporarily replace comment tags with a (unique) control character
     commentTags.forEach((tag, i) => {
@@ -888,7 +891,7 @@ export function parseContentBySection(content: string): Array<{
     // Get headers and exclude those in comment tags
     const matched = content.match(regex.headerG);
     let headers = matched ? matched.slice() : [];
-    extractCommentOuts(content).forEach(co => {
+    getCommentTags(content).forEach(co => {
         headers = headers!.filter(header => !co.includes(header));
     });
     headers.unshift(''); // For the top section
