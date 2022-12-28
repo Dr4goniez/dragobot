@@ -632,10 +632,18 @@ export interface Html {
     name: string;
     /** Nest level of the tag. If it's not part of another tag, the value is 0. */
     nestlevel: number;
+    /** Whether the tag is closed by itself. */
+    selfclosing: boolean;
+    /**
+     * Indexes of the html tag in the input string. The end index is 'characters up to or not including', so the relevant tag can be extracted
+     * from the input string by "input.slice(index.start, index.end)".
+     */
+    index: {
+        start: number;
+        end: number;
+    };
 }
 export interface HtmlConfig {
-	/** Also parse tags within tags. True by default. */
-	recursive?: boolean;
 	/**
      * Include tag in result only if its name matches this predicate, where \<!-- --> tags are named as 'comment'.
      * (Should not be specified together with htmlPredicate.)
@@ -645,74 +653,156 @@ export interface HtmlConfig {
 	htmlPredicate?: (Html: Html) => boolean;
 }
 
-export function parseHtml(html: string, config?: HtmlConfig, nestlevel = 0): Html[] {
+/**
+ * Parse a plain text and extract html tags in it, including \<!-- --> tags. This function is fast because it doesn't involve parsing into DOM.
+ * @param html 
+ * @param config 
+ * @returns 
+ */
+export function parseHtml(html: string, config?: HtmlConfig): Html[] {
 
     // Initialize config
     config = Object.assign({
-        recursive: true,
         namePredicate: null,
         htmlPredicate: null
     }, config || {});
 
-
-    const openingTagRegex = /^(?:<!--|<([a-z]+) ?[^>]*?>)/i;
+    // eslint-disable-next-line no-useless-escape
+    const openingTagRegex = /^(?:<!--|<([a-z]+) ?[^\/>]*?>)/i;
     const closingTagRegex = /^(?:-->|<\/([a-z]+) ?[^>]*?>)/i;
-    let curTagName: string, tempTagName: string;
-    let matched;
-    let numUnclosed = 0;
+    const selfclosingTagRegex = /^<([a-z]+) ?[^>]*?\/>/i;
 
-    let parsed: Html[] = [];
-    let startIdx, endIdx;
+    let matched;
+    let parsed = [];
+    interface Tags {
+        name: string;
+        startIdx: number;
+        selfclosingIdx: number;
+    }
+    const tags: Tags[] = []; // All elements are pushed into the beginning of the array in the loop below (unshift)
 
     for (let i = 0; i < html.length; i++) {
         const slicedHtml = html.slice(i);
-        if (numUnclosed === 0) {
-            if ((matched = slicedHtml.match(openingTagRegex))) {
-                startIdx = i;
-                curTagName = matched[1] ? matched[1].toLowerCase() : 'comment';
-                numUnclosed++;
-                i += matched[0].length - 1;
-            }
-        } else {
-            if ((matched = slicedHtml.match(openingTagRegex))) {
-                tempTagName = matched[1] ? matched[1].toLowerCase() : 'comment';
-                if (tempTagName === curTagName!) numUnclosed++;
-                i += matched[0].length - 1;
-            } else if ((matched = slicedHtml.match(closingTagRegex))) {
-                tempTagName = matched[1] ? matched[1].toLowerCase() : 'comment';
-                if (tempTagName === curTagName! && numUnclosed === 1) {
-                    endIdx = i + matched[0].length;
-                    parsed.push({
-                        text: html.slice(startIdx, endIdx),
-                        name: curTagName,
-                        nestlevel: nestlevel
-                    });
-                    curTagName = '';
-                    numUnclosed--;
+
+        // For when the current index is the start of <tag /> (self-closing)
+        if ((matched = slicedHtml.match(selfclosingTagRegex))) {
+
+            parsed.push({
+                text: html.slice(i, i + matched[0].length),
+                name: matched[1].toLowerCase(),
+                nestlevel: NaN,
+                selfclosing: true,
+                index: {
+                    start: i,
+                    end: i + matched[0].length
                 }
-                i += matched[0].length - 1;
+            });
+            i += matched[0].length - 1;
+
+        // Not the start of a self-closing tag
+        } else {
+
+            // Not inside any other tags
+            if (tags.length === 0) {
+
+                // Start of a new tag
+                if ((matched = slicedHtml.match(openingTagRegex))) {
+
+                    // Save the current index and the tag name
+                    tags.unshift({
+                        name: matched[1] ? matched[1].toLowerCase() : 'comment',
+                        startIdx: i,
+                        selfclosingIdx: i + matched[0].length
+                    });
+                    i += matched[0].length - 1; // Continue the loop after the end of the matched tag
+
+                // End of a tag (ungrammatical)
+                } else if ((matched = slicedHtml.match(closingTagRegex))) {
+                    i += matched[0].length - 1; // Just skip
+                }
+
+            // Inside some other tags
+            } else {
+
+                // Start of a new tag (nested tag); same as when not nested
+                if ((matched = slicedHtml.match(openingTagRegex))) {
+
+                    tags.unshift({
+                        name: matched[1] ? matched[1].toLowerCase() : 'comment',
+                        startIdx: i,
+                        selfclosingIdx: i + matched[0].length
+                    });
+                    i += matched[0].length - 1;
+
+                // End of a tag
+                } else if ((matched = slicedHtml.match(closingTagRegex))) {
+
+                    const endIdx = i + matched[0].length;
+                    const tagName = matched[1] ? matched[1].toLowerCase() : 'comment';
+                    let deleteIdx;
+
+                    // Asssume that the html has the structure of '<p> ... <br> ... </p>' in the comments below
+                    tags.some((obj, j) => {
+                        if (obj.name === tagName) { // There's a <p> for the </p>; just need to find the start index of the <p>
+                            parsed.push({
+                                text: html.slice(obj.startIdx, endIdx),
+                                name: obj.name,
+                                nestlevel: NaN,
+                                selfclosing: false,
+                                index: {
+                                    start: obj.startIdx,
+                                    end: endIdx
+                                }
+                            });
+                            deleteIdx = j + 1;
+                            return true;
+                        } else { // There's a <br> for the </p>; <br> closes itself, neccesary to retrieve the start and end indexes from the saved tag object
+                            parsed.push({
+                                text: html.slice(obj.startIdx, obj.selfclosingIdx),
+                                name: obj.name,
+                                nestlevel: NaN,
+                                selfclosing: true,
+                                index: {
+                                    start: obj.startIdx,
+                                    end: obj.selfclosingIdx
+                                }
+                            });
+                            return false;
+                        }
+                    });
+                    tags.splice(0, deleteIdx); // Remove pushed tags, e.g. [br, p, span, p, ...] => [span, p, ...]
+
+                }
+
             }
-        }        
+        }
     }
 
+    // Deal with elements that are still in the tags array (self-closing ones)
+    // E.g. '<br> ... <br> (... <p></p>)'; <br>s are still in the array because they don't have corresponding closing tags
+    tags.forEach(obj => {
+        parsed.push({
+            text: html.slice(obj.startIdx, obj.selfclosingIdx),
+            name: obj.name,
+            nestlevel: NaN,
+            selfclosing: true,
+            index: {
+                start: obj.startIdx,
+                end: obj.selfclosingIdx
+            }
+        });
+    });
+
+    // Sort the result by start index and set nestlevel
+    parsed = parsed.sort((obj1, obj2) => obj1.index.start - obj2.index.start);
+    parsed.forEach((obj, i, arr) => {
+        // If the relevant indexes are e.g. '0 ... [1 ... 59] ... 60', the nestlevel is 1
+        const nestlevel = arr.filter(objF => objF.index.start < obj.index.start && obj.index.end < objF.index.end).length;
+        obj.nestlevel = nestlevel;
+    });
+
+    // Filter the result by config
     if (config) {
-        // Get nested tags?
-        if (config.recursive) {
-            const nestedTags = parsed
-                .map((subhtml) => {
-                    // Get rid of the first '<' and the last '>' to make sure that another call of parseHtml() doesn't parse itself
-                    return subhtml.text.slice(1, -1);
-                })
-                .filter((subhtml) => {
-                    // Filter out tags that nest other tags
-                    return /<!--.*?(?=-->)|<([a-z]+) ?[^>]*?>.*?(?=<\/\1[^>]*?>)/si.test(subhtml);
-                })
-                .map((subhtml) => {
-                    return parseHtml(subhtml, config, nestlevel + 1);
-                }) // Array of arrays of objects here
-                .flat(); // Shrink the result to an array of objects
-            parsed = parsed.concat(nestedTags);
-        }
         // Filter the array by tag name(s)?
         if (config.namePredicate) {
             parsed = parsed.filter(({name}) => config!.namePredicate!(name));
