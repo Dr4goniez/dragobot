@@ -644,7 +644,7 @@ async function markup(pagetitle, checkGlobal) {
     };
     if (modOnly)
         editParams.bot = true;
-    lib.edit(editParams);
+    await lib.edit(editParams);
 }
 exports.markup = markup;
 //********************** UTILITY FUNCTIONS **********************/
