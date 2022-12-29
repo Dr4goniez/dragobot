@@ -709,7 +709,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
         starttimestamp: lr.curtimestamp,
     };
     if (modOnly) editParams.bot = true;
-    lib.edit(editParams);
+    await lib.edit(editParams);
 
 }
 
