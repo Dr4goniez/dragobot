@@ -166,13 +166,13 @@ export async function getBackLinks(pagetitle: string, nsExclude?: number[]): Pro
 
 /**
  * Get pagetitles that belong to a given category
- * @param cattitle Must start with 'Category:' but automatically added
+ * @param cattitle A 'Category:' prefix is automatically added if there's none
  * @param nsExclude An array of namespace numbers to exclude
  * @returns
  */
 export async function getCatMembers(cattitle: string, nsExclude?: number[]): Promise<string[]|undefined> {
 
-    if (cattitle && !cattitle.match(/^Category:/)) cattitle = 'Category:' + cattitle;
+    if (!/^Category:/i.test(cattitle)) cattitle = 'Category:' + cattitle;
 
     let cats: string[] = [];
     if (typeof nsExclude === 'undefined') nsExclude = [];
