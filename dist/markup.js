@@ -509,11 +509,11 @@ async function markup(pagetitle, checkGlobal) {
             .filter(obj => obj && obj.query && obj.query.globalallusers)
             .map(obj => obj.query.globalallusers)
             .flat();
-        const globallyLockedUseres = resGLock
+        const globallyLockedUsers = resGLock
             .filter(obj => obj && obj.locked === '')
             .map(obj => obj.name);
         const lockedDate = getBlockedDate();
-        globallyLockedUseres.forEach(lockedUser => {
+        globallyLockedUsers.forEach(lockedUser => {
             UserAN.filter(obj => obj.user === lockedUser).forEach(obj => {
                 obj.domain = 'グローバルロック';
                 obj.date = lockedDate;
@@ -565,7 +565,7 @@ async function markup(pagetitle, checkGlobal) {
         /** Creates a contribs link from an object that is an element of the 'UserAN' array. */
         const getUserLink = (obj) => {
             const condition = obj.reblocked || obj.domain + obj.duration;
-            if (obj.type.match(/^(?:user2|unl|usernolink)$/)) {
+            if (/^(?:user2|unl|usernolink)$/.test(obj.type)) {
                 const maxLetterCnt = containsJapaneseCharacter(obj.user) ? 10 : 20;
                 if (obj.user.length > maxLetterCnt) {
                     return `${obj.user.substring(0, maxLetterCnt)}.. (${condition})`;
@@ -574,13 +574,13 @@ async function markup(pagetitle, checkGlobal) {
                     return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${condition})`;
                 }
             }
-            else if (obj.type.match(/^(?:ip2|ipuser2)$/)) {
+            else if (/^ip(user)?2$/.test(obj.type)) {
                 return `[[特別:投稿記録/${obj.user}|${obj.user}]] (${condition})`;
             }
-            else if (obj.type.match(/^(?:log|logid)$/)) {
+            else if (/^log(id)?$/.test(obj.type)) {
                 return `[[特別:転送/logid/${obj.logid}|Logid/${obj.logid}]] (${condition})`;
             }
-            else if (obj.type.match(/^(?:dif|diff)$/)) {
+            else if (/^diff?$/.test(obj.type)) {
                 return `[[特別:差分/${obj.diffid}|差分/${obj.diffid}]]の投稿者 (${condition})`;
             }
         };

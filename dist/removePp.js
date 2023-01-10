@@ -93,7 +93,9 @@ async function removePp(botRunTs) {
             (0, server_1.log)('The next procedure starts within 10 seconds: Put off editing the rest of the pages.');
             break;
         }
-        await editPageWithPp(page);
+        const result = await editPageWithPp(page);
+        if (result === null)
+            ignore.push(page);
     }
 }
 exports.removePp = removePp;
@@ -107,11 +109,14 @@ function needToQuit(botRunTs) {
     dLimit.setSeconds(dLimit.getSeconds() + 590); // 9m50s
     return d > dLimit;
 }
-/** Remove protection templates from a given page. */
+/**
+ * Remove protection templates from a given page.
+ * @returns Null if the page can't be edited.
+ */
 async function editPageWithPp(pagetitle) {
     const lr = await lib.getLatestRevision(pagetitle);
     if (!lr)
-        return (0, server_1.log)('Failed to parse the page.');
+        return (0, server_1.log)(`${pagetitle}: Failed to parse the page.`);
     let content = lr.content;
     const templates = lib.parseTemplates(content, {
         templatePredicate: (template) => {
@@ -122,14 +127,18 @@ async function editPageWithPp(pagetitle) {
         // Filter out the template texts and convert them into RegExps
         return new RegExp(lib.escapeRegExp(template.text) + '[^\\S\\n\\r]*\\n?');
     });
-    if (templates.length === 0)
-        return (0, server_1.log)('No protection templates found.');
+    if (templates.length === 0) {
+        (0, server_1.log)(`${pagetitle}: No protection templates found.`);
+        return null;
+    }
     // Replace "{{TEMPLATE}}\n" with an empty string
     content = lib.replaceWikitext(content, templates, '');
     // Remove empty <noinclude> tags and the like if there's any
     content = content.replace(/<noinclude>\s*?<\/noinclude>[^\S\n\r]*\n?/gm, '').replace(/\/\*\s*?\*\/[^\S\n\r]*\n?/gm, '');
-    if (content === lr.content)
-        return (0, server_1.log)('Procedure cancelled: Same content');
+    if (content === lr.content) {
+        (0, server_1.log)(`${pagetitle}: Procedure cancelled: Same content`);
+        return null;
+    }
     const params = {
         title: pagetitle,
         text: content,
