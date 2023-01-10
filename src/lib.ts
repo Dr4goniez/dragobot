@@ -5,6 +5,7 @@ import axios from 'axios';
 import { log } from './server';
 import { getMw, init, isBot } from './mw';
 import { DynamicObject, ApiResponse, ApiResponseError, ApiResponseQueryPagesProtection, ApiParamsEditPage } from '.';
+import * as siteinfo from './siteinfo';
 
 
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
@@ -486,7 +487,7 @@ export function parseTemplates(wikitext: string, config?: TemplateConfig, nestle
                     const templateTextPipesBack = replacePipesBack(templateText);
                     parsed.push({
                         text: templateTextPipesBack,
-                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim()),
+                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').trim()),
                         arguments: parseTemplateArguments(templateText),
                         nestlevel: nestlevel
                     });
@@ -873,7 +874,7 @@ export function replaceWikitext(wikitext: string, replacees: (string|RegExp)[], 
 }
 
 /** Parse the content of a page into that of each section. */
-export function parseContentBySection(content: string): Array<{
+export function parseSections(content: string): Array<{
     header: string|null,
     title: string|null,
     level: number,
@@ -932,6 +933,257 @@ export function parseContentBySection(content: string): Array<{
     });
 
     return sections;
+
+}
+
+interface ExternalLink {
+    /** Full wikitext of the external link. */
+    text: string;
+    /** Target of the link, usually an URL. */
+    target: string;
+    /** Displayed text of the link. Null if not specified. */
+    display: string | null;
+    /** Whether the link is external. */
+    external: true;
+}
+interface InternalLink {
+    /** Full wikitext of the internal link. */
+    text: string;
+    /** Whether the link is an external one. */
+    external: false;
+    /** Whether the link is an interwiki one. */
+    interwiki: boolean;  
+    /** Whether the link is shown as a file. If false, coloned is of type boolean and display is of type string. If true, coloned is of type false and display is of type string[].*/
+    file: boolean;
+    /** Whether the link starts with a colon. */
+    coloned: boolean;
+    /** 
+     * If file === false:
+     * Displayed text of the link. Same as target if not specified. Could include lowercase alphabets that immediately follow the closure of the link.
+     * If file === true:
+     * Parameters of the file link. (Trailing alphabets are irrelevant.)
+     */
+    display: string | string[];
+}
+interface InternalLinkComplete extends InternalLink {
+    target: {
+        /** Target of the link without a namespace prefix. */
+        title: string;
+        /** Target of the link with a namespace prefix. */
+        prefixedtitle: string;
+        /** Section name starting with '#', if the title contains any. */
+        section: string | null;
+        /** project prefixes + prefixedtitle + section. */
+        fullpath: string;
+        /** Array of interwiki prefixes. */
+        prefix: string[];
+        /** Name of the target's namespace. Expect an inaccurate result for interwiki links. */
+        namespace: string;
+        /** ID of the target's namespace. Expect an inaccurate result for interwiki links. */
+        namespaceid: string;
+    };
+    /** Whether the link target is a page's fragment (i.e. page-internal section or subpage). */
+    incomplete: false;
+}
+interface InternalLinkIncomplete extends InternalLink {
+    target: {
+        /** Target of the link without a namespace prefix. Always null if 'pagetitle' isn't provided and if the link is a fragment. */
+        title: null;
+        /** Target of the link with a namespace prefix. Always null if 'pagetitle' isn't provided and if the link is a fragment. */
+        prefixedtitle: null;
+        /** Section name starting with '#', if the title contains any. */
+        section: string | null;
+        /** project prefixes + prefixedtitle + section. Always null if 'pagetitle' isn't provided and if the link is a fragment. */
+        fullpath: null;
+        /** Array of interwiki prefixes. */
+        prefix: string[];
+        /** Name of the target's namespace. Always null if 'pagetitle' isn't provided and if the link is a fragment. */
+        namespace: null;
+        /** ID of the target's namespace. Always null if 'pagetitle' isn't provided and if the link is a fragment. */
+        namespaceid: null;
+    };
+    /** Whether the link target is a page's fragment (i.e. page-internal section or subpage). */
+    incomplete: true;
+}
+type Link = ExternalLink | InternalLinkComplete | InternalLinkIncomplete;
+
+interface RawLinks {
+    /** Full wikitext of the link. */
+    text: string;
+    /** Whether the link is external. */
+    external: boolean;
+    /** 
+     * Lowercase alphabets that immediately follow the closure of the link (relevant only to internal ones). This information is neccesary
+     * in order to figure out what the displayed text will be, because it will be "scripts" if e.g. "[[script]]s", not just "script". This
+     * property gets an empty string if no letter meets the condition to be inclusive.
+     */
+    inclusive: string;
+}
+
+/**
+ * Parse links in a given wikitext.
+ * @param wikitext Wikitext to parse.
+ * @param pagetitle Namespace-prefixed title to parse. Supplemented if the link starts with '#' (page-internal section link) or '/' (subpage link).
+ * Expect an incomplete result when not providing any.
+ * @param linkPredicate Predicate to filter out the result.
+ * @returns
+ */
+export function parseLinks(wikitext: string, pagetitle?: string, linkPredicate?: (Link: Link) => boolean): Link[] {
+
+    const rawLinks: RawLinks[] = [];
+
+    let inLink = false;
+    let startIdx, endIdx;
+    let numUnclosed = 0;
+
+    // Extract links from the input text and create an array of objects
+    for (let i = 0; i < wikitext.length; i++) {
+        const slicedWkt = wikitext.slice(i);
+        if (!inLink) {
+            if (/^\[\[/.test(slicedWkt)) {
+                startIdx = i;
+                inLink = true;
+                i++;
+            } else if (wikitext[i] === '[') {
+                startIdx = i;
+                inLink = true;
+            }
+        } else {
+            if (wikitext[i] === ']' && numUnclosed !== 0) {
+                numUnclosed--;
+            } else if (wikitext[i] === '[') { // Nested ungrammatical link
+                numUnclosed++;
+            } else if (/^\]\]/.test(slicedWkt)) {
+                endIdx = i + 2;
+                inLink = false;
+                numUnclosed = 0;
+                const inclusive = (slicedWkt.slice(2).match(/^[a-z]+/) || [''])[0];
+                rawLinks.push({
+                    text: wikitext.slice(startIdx, endIdx),
+                    external: false,
+                    inclusive
+                });
+                i++;
+            } else if (wikitext[i] === ']') {
+                endIdx = i + 1;
+                inLink = false;
+                numUnclosed = 0;
+                rawLinks.push({
+                    text: wikitext.slice(startIdx, endIdx),
+                    external: true,
+                    inclusive: ''
+                });
+            }
+        }
+    }
+    if (rawLinks.length === 0) return [];
+
+    // Parse the links
+    let links = rawLinks.map(({text, external, inclusive}) => {
+
+        // Remove the leading and trailing bracket(s)
+        let linkTrunc: string = external ? text.slice(1, -1) : text.slice(2, -2);
+
+        // Get templates inside the link and replace pipes/spaces in them with a control character
+        const templates = parseTemplates(linkTrunc, {templatePredicate: (Template) => Template.nestlevel === 0}).map(Template => Template.text);
+        const replacee = external ? / /g : /\|/g;
+        templates.forEach((template) => {
+            linkTrunc = linkTrunc.split(template).join(template.replace(replacee, '\x01'));
+        });
+
+        if (external) {
+
+            const params = split2(linkTrunc, ' ').map(el => el.trim().replace(/\\x01/g, ' '));
+            return {
+                text,
+                target: params[0],
+                display: params[1] ? params[1] : null,
+                external
+            };
+
+        } else {
+
+            const params = linkTrunc.split('|').map(el => el.trim().replace(/\\x01/g, '|'));
+            let isFragment = ['#', '/'].includes(params[0][0]);
+            if (pagetitle && isFragment) {
+                params[0] = pagetitle + params[0];
+                isFragment = false;
+            }
+            const isColoned = params[0][0] === ':';
+            const isFile = /\bfile:/i.test(params[0]);
+            const displayedText: string | string[] = isFile ? params.slice(1) : (params.length === 1 ? params[0].replace(/^:/, '') : params.slice(1).join('|')) + inclusive;
+            const colonArr = params[0].split(':').filter(el => el); // Split the link target by colon and remove empty strings
+            const prefixes = colonArr.filter(el => siteinfo.projectPrefixes.includes(el.toLowerCase())).map(el => el.toLowerCase());
+            const isInterwiki = prefixes.length !== 0;
+
+            // Get the link target's namespace
+            const nsIdx = colonArr.findIndex(el => siteinfo.namespaces.includes(el.toLowerCase().replace(/ /g, '_')));
+            let nsId: string | null = '0';
+            let ns: string | null = '';
+            if (nsIdx !== -1) {
+                const key = colonArr[nsIdx].toLowerCase().replace(/ /g, '_');
+                nsId = siteinfo.namespaceIds[key as keyof typeof siteinfo.namespaceIds].toString();
+                ns = siteinfo.normalizedNamespaces[nsId as keyof typeof siteinfo.normalizedNamespaces];
+            }
+
+            // Get title and section
+            let m;
+            const section = ((m = params[0].match(/#.+/))) ? m[0] : m;
+            const prefixRegex = new RegExp(`^:?${prefixes.length !== 0 ? prefixes.join(':') + ':' : ''}`);
+            let title = colonArr.slice(nsIdx + 1).join(':').replace(prefixRegex, '');
+            if (section) title = title.replace(section, '');
+            const prefixedtitle = nsId === '0' ? title : `${ns}:${title}`;
+
+            // Return object
+            if (isFragment) {
+                return {
+                    text,
+                    external,
+                    interwiki: isInterwiki,
+                    file: isFile,
+                    coloned: isColoned,
+                    display: displayedText,
+                    target: {
+                        title: null,
+                        prefixedtitle: null,
+                        section,
+                        fullpath: null,
+                        prefix: prefixes,
+                        namespace: null,
+                        namespaceid: null
+                    },
+                    incomplete: isFragment
+                };
+            } else {
+                return {
+                    text,
+                    external,
+                    interwiki: isInterwiki,
+                    file: isFile,
+                    coloned: isColoned,
+                    display: displayedText,
+                    target: {
+                        title,
+                        prefixedtitle,
+                        section,
+                        fullpath: prefixes.join(':') + (prefixes.length !== 0 ? ':' : '') + prefixedtitle + (section ? section : ''),
+                        prefix: prefixes,
+                        namespace: ns,
+                        namespaceid: nsId
+                    },
+                    incomplete: isFragment
+                };
+            }
+
+        }
+
+    });
+
+    if (linkPredicate) {
+        links = links.filter(Link => linkPredicate(Link));
+    }
+
+    return links;
 
 }
 
