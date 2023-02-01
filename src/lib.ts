@@ -1233,21 +1233,71 @@ export function getDuration(timestamp1: string, timestamp2: string) {
     months %= 30;
     years %= 365;
 
+    let duration: number, unit: string;
     if (years) {
-        return years + '年';
+        duration = years;
+        unit = '年';
     } else if (months) {
-        return months + 'か月';
+        duration = months;
+        unit = 'か月';
     } else if (weeks) {
-        return weeks + '週間';
+        duration = weeks;
+        unit = '週間';
     } else if (days) {
-        return days + '日';
+        duration = days;
+        unit = '日';
     } else if (hours) {
-        return hours + '時間';
+        duration = hours;
+        unit = '時間';
     } else if (minutes) {
-        return minutes + '分';
-    } else if (seconds) {
-        return seconds + '秒';
+        duration = minutes;
+        unit = '分';
+    } else {
+        duration = seconds;
+        unit = '秒';
     }
+
+    switch (unit) {
+        case 'か月':
+            if (duration % 12 === 0) {
+                duration /= 12;
+                unit = '年';
+            }
+            break;
+        case '週間':
+            if (duration % 4 === 0) {
+                duration /= 4;
+                unit = 'か月';
+            }
+            break;
+        case '日':
+            if (duration % 7 === 0) {
+                duration /= 7;
+                unit = '週間';
+            }
+            break;
+        case '時間':
+            if (duration % 24 === 0) {
+                duration /= 24;
+                unit = '日';
+            }
+            break;
+        case '分':
+            if (duration % 60 === 0) {
+                duration /= 60;
+                unit = '時間';
+            }
+            break;
+        case '秒':
+                if (duration % 60 === 0) {
+                    duration /= 60;
+                    unit = '分';
+                }
+            break;
+        default:
+    }
+
+    return duration + unit;
 
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "dragobot",
-  "version": "5.2.0",
+  "version": "5.2.1",
   "description": "A Wikipedia bot.",
   "main": "dist/bot.js",
   "scripts": {
@@ -9,6 +9,7 @@
     "start-ts": "ts-node src/bot.ts",
     "test": "ts-node src/test.js",
     "test-ts": "ts-node src/test-ts.ts",
+    "relink": "ts-node src/relink.ts",
     "p-block": "ts-node personal/searchBlockLog.ts",
     "build": "tsc -p ."
   },
