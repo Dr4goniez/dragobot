@@ -26,13 +26,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseContentBySection = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
+exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseLinks = exports.parseSections = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
 const net_1 = __importDefault(require("net"));
 const is_cidr_1 = __importStar(require("is-cidr"));
 const cheerio = __importStar(require("cheerio"));
 const axios_1 = __importDefault(require("axios"));
 const server_1 = require("./server");
 const mw_1 = require("./mw");
+const siteinfo = __importStar(require("./siteinfo"));
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
 /**
  * Get the latest revision of a given page.
@@ -447,7 +448,7 @@ function parseTemplates(wikitext, config, nestlevel = 0) {
                     const templateTextPipesBack = replacePipesBack(templateText);
                     parsed.push({
                         text: templateTextPipesBack,
-                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim()),
+                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').trim()),
                         arguments: parseTemplateArguments(templateText),
                         nestlevel: nestlevel
                     });
@@ -766,7 +767,7 @@ function replaceWikitext(wikitext, replacees, replacers) {
 }
 exports.replaceWikitext = replaceWikitext;
 /** Parse the content of a page into that of each section. */
-function parseContentBySection(content) {
+function parseSections(content) {
     const regex = {
         header: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/,
         headerG: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/g,
@@ -811,7 +812,165 @@ function parseContentBySection(content) {
     });
     return sections;
 }
-exports.parseContentBySection = parseContentBySection;
+exports.parseSections = parseSections;
+/**
+ * Parse links in a given wikitext.
+ * @param wikitext Wikitext to parse.
+ * @param pagetitle Namespace-prefixed title to parse. Supplemented if the link starts with '#' (page-internal section link) or '/' (subpage link).
+ * Expect an incomplete result when not providing any.
+ * @param linkPredicate Predicate to filter out the result.
+ * @returns
+ */
+function parseLinks(wikitext, pagetitle, linkPredicate) {
+    const rawLinks = [];
+    let inLink = false;
+    let startIdx, endIdx;
+    let numUnclosed = 0;
+    // Extract links from the input text and create an array of objects
+    for (let i = 0; i < wikitext.length; i++) {
+        const slicedWkt = wikitext.slice(i);
+        if (!inLink) {
+            if (/^\[\[/.test(slicedWkt)) {
+                startIdx = i;
+                inLink = true;
+                i++;
+            }
+            else if (wikitext[i] === '[') {
+                startIdx = i;
+                inLink = true;
+            }
+        }
+        else {
+            if (wikitext[i] === ']' && numUnclosed !== 0) {
+                numUnclosed--;
+            }
+            else if (wikitext[i] === '[') { // Nested ungrammatical link
+                numUnclosed++;
+            }
+            else if (/^\]\]/.test(slicedWkt)) {
+                endIdx = i + 2;
+                inLink = false;
+                numUnclosed = 0;
+                const inclusive = (slicedWkt.slice(2).match(/^[a-z]+/) || [''])[0];
+                rawLinks.push({
+                    text: wikitext.slice(startIdx, endIdx),
+                    external: false,
+                    inclusive
+                });
+                i++;
+            }
+            else if (wikitext[i] === ']') {
+                endIdx = i + 1;
+                inLink = false;
+                numUnclosed = 0;
+                rawLinks.push({
+                    text: wikitext.slice(startIdx, endIdx),
+                    external: true,
+                    inclusive: ''
+                });
+            }
+        }
+    }
+    if (rawLinks.length === 0)
+        return [];
+    // Parse the links
+    let links = rawLinks.map(({ text, external, inclusive }) => {
+        // Remove the leading and trailing bracket(s)
+        let linkTrunc = external ? text.slice(1, -1) : text.slice(2, -2);
+        // Get templates inside the link and replace pipes/spaces in them with a control character
+        const templates = parseTemplates(linkTrunc, { templatePredicate: (Template) => Template.nestlevel === 0 }).map(Template => Template.text);
+        const replacee = external ? / /g : /\|/g;
+        templates.forEach((template) => {
+            linkTrunc = linkTrunc.split(template).join(template.replace(replacee, '\x01'));
+        });
+        if (external) {
+            const params = split2(linkTrunc, ' ').map(el => el.trim().replace(/\\x01/g, ' '));
+            return {
+                text,
+                target: params[0],
+                display: params[1] ? params[1] : null,
+                external
+            };
+        }
+        else {
+            const params = linkTrunc.split('|').map(el => el.trim().replace(/\\x01/g, '|'));
+            let isFragment = ['#', '/'].includes(params[0][0]);
+            if (pagetitle && isFragment) {
+                params[0] = pagetitle + params[0];
+                isFragment = false;
+            }
+            const isColoned = params[0][0] === ':';
+            const isFile = /\bfile:/i.test(params[0]);
+            const displayedText = isFile ? params.slice(1) : (params.length === 1 ? params[0].replace(/^:/, '') : params.slice(1).join('|')) + inclusive;
+            const colonArr = params[0].split(':').filter(el => el); // Split the link target by colon and remove empty strings
+            const prefixes = colonArr.filter(el => siteinfo.projectPrefixes.includes(el.toLowerCase())).map(el => el.toLowerCase());
+            const isInterwiki = prefixes.length !== 0;
+            // Get the link target's namespace
+            const nsIdx = colonArr.findIndex(el => siteinfo.namespaces.includes(el.toLowerCase().replace(/ /g, '_')));
+            let nsId = '0';
+            let ns = '';
+            if (nsIdx !== -1) {
+                const key = colonArr[nsIdx].toLowerCase().replace(/ /g, '_');
+                nsId = siteinfo.namespaceIds[key].toString();
+                ns = siteinfo.normalizedNamespaces[nsId];
+            }
+            // Get title and section
+            let m;
+            const section = ((m = params[0].match(/#.+/))) ? m[0] : m;
+            const prefixRegex = new RegExp(`^:?${prefixes.length !== 0 ? prefixes.join(':') + ':' : ''}`);
+            let title = colonArr.slice(nsIdx + 1).join(':').replace(prefixRegex, '');
+            if (section)
+                title = title.replace(section, '');
+            const prefixedtitle = nsId === '0' ? title : `${ns}:${title}`;
+            // Return object
+            if (isFragment) {
+                return {
+                    text,
+                    external,
+                    interwiki: isInterwiki,
+                    file: isFile,
+                    coloned: isColoned,
+                    display: displayedText,
+                    target: {
+                        title: null,
+                        prefixedtitle: null,
+                        section,
+                        fullpath: null,
+                        prefix: prefixes,
+                        namespace: null,
+                        namespaceid: null
+                    },
+                    incomplete: isFragment
+                };
+            }
+            else {
+                return {
+                    text,
+                    external,
+                    interwiki: isInterwiki,
+                    file: isFile,
+                    coloned: isColoned,
+                    display: displayedText,
+                    target: {
+                        title,
+                        prefixedtitle,
+                        section,
+                        fullpath: prefixes.join(':') + (prefixes.length !== 0 ? ':' : '') + prefixedtitle + (section ? section : ''),
+                        prefix: prefixes,
+                        namespace: ns,
+                        namespaceid: nsId
+                    },
+                    incomplete: isFragment
+                };
+            }
+        }
+    });
+    if (linkPredicate) {
+        links = links.filter(Link => linkPredicate(Link));
+    }
+    return links;
+}
+exports.parseLinks = parseLinks;
 /**
  * @param timestamp1
  * @param timestamp2
@@ -856,27 +1015,75 @@ function getDuration(timestamp1, timestamp2) {
     weeks %= 7;
     months %= 30;
     years %= 365;
+    let duration, unit;
     if (years) {
-        return years + '年';
+        duration = years;
+        unit = '年';
     }
     else if (months) {
-        return months + 'か月';
+        duration = months;
+        unit = 'か月';
     }
     else if (weeks) {
-        return weeks + '週間';
+        duration = weeks;
+        unit = '週間';
     }
     else if (days) {
-        return days + '日';
+        duration = days;
+        unit = '日';
     }
     else if (hours) {
-        return hours + '時間';
+        duration = hours;
+        unit = '時間';
     }
     else if (minutes) {
-        return minutes + '分';
+        duration = minutes;
+        unit = '分';
     }
-    else if (seconds) {
-        return seconds + '秒';
+    else {
+        duration = seconds;
+        unit = '秒';
     }
+    switch (unit) {
+        case 'か月':
+            if (duration % 12 === 0) {
+                duration /= 12;
+                unit = '年';
+            }
+            break;
+        case '週間':
+            if (duration % 4 === 0) {
+                duration /= 4;
+                unit = 'か月';
+            }
+            break;
+        case '日':
+            if (duration % 7 === 0) {
+                duration /= 7;
+                unit = '週間';
+            }
+            break;
+        case '時間':
+            if (duration % 24 === 0) {
+                duration /= 24;
+                unit = '日';
+            }
+            break;
+        case '分':
+            if (duration % 60 === 0) {
+                duration /= 60;
+                unit = '時間';
+            }
+            break;
+        case '秒':
+            if (duration % 60 === 0) {
+                duration /= 60;
+                unit = '分';
+            }
+            break;
+        default:
+    }
+    return duration + unit;
 }
 exports.getDuration = getDuration;
 /** Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!'). */
