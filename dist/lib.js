@@ -524,7 +524,7 @@ function parseTemplateArguments(template) {
     while (wikilinkRegex.test(innerContent)) {
         innerContent = innerContent.replace(wikilinkRegex, '$1\x01$2');
     }
-    const args = innerContent.split('|');
+    const args = innerContent.split('|').map(el => el.trim());
     args.shift(); // Remove template name
     let unnamedArgCount = 0;
     const parsedArgs = args.map((arg) => {
@@ -1001,10 +1001,10 @@ function getDuration(timestamp1, timestamp2) {
     const diff = ts2.getTime() - ts1.getTime();
     if (diff < 0)
         return;
-    let seconds = Math.floor(diff / 1000);
-    let minutes = Math.floor(seconds / 60);
-    let hours = Math.floor(minutes / 60);
-    let days = Math.floor(hours / 24);
+    let seconds = Math.round(diff / 1000);
+    let minutes = Math.round(seconds / 60);
+    let hours = Math.round(minutes / 60);
+    let days = Math.round(hours / 24);
     let weeks = Math.floor(days / 7);
     let months = Math.floor(days / 30);
     let years = Math.floor(days / 365);
