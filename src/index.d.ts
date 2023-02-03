@@ -222,7 +222,10 @@ export interface ApiResponseQuery {
     // querypage?: ApiResponseQueryListQuerypage;
     // random?: ApiResponseQueryListRandom;
     // recentchanges?: ApiResponseQueryListRecentchanges;
-    // search?: ApiResponseQueryListSearch;
+    search?: ApiResponseQueryListSearch[];
+    searchinfo?: {
+        totalhits: number;
+    };
     // tags?: ApiResponseQueryListTags;
     // threads?: ApiResponseQueryListThreads;
     // usercontribs?: ApiResponseQueryListUsercontribs;
@@ -484,7 +487,18 @@ export interface ApiResponseQueryListLogevents {
 // export interface ApiResponseQueryListQuerypage {}
 // export interface ApiResponseQueryListRandom {}
 // export interface ApiResponseQueryListRecentchanges {}
-// export interface ApiResponseQueryListSearch {}
+export interface ApiResponseQueryListSearch {
+    ns: number;
+    title: string;
+    pageid: number;
+    size: number;
+    wordcount: number;
+    snippet: string;
+    timestamp: string;
+    titlesnippet?: string;
+    categorysnippet?: string;
+    isfilematch?: boolean;
+}
 // export interface ApiResponseQueryListTags {}
 // export interface ApiResponseQueryListThreads {}
 // export interface ApiResponseQueryListUsercontribs {}
