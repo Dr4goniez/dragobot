@@ -1005,9 +1005,10 @@ function getDuration(timestamp1, timestamp2) {
     let minutes = Math.round(seconds / 60);
     let hours = Math.round(minutes / 60);
     let days = Math.round(hours / 24);
-    let weeks = Math.floor(days / 7);
-    let months = Math.floor(days / 30);
+    let weeks = Math.round(days / 7);
+    let months = Math.round(days / 30);
     let years = Math.floor(days / 365);
+    // console.log(seconds, minutes, hours, days, weeks, months, years);
     seconds %= 60;
     minutes %= 60;
     hours %= 24;
@@ -1015,6 +1016,7 @@ function getDuration(timestamp1, timestamp2) {
     weeks %= 7;
     months %= 30;
     years %= 365;
+    // console.log(seconds, minutes, hours, days, weeks, months, years);
     let duration, unit;
     if (years) {
         duration = years;
