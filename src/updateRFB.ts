@@ -82,9 +82,25 @@ export async function updateRFB(): Promise<void> {
         }
         const linkRegex = /\[\[[Ww]ikipedia:投稿ブロック依頼 \d{4}年\d{1,2}月\|\d{1,2}月\]\]/g;
         const mOldLinks = content.match(linkRegex);
-        if (!mOldLinks) return log('Cancelled: No replacee link found.');
-        const oldLink = mOldLinks[mOldLinks.length - 1];
-        content = content.replace(oldLink, oldLink + ' - ' + newLink);
+        if (mOldLinks) { // Links found - just add a link for the new month next to them
+            const oldLink = mOldLinks[mOldLinks.length - 1];
+            content = content.replace(oldLink, oldLink + ' - ' + newLink);
+        } else if (/^Wikipedia:/.test(pagetitle)) { // Links not found and the Wikipedia namespace - reconstruct page
+            const lines = [
+                '{{投稿ブロック依頼|}}',
+                '== 依頼 ==',
+                "'''新しい依頼は[[Wikipedia:投稿ブロック依頼 {{#time:Y年n月|+9 hours}}]]に追加してください。'''",
+                `* ${d[linktype].year}年 ${getLink(d[linktype].year, d[linktype].month)}`,
+                '<!-- 上記の各月リンク先を編集する場合、連動して[[Template:投稿ブロック依頼]]の編集も必要となります -->',
+                '{{投稿ブロック依頼過去ログ|}}',
+                '{{DEFAULTSORT:とうこうふろつくいらい}}',
+                '[[Category:投稿ブロック]]',
+                '[[Category:投稿ブロック依頼|*]]'
+            ];
+            content = lines.join('\n');
+        } else { // Links not found - impossible to proceed
+            return log('Cancelled: No replacee link found.');
+        }
         if (content === lr.content) return log(pagetitle + ': Edit cancelled (same content).');
 
         const params = {
