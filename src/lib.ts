@@ -4,7 +4,7 @@ import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { log } from './server';
 import { getMw, init, isBot } from './mw';
-import { DynamicObject, ApiResponse, ApiResponseError, ApiResponseQueryPagesProtection, ApiParamsEditPage } from '.';
+import { DynamicObject, ApiResponse, ApiResponseError, ApiResponseQueryPagesProtection, ApiResponseQueryListSearch, ApiParamsEditPage } from '.';
 import * as siteinfo from './siteinfo';
 
 
@@ -68,9 +68,9 @@ let lastedit: string;
  * @param params Automatically added params: { action: 'edit', token: mw.editToken, formatversion: '2' }
  * @param autoInterval True by default
  * @param retry Automatically set to true for a second edit attempt after re-login. Don't specify this parameter manually.
- * @returns apiReponse (null if a second edit attempt fails or if the mwbot instance fails to be initialized)
+ * @returns boolean (null if a second edit attempt fails or if the mwbot instance fails to be initialized)
  */
-export async function edit(params: ApiParamsEditPage, autoInterval = true, retry?: boolean): Promise<ApiResponse|ApiResponseError|null> {
+export async function edit(params: ApiParamsEditPage, autoInterval = true, retry?: boolean): Promise<boolean|null> {
 
     // Initialize the request parameters
     let mw = getMw();
@@ -88,29 +88,28 @@ export async function edit(params: ApiParamsEditPage, autoInterval = true, retry
 
     // Edit the page
     log(`Editing ${params.title}...`);
-    let apiReponse: ApiResponse;
-    let apiReponseErr: ApiResponseError;
     /** True if edit succeeds, false if it fails because of an unknown error, undefined if it fails because of a known error. */
-    const result: boolean|undefined = await mw.request(params)
-    .then((res: ApiResponse) => {
-        apiReponse = res;
-        return res && res.edit && res.edit.result === 'Success';
-    })
-    .catch((err: ApiResponseError) => {
-        apiReponseErr = err;
-        return;
-    });
+    const result: boolean|undefined|null = await mw.request(params)
+        .then((res: ApiResponse) => {
+            return res && res.edit && res.edit.result === 'Success';
+        })
+        .catch((err: ApiResponseError) => {
+            if (err) log(err);
+            return err && err.info && err.info.includes('Invalid CSRF token') ? null : undefined;
+        });
     switch (result) {
         case true:
             log(params.title + ': Edit done.');
             lastedit = new Date().toJSON();
-            return apiReponse!;
+            return true;
         case false:
             log(params.title + ': Edit failed due to an unknown error.');
-            return apiReponse!;
-        default:
-            log(params.title + ': Edit failed: ' + apiReponseErr!.info);
-            if (!apiReponseErr!.info.includes('Invalid CSRF token')) return apiReponseErr!;
+            return false;
+        case undefined:
+            log(`${params.title}: Edit failed`);
+            return false;
+        case null:
+            log(`${params.title}: Edit failed`);
     }
 
     // Error handler for an expired token
@@ -309,6 +308,58 @@ export async function filterOutProtectedPages(pagetitles: string[]): Promise<str
 
 }
 
+/**
+ * Perform text search and return matching pagetitles.
+ * @param condition
+ * @param namespace ['0'] by default.
+ * @returns
+ */
+export async function searchText(condition: string, namespace?: number[]): Promise<string[]> {
+
+    const mw = getMw();
+
+    if (!namespace) namespace = [0];
+    let pagetitles: string[] = [];
+    const query = (sroffset?: string) => new Promise<undefined>(resolve => {
+        mw.request({
+            action: 'query',
+            list: 'search',
+            srsearch: condition,
+            srnamespace: namespace!.map(el => el.toString()).join('|'),
+            srlimit: 'max',
+            sroffset: sroffset,
+            srwhat: 'text',
+            formatversion: '2'
+        }).then((res: ApiResponse) => {
+
+            let resSr: ApiResponseQueryListSearch[] | undefined;
+            if (!res || !res.query || !(resSr = res.query.search) || !resSr.length) return resolve(undefined);
+            
+            const accumulator : string[] = [];
+            const titles = resSr.reduce((acc, obj) => {
+                if (obj.title && !acc.includes(obj.title)) acc.push(obj.title);
+                return acc;
+            }, accumulator);
+            pagetitles = pagetitles.concat(titles);
+
+            let resCont: string;
+            if (res.continue && (resCont = res.continue.sroffset)) {
+                query(resCont).then(() => resolve(undefined));
+            } else {
+                resolve(undefined);
+            }
+
+        }).catch((err: ApiResponseError) => {
+            console.log(err.info);
+            resolve(undefined);
+        });
+    });
+    
+    await query();
+    return pagetitles;
+
+}
+
 /** Scrape a webpage. */
 export async function scrapeWebpage(url: string) {
     try {
@@ -416,7 +467,7 @@ export function massRequest(params: DynamicObject, batchParam: string|string[], 
 export interface Template {
     /** The whole text of the template, starting with '{{' and ending with '}}'. */
     text: string;
-    /** Name of the template. The first letter is always in upper case. */
+    /** Name of the template. The first letter is always in upper case and spaces are represented by underscores. */
     name: string;
     /** Parsed template arguments as an array. */
     arguments: TemplateArgument[];
@@ -431,6 +482,8 @@ export interface TemplateArgument {
 export interface TemplateConfig {
 	/** Also parse templates within subtemplates. True by default. */
 	recursive?: boolean;
+    /** Whether to include templates within comments (i.e. \<!-- -->). False by default. */
+    parseComments?: boolean;
 	/** Include template in result only if its name matches this predicate. (Should not be specified together with templatePredicate.)  */
 	namePredicate?: (name: string) => boolean;
 	/** Include template in result only if it matches this predicate. (Should not be specified together with namePredicate.) */
@@ -438,7 +491,8 @@ export interface TemplateConfig {
 }
 
 /**
- * Parse templates in wikitext. Templates within tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source) are not parsed.
+ * Parse templates in wikitext. Templates within \<!-- -->, nowiki, pre, syntaxhighlight, source, and math are ignored.
+ * (Those in comment tags can be parsed if TemplateConfig.parseComments is true.)
  * @param wikitext 
  * @param config
  * @param nestlevel Used module-internally. Don't specify this parameter manually.
@@ -449,11 +503,13 @@ export interface TemplateConfig {
 export function parseTemplates(wikitext: string, config?: TemplateConfig, nestlevel = 0): Template[] {
 
     // Initialize config
-    config = Object.assign({
+    const cfg: TemplateConfig = {
         recursive: true,
-        namePredicate: null,
-        templatePredicate: null
-    }, config || {});
+        parseComments: false,
+        namePredicate: undefined,
+        templatePredicate: undefined
+    };
+    Object.assign(cfg, config || {});
 
     // Number of unclosed braces
     let numUnclosed = 0;
@@ -487,7 +543,7 @@ export function parseTemplates(wikitext: string, config?: TemplateConfig, nestle
                     const templateTextPipesBack = replacePipesBack(templateText);
                     parsed.push({
                         text: templateTextPipesBack,
-                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').trim()),
+                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').replace(/ /g, '_').trim()),
                         arguments: parseTemplateArguments(templateText),
                         nestlevel: nestlevel
                     });
@@ -497,19 +553,25 @@ export function parseTemplates(wikitext: string, config?: TemplateConfig, nestle
             } else if (wikitext[i] === '|' && numUnclosed > 2) { // numUnclosed > 2 means we're in a nested template
 				// Swap out pipes with \x01 character.
 				wikitext = strReplaceAt(wikitext, i, '\x01');
-			} else if ((matchedTag = slicedWkt.match(/^(?:<!--|<(nowiki|pre|syntaxhighlist|source) ?[^>]*?>)/))) {
-				inTag = true;
-                tagNames.push(matchedTag[1] ? matchedTag[1] : 'comment');
-				i += matchedTag[0].length - 1;
+			} else if ((matchedTag = slicedWkt.match(/^(?:<!--|<(nowiki|pre|syntaxhighlight|source|math) ?[^>]*?>)/))) {
+                const isComment = /^<!--/.test(slicedWkt);
+                if (!(cfg.parseComments && isComment)) {
+                    inTag = true;
+                    tagNames.push(isComment ? 'comment' : matchedTag[1]);
+                    i += matchedTag[0].length - 1;
+                }
 			}
         } else {
             // we are in a {{{parameter}}} or tag 
 			if (wikitext[i] === '|' && numUnclosed > 2) {
 				wikitext = strReplaceAt(wikitext, i, '\x01');
-			} else if ((matchedTag = slicedWkt.match(/^(?:-->|<\/(nowiki|pre|syntaxhighlist|source) ?[^>]*?>)/))) {
-				inTag = false;
-                tagNames.pop();
-				i += matchedTag[0].length - 1;
+			} else if ((matchedTag = slicedWkt.match(/^(?:-->|<\/(nowiki|pre|syntaxhighlight|source|math) ?[^>]*?>)/))) {
+                const isComment = /^-->/.test(slicedWkt);
+                if (!(cfg.parseComments && isComment)) {
+                    inTag = false;
+                    tagNames.pop();
+                    i += matchedTag[0].length - 1;
+                }
 			} else if (/^\}\}\}/.test(slicedWkt)) {
 				inParameter = false;
 				i += 2;
@@ -517,30 +579,25 @@ export function parseTemplates(wikitext: string, config?: TemplateConfig, nestle
         }     
     }
 
-    if (config) {
-        // Get nested templates?
-        if (config.recursive) {
-            const subtemplates = parsed
-                .map((template) => {
-                    return template.text.slice(2, -2);
-                })
-                .filter((templateWikitext) => {
-                    return /\{\{.*\}\}/s.test(templateWikitext);
-                })
-                .map((templateWikitext) => {
-                    return parseTemplates(templateWikitext, config, nestlevel + 1);
-                })
-                .flat();
-            parsed = parsed.concat(subtemplates);
-        }
-        // Filter the array by template name(s)?
-        if (config.namePredicate) {
-            parsed = parsed.filter(({name}) => config!.namePredicate!(name));
-        }
-        // Filter the array by a user-defined condition?
-        if (config.templatePredicate) {
-            parsed = parsed.filter((Template) => config!.templatePredicate!(Template));
-        }
+    // Get nested templates?
+    if (cfg.recursive) {
+        const accumulator: Template[] = [];
+        const subtemplates = parsed.reduce((acc, obj) => {
+            const tempInner = obj.text.slice(2, -2);
+            if (/\{\{.*\}\}/s.test(tempInner)) {
+                acc = acc.concat(parseTemplates(tempInner, cfg, nestlevel + 1))
+            }
+            return acc;
+        }, accumulator);
+        parsed = parsed.concat(subtemplates);
+    }
+    // Filter the array by template name(s)?
+    if (cfg.namePredicate) {
+        parsed = parsed.filter(({name}) => cfg.namePredicate!(name));
+    }
+    // Filter the array by a user-defined condition?
+    if (cfg.templatePredicate) {
+        parsed = parsed.filter((Template) => cfg.templatePredicate!(Template));
     }
 
 	return parsed;
@@ -831,7 +888,7 @@ export function getCommentTags(wikitext: string): string[] {
 }
 
 /**
- * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source).
+ * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlight, source).
  * The replacees array and the replacers array must have the same number of elements in them. This restriction does not apply only if the replacees are to be 
  * replaced with one unique replacer, and the 'replacers' argument is a string or an array containing only one element. 
  */
