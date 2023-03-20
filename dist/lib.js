@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseLinks = exports.parseSections = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
+exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseLinks = exports.parseSections = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.searchText = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
 const net_1 = __importDefault(require("net"));
 const is_cidr_1 = __importStar(require("is-cidr"));
 const cheerio = __importStar(require("cheerio"));
@@ -87,7 +87,7 @@ let lastedit;
  * @param params Automatically added params: { action: 'edit', token: mw.editToken, formatversion: '2' }
  * @param autoInterval True by default
  * @param retry Automatically set to true for a second edit attempt after re-login. Don't specify this parameter manually.
- * @returns apiReponse (null if a second edit attempt fails or if the mwbot instance fails to be initialized)
+ * @returns boolean (null if a second edit attempt fails or if the mwbot instance fails to be initialized)
  */
 async function edit(params, autoInterval = true, retry) {
     // Initialize the request parameters
@@ -105,30 +105,29 @@ async function edit(params, autoInterval = true, retry) {
     }
     // Edit the page
     (0, server_1.log)(`Editing ${params.title}...`);
-    let apiReponse;
-    let apiReponseErr;
     /** True if edit succeeds, false if it fails because of an unknown error, undefined if it fails because of a known error. */
     const result = await mw.request(params)
         .then((res) => {
-        apiReponse = res;
         return res && res.edit && res.edit.result === 'Success';
     })
         .catch((err) => {
-        apiReponseErr = err;
-        return;
+        if (err)
+            (0, server_1.log)(err);
+        return err && err.info && err.info.includes('Invalid CSRF token') ? null : undefined;
     });
     switch (result) {
         case true:
             (0, server_1.log)(params.title + ': Edit done.');
             lastedit = new Date().toJSON();
-            return apiReponse;
+            return true;
         case false:
             (0, server_1.log)(params.title + ': Edit failed due to an unknown error.');
-            return apiReponse;
-        default:
-            (0, server_1.log)(params.title + ': Edit failed: ' + apiReponseErr.info);
-            if (!apiReponseErr.info.includes('Invalid CSRF token'))
-                return apiReponseErr;
+            return false;
+        case undefined:
+            (0, server_1.log)(`${params.title}: Edit failed`);
+            return false;
+        case null:
+            (0, server_1.log)(`${params.title}: Edit failed`);
     }
     // Error handler for an expired token
     if (retry)
@@ -307,6 +306,54 @@ async function filterOutProtectedPages(pagetitles) {
     return failed ? undefined : protectedPages;
 }
 exports.filterOutProtectedPages = filterOutProtectedPages;
+/**
+ * Perform text search and return matching pagetitles.
+ * @param condition
+ * @param namespace ['0'] by default.
+ * @returns
+ */
+async function searchText(condition, namespace) {
+    const mw = (0, mw_1.getMw)();
+    if (!namespace)
+        namespace = [0];
+    let pagetitles = [];
+    const query = (sroffset) => new Promise(resolve => {
+        mw.request({
+            action: 'query',
+            list: 'search',
+            srsearch: condition,
+            srnamespace: namespace.map(el => el.toString()).join('|'),
+            srlimit: 'max',
+            sroffset: sroffset,
+            srwhat: 'text',
+            formatversion: '2'
+        }).then((res) => {
+            let resSr;
+            if (!res || !res.query || !(resSr = res.query.search) || !resSr.length)
+                return resolve(undefined);
+            const accumulator = [];
+            const titles = resSr.reduce((acc, obj) => {
+                if (obj.title && !acc.includes(obj.title))
+                    acc.push(obj.title);
+                return acc;
+            }, accumulator);
+            pagetitles = pagetitles.concat(titles);
+            let resCont;
+            if (res.continue && (resCont = res.continue.sroffset)) {
+                query(resCont).then(() => resolve(undefined));
+            }
+            else {
+                resolve(undefined);
+            }
+        }).catch((err) => {
+            console.log(err.info);
+            resolve(undefined);
+        });
+    });
+    await query();
+    return pagetitles;
+}
+exports.searchText = searchText;
 /** Scrape a webpage. */
 async function scrapeWebpage(url) {
     try {
@@ -402,7 +449,8 @@ function massRequest(params, batchParam, limit = (0, mw_1.isBot)() ? 500 : 50) {
 }
 exports.massRequest = massRequest;
 /**
- * Parse templates in wikitext. Templates within tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source) are not parsed.
+ * Parse templates in wikitext. Templates within \<!-- -->, nowiki, pre, syntaxhighlight, source, and math are ignored.
+ * (Those in comment tags can be parsed if TemplateConfig.parseComments is true.)
  * @param wikitext
  * @param config
  * @param nestlevel Used module-internally. Don't specify this parameter manually.
@@ -412,11 +460,13 @@ exports.massRequest = massRequest;
  */
 function parseTemplates(wikitext, config, nestlevel = 0) {
     // Initialize config
-    config = Object.assign({
+    const cfg = {
         recursive: true,
-        namePredicate: null,
-        templatePredicate: null
-    }, config || {});
+        parseComments: false,
+        namePredicate: undefined,
+        templatePredicate: undefined
+    };
+    Object.assign(cfg, config || {});
     // Number of unclosed braces
     let numUnclosed = 0;
     // Are we in a {{{parameter}}}, or between wikitags that prevent transclusions?
@@ -448,7 +498,7 @@ function parseTemplates(wikitext, config, nestlevel = 0) {
                     const templateTextPipesBack = replacePipesBack(templateText);
                     parsed.push({
                         text: templateTextPipesBack,
-                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').trim()),
+                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').replace(/ /g, '_').trim()),
                         arguments: parseTemplateArguments(templateText),
                         nestlevel: nestlevel
                     });
@@ -460,10 +510,13 @@ function parseTemplates(wikitext, config, nestlevel = 0) {
                 // Swap out pipes with \x01 character.
                 wikitext = strReplaceAt(wikitext, i, '\x01');
             }
-            else if ((matchedTag = slicedWkt.match(/^(?:<!--|<(nowiki|pre|syntaxhighlist|source) ?[^>]*?>)/))) {
-                inTag = true;
-                tagNames.push(matchedTag[1] ? matchedTag[1] : 'comment');
-                i += matchedTag[0].length - 1;
+            else if ((matchedTag = slicedWkt.match(/^(?:<!--|<(nowiki|pre|syntaxhighlight|source|math) ?[^>]*?>)/))) {
+                const isComment = /^<!--/.test(slicedWkt);
+                if (!(cfg.parseComments && isComment)) {
+                    inTag = true;
+                    tagNames.push(isComment ? 'comment' : matchedTag[1]);
+                    i += matchedTag[0].length - 1;
+                }
             }
         }
         else {
@@ -471,10 +524,13 @@ function parseTemplates(wikitext, config, nestlevel = 0) {
             if (wikitext[i] === '|' && numUnclosed > 2) {
                 wikitext = strReplaceAt(wikitext, i, '\x01');
             }
-            else if ((matchedTag = slicedWkt.match(/^(?:-->|<\/(nowiki|pre|syntaxhighlist|source) ?[^>]*?>)/))) {
-                inTag = false;
-                tagNames.pop();
-                i += matchedTag[0].length - 1;
+            else if ((matchedTag = slicedWkt.match(/^(?:-->|<\/(nowiki|pre|syntaxhighlight|source|math) ?[^>]*?>)/))) {
+                const isComment = /^-->/.test(slicedWkt);
+                if (!(cfg.parseComments && isComment)) {
+                    inTag = false;
+                    tagNames.pop();
+                    i += matchedTag[0].length - 1;
+                }
             }
             else if (/^\}\}\}/.test(slicedWkt)) {
                 inParameter = false;
@@ -482,30 +538,25 @@ function parseTemplates(wikitext, config, nestlevel = 0) {
             }
         }
     }
-    if (config) {
-        // Get nested templates?
-        if (config.recursive) {
-            const subtemplates = parsed
-                .map((template) => {
-                return template.text.slice(2, -2);
-            })
-                .filter((templateWikitext) => {
-                return /\{\{.*\}\}/s.test(templateWikitext);
-            })
-                .map((templateWikitext) => {
-                return parseTemplates(templateWikitext, config, nestlevel + 1);
-            })
-                .flat();
-            parsed = parsed.concat(subtemplates);
-        }
-        // Filter the array by template name(s)?
-        if (config.namePredicate) {
-            parsed = parsed.filter(({ name }) => config.namePredicate(name));
-        }
-        // Filter the array by a user-defined condition?
-        if (config.templatePredicate) {
-            parsed = parsed.filter((Template) => config.templatePredicate(Template));
-        }
+    // Get nested templates?
+    if (cfg.recursive) {
+        const accumulator = [];
+        const subtemplates = parsed.reduce((acc, obj) => {
+            const tempInner = obj.text.slice(2, -2);
+            if (/\{\{.*\}\}/s.test(tempInner)) {
+                acc = acc.concat(parseTemplates(tempInner, cfg, nestlevel + 1));
+            }
+            return acc;
+        }, accumulator);
+        parsed = parsed.concat(subtemplates);
+    }
+    // Filter the array by template name(s)?
+    if (cfg.namePredicate) {
+        parsed = parsed.filter(({ name }) => cfg.namePredicate(name));
+    }
+    // Filter the array by a user-defined condition?
+    if (cfg.templatePredicate) {
+        parsed = parsed.filter((Template) => cfg.templatePredicate(Template));
     }
     return parsed;
 }
@@ -728,7 +779,7 @@ function getCommentTags(wikitext) {
 }
 exports.getCommentTags = getCommentTags;
 /**
- * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlist, source).
+ * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlight, source).
  * The replacees array and the replacers array must have the same number of elements in them. This restriction does not apply only if the replacees are to be
  * replaced with one unique replacer, and the 'replacers' argument is a string or an array containing only one element.
  */
