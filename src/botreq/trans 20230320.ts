@@ -23,7 +23,7 @@ init().then(async (mw) => {
         const templates = lib.parseTemplates(content, {
             parseComments: true,
             templatePredicate: (Template) => {
-                const regex = /^Cit(e(web)?|ation)|^Cite_(book|journal|news|web|press_release|video|report|interview|conference|patent|DVD-notes|music_release_notes|wikisource|Metacritic)|^Vcite_(book|web)/;
+                const regex = /^Cit(e(web)?|ation)$|^Cite_(book|journal|news|web|press_release|video|report|interview|conference|patent|DVD-notes|music_release_notes|wikisource|Metacritic)$|^Vcite_(book|web)$/;
                 return regex.test(Template.name) && /\|(\s*)trans_(title|chapter)/.test(Template.text);
             }
         });

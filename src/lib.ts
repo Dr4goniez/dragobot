@@ -543,7 +543,7 @@ export function parseTemplates(wikitext: string, config?: TemplateConfig, nestle
                     const templateTextPipesBack = replacePipesBack(templateText);
                     parsed.push({
                         text: templateTextPipesBack,
-                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').replace(/ /g, '_').trim()),
+                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').trim().replace(/ /g, '_')),
                         arguments: parseTemplateArguments(templateText),
                         nestlevel: nestlevel
                     });
@@ -871,12 +871,12 @@ export function parseHtml(html: string, config?: HtmlConfig): Html[] {
 }
 
 /**
- * Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />, not including those nested
+ * Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, \<source />, and \<math />,not including those nested
  * inside other occurrences of these tags.
  */
 export function getCommentTags(wikitext: string): string[] {
     const namePredicate = (name: string) => {
-        return ['comment', 'nowiki', 'pre', 'syntaxhighlight', 'source'].includes(name);
+        return ['comment', 'nowiki', 'pre', 'syntaxhighlight', 'source', 'math'].includes(name);
     };
     const commentTags = parseHtml(wikitext, {namePredicate: namePredicate})
         .filter((Html, i, arr) => {
@@ -930,66 +930,66 @@ export function replaceWikitext(wikitext: string, replacees: (string|RegExp)[], 
 
 }
 
+interface ParsedSection {
+    header: string|null;
+    title: string|null;
+    level: number;
+    index: number;
+    content: string;
+    deepest: boolean|null;
+}
+
 /** Parse the content of a page into that of each section. */
-export function parseSections(content: string): Array<{
-    header: string|null,
-    title: string|null,
-    level: number,
-    index: number,
-    content: string,
-    deepest: boolean|null
-}> {
+export function parseSections(content: string): Array<ParsedSection> {
 
     const regex = {
-        header: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/,
-        headerG: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/g,
+        comments: /<!--[\s\S]*?-->|<(nowiki|pre|syntaxhighlight|source|math)[\s\S]*?<\/\1\s*>/gi,
+        header: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}/,
+        headerG: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}/g,
         headerEquals: /(?:^={2,5}[^\S\n\r]*|[^\S\n\r]*={2,5}$)/g
     };
 
-    // Get headers and exclude those in comment tags
-    const matched = content.match(regex.headerG);
-    let headers = matched ? matched.slice() : [];
-    getCommentTags(content).forEach(co => {
-        headers = headers!.filter(header => !co.includes(header));
-    });
-    headers.unshift(''); // For the top section
+    // Replace comment-related tags
+    let idx = 0;
+    const comments: string[] = [];
+    let m;
+    while ((m = regex.comments.exec(content))) {
+        content = content.replace(m[0], '$CM' + (idx++));
+        comments.push(m[0]);
+    }
 
-    // Create an array of objects
-    const sections = headers.map((header, i, arr) => {
-        const isTopSection: boolean = i === 0;
+    // Get headers
+    const headers: {text:string, title:string, level: number, index: number}[] = [];
+    while ((m = regex.headerG.exec(content))) {
+        headers.push({
+            text: m[0],
+            title: m[0].replace(regex.headerEquals, ''),
+            level: (m[0].match(/=/g) || []).length / 2,
+            index: m.index // This is the index number of the header in the content
+        });
+    }
+    headers.unshift({text: '', title: '', level: 1, index: 0}); // For the top section
+
+    // Return an array of objects
+    return headers.map(({text, title, level, index}, i, arr) => {
+        let sectionContent = arr.length > 1 ? content.slice(0, arr[1].index) : content; // For the top section
+        let deepest: null|boolean = null;
+        if (i !== 0) { // For non-top sections
+            const nextSameLevelSection = arr.slice(i + 1).filter(obj => obj.level <= level);
+            sectionContent = content.slice(index, nextSameLevelSection.length ? nextSameLevelSection[0].index : content.length);
+            const dRegex = new RegExp(`(={${level + 1},})[^\\S\\n\\r]*.+[^\\S\\n\\r]*\\1`);
+            deepest = !dRegex.test(sectionContent.slice(text.length));
+        }
+        comments.forEach((el, j) => sectionContent = sectionContent.replace(`$CM${j}`, el)); // Get comments back
         return {
-            header: isTopSection ? null : header,
-            title: isTopSection ? null : header.replace(regex.headerEquals, ''),
-            level: isTopSection ? 1 : header.match(/=/g)!.length / 2,
+            header: i === 0 ? null : text,
+            title: i === 0 ? null : title,
+            level: level,
             index: i,
-            content: isTopSection ? (arr.length > 1 ? content.split(headers[1])[0] : content) : '',
-            deepest: isTopSection ? null : false
+            content: sectionContent,
+            deepest: deepest
         };
     });
-
-    // Get the content property
-    sections.forEach((obj, i, arr) => {
-
-        // For top section
-        if (!obj.header) return;
-
-        // Check if there's any section of the same level or shallower following this section
-        const nextBoundarySection = arr.slice(i + 1).find(objF => objF.level <= obj.level);
-
-        // Get the content of this section
-        let sectionContent: string;
-        if (nextBoundarySection) {
-            sectionContent = content.substring(content.indexOf(obj.header), content.indexOf(nextBoundarySection.header!));
-        } else {
-            sectionContent = content.substring(content.indexOf(obj.header));
-        }
-
-        obj.content = sectionContent;
-        obj.deepest = typeof arr.slice(i + 1).find(objF => sectionContent.includes(objF.header!)) === 'undefined';
-
-    });
-
-    return sections;
 
 }
 
