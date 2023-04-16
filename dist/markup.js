@@ -78,11 +78,11 @@ async function markup(pagetitle, checkGlobal) {
                 if (!text)
                     return false; // Remove empty parameters
                 if (!isBotNo)
-                    isBotNo = /bot/i.test(name) && /no/i.test(value);
+                    isBotNo = /^bot$/i.test(name) && /^no$/i.test(value);
                 if (!hasTypeParam)
-                    hasTypeParam = /t|[tT]ype/.test(name);
+                    hasTypeParam = /^(t|[tT]ype)$/.test(name);
                 if (!hasUnvaluedStatusParam)
-                    hasUnvaluedStatusParam = /状態|s|[Ss]tatus/.test(name) && value === '';
+                    hasUnvaluedStatusParam = /^(状態|s|[sS]tatus)$/.test(name) && value === '';
                 if (/^\d+$/.test(name))
                     integerParamCount++;
                 return true;
@@ -109,12 +109,12 @@ async function markup(pagetitle, checkGlobal) {
         \***********************************************************************************************************/
         let param1, paramType;
         const params = obj.arguments.filter((param) => {
-            const isBotParam = /bot/i.test(param.name);
-            const isStatusParam = /状態|s|[Ss]tatus/.test(param.name);
+            const isBotParam = /^bot$/i.test(param.name);
+            const isStatusParam = /^(状態|s|[sS]tatus)$/.test(param.name);
             const isEmptyParam = !param.value;
-            if (!param1 && param.name === '1')
+            if (!param1 && /^(1|[uU]ser)$/.test(param.name))
                 param1 = param;
-            if (!paramType && /t|[tT]ype/.test(param.name))
+            if (!paramType && /^(t|[tT]ype)$/.test(param.name))
                 paramType = param;
             return !isBotParam && !isStatusParam && !isEmptyParam;
         });
@@ -175,7 +175,14 @@ async function markup(pagetitle, checkGlobal) {
                     info.diffid = u;
                 break;
             case 'none': // UserANs with this type param have a random string in the username param (the block status can't be checked)
-                info.none = u;
+                if (lib.isIPAddress(u)) {
+                    info.user = u;
+                    info.type = 'ip2';
+                    info.modified = `{{UserAN|t=IP2|${u}}}`;
+                }
+                else {
+                    info.none = u;
+                }
                 break;
             default: // Invalid type
                 if (lib.isIPAddress(u)) {
@@ -400,7 +407,10 @@ async function markup(pagetitle, checkGlobal) {
             // If the user is an IP, change 'anononly' to 'hardblock'
             if (lib.isIPAddress(username)) {
                 if ((elementIdx = obj.params.flags.indexOf('anononly')) !== -1) {
-                    obj.params.flags.splice(elementIdx, 1).unshift('hardblock');
+                    obj.params.flags.splice(elementIdx, 1);
+                }
+                else {
+                    obj.params.flags.unshift('hardblock');
                 }
             }
         };
