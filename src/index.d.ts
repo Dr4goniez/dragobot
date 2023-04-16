@@ -9,7 +9,7 @@ export interface ApiResponse {
     warnings?: {
         [key: string]: {
             warnings: string;
-        }
+        };
     };
     batchcomplete?: boolean;
     requestid?: string;
@@ -285,7 +285,7 @@ export interface ApiResponseQueryPagesRevisions {
             contentmodel: string;
             contentformat: string;
             content: string;
-        }
+        };
     };
     comment: string;
     parsedcomment: string;
@@ -319,7 +319,7 @@ export interface ApiResponseQueryListBetafeatures {
     [key: string]: {
         name: string;
         count: number;
-    }
+    };
 }
 export interface ApiResponseQueryListBlocks {
     id: number;

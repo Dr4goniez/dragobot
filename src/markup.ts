@@ -109,9 +109,9 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
             let integerParamCount = 0;
             const params = template.arguments.filter(({text, name, value}) => {
                 if (!text) return false; // Remove empty parameters
-                if (!isBotNo) isBotNo = /bot/i.test(name) && /no/i.test(value);
-                if (!hasTypeParam) hasTypeParam = /t|[tT]ype/.test(name);
-                if (!hasUnvaluedStatusParam) hasUnvaluedStatusParam = /状態|s|[Ss]tatus/.test(name) && value === '';
+                if (!isBotNo) isBotNo = /^bot$/i.test(name) && /^no$/i.test(value);
+                if (!hasTypeParam) hasTypeParam = /^(t|[tT]ype)$/.test(name);
+                if (!hasUnvaluedStatusParam) hasUnvaluedStatusParam = /^(状態|s|[sS]tatus)$/.test(name) && value === '';
                 if (/^\d+$/.test(name)) integerParamCount++;
                 return true;
             });
@@ -145,11 +145,11 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
         let param1: lib.TemplateArgument|undefined,
             paramType: lib.TemplateArgument|undefined;
         const params = obj.arguments.filter((param) => { // Remove bot=, 状態=, and empty params
-            const isBotParam = /bot/i.test(param.name);
-            const isStatusParam = /状態|s|[Ss]tatus/.test(param.name);
+            const isBotParam = /^bot$/i.test(param.name);
+            const isStatusParam = /^(状態|s|[sS]tatus)$/.test(param.name);
             const isEmptyParam = !param.value;
-            if (!param1 && param.name === '1') param1 = param;
-            if (!paramType && /t|[tT]ype/.test(param.name)) paramType = param;
+            if (!param1 && /^(1|[uU]ser)$/.test(param.name)) param1 = param;
+            if (!paramType && /^(t|[tT]ype)$/.test(param.name)) paramType = param;
             return !isBotParam && !isStatusParam && !isEmptyParam;
         });
 
@@ -210,7 +210,13 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
                 if (/^\d+$/.test(u)) info.diffid = u;
                 break;
             case 'none': // UserANs with this type param have a random string in the username param (the block status can't be checked)
-                info.none = u;
+                if (lib.isIPAddress(u)) {
+                    info.user = u;
+                    info.type = 'ip2';
+                    info.modified = `{{UserAN|t=IP2|${u}}}`;
+                } else {
+                    info.none = u;
+                }
                 break;
             default: // Invalid type
                 if (lib.isIPAddress(u)) {
@@ -441,7 +447,9 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
             // If the user is an IP, change 'anononly' to 'hardblock'
             if (lib.isIPAddress(username)) {
                 if ((elementIdx = obj.params.flags.indexOf('anononly')) !== -1) {
-                    obj.params.flags.splice(elementIdx, 1).unshift('hardblock');
+                    obj.params.flags.splice(elementIdx, 1);
+                } else {
+                    obj.params.flags.unshift('hardblock');
                 }
             }
 
@@ -693,7 +701,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
         // Filter out objects that are elements of the UserAN array and create a new object with its keys named after each section title.
         interface ReportsBySection {
             /** The array set as the object's properties only contains UserANs that need to be updated. */
-            [sectiontitle: string]: UserANInfo[]
+            [sectiontitle: string]: UserANInfo[];
         }
         const reportsBySection: ReportsBySection = UserAN.reduce((acc: ReportsBySection, obj) => {
 

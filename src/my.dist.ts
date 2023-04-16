@@ -7,12 +7,12 @@
 ------------------------------------------------------------------------------------------------------- */
 
 interface UserInfo {
-    apiUrl: string,
-    username: string,
-    password: string
+    apiUrl: string;
+    username: string;
+    password: string;
 }
 interface My {
-    [key: string]: UserInfo
+    [key: string]: UserInfo;
 }
 
 const userinfo: UserInfo = {
