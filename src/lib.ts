@@ -147,7 +147,12 @@ export async function getBackLinks(pagetitle: string, nsExclude?: number[]): Pro
                 let resBL, resCont;
                 if (!res || !res.query || !(resBL = res.query.backlinks)) return resolve(log('getBackLinks: Query failed.'));
 
-                const titles = resBL.filter(obj => !nsExclude!.includes(obj.ns)).map(obj => obj.title);
+                const titles = resBL.reduce((acc: string[], obj) => {
+                    if (!nsExclude!.includes(obj.ns)) {
+                        acc.push(obj.title);
+                    }
+                    return acc;
+                }, []);
                 pages = pages.concat(titles);
 
                 if (res && res.continue && (resCont = res.continue.blcontinue)) {
@@ -192,7 +197,12 @@ export async function getCatMembers(cattitle: string, nsExclude?: number[]): Pro
                 let resCM, resCont;
                 if (!res || !res.query || !(resCM = res.query.categorymembers)) return resolve(log('getCatMembers: Query failed.'));
 
-                const titles = resCM.filter(obj => !nsExclude!.includes(obj.ns)).map(obj => obj.title);
+                const titles = resCM.reduce((acc: string[], obj) => {
+                    if (!nsExclude!.includes(obj.ns)) {
+                        acc.push(obj.title);
+                    }
+                    return acc;
+                }, []);
                 cats = cats.concat(titles);
 
                 if (res && res.continue && (resCont = res.continue.cmcontinue)) {
@@ -275,15 +285,13 @@ export async function filterOutProtectedPages(pagetitles: string[]): Promise<str
                     });
                 };
 
-                const titles = resPg.filter(obj => {
+                const titles = resPg.reduce((acc: string[], obj) => {
                     let prtArr;
-                    if (!obj.title) return false;
-                    if (!(prtArr = obj.protection) || prtArr.length === 0) {
-                        return false;
-                    } else {
-                        return isProtected(prtArr);
+                    if (obj.title && (prtArr = obj.protection) && prtArr.length && isProtected(prtArr)) {
+                        acc.push(obj.title);
                     }
-                }).map(obj => obj.title);
+                    return acc;
+                }, []);
 
                 resolve(titles);
 
@@ -541,12 +549,16 @@ export function parseTemplates(wikitext: string, config?: TemplateConfig, nestle
 					endIdx = i + 2;
                     const templateText = wikitext.slice(startIdx, endIdx); // Pipes could have been replaced with a control character if they're part of nested templates
                     const templateTextPipesBack = replacePipesBack(templateText);
-                    parsed.push({
-                        text: templateTextPipesBack,
-                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').trim().replace(/ /g, '_')),
-                        arguments: parseTemplateArguments(templateText),
-                        nestlevel: nestlevel
-                    });
+                    let templateName = templateTextPipesBack.replace(/\u200e|^\{\{\s*(:?\s*template\s*:|:?\s*テンプレート\s*:)?\s*|\s*[|}][\s\S]*$/gi, '').replace(/ /g, '_');
+                    templateName = ucFirst(templateName);
+                    if (!cfg.namePredicate || cfg.namePredicate(templateName)) {
+                        parsed.push({
+                            text: templateTextPipesBack,
+                            name: templateName,
+                            arguments: parseTemplateArguments(templateText),
+                            nestlevel: nestlevel
+                        });
+                    }
 				}
 				numUnclosed -= 2;
 				i++;
@@ -590,10 +602,6 @@ export function parseTemplates(wikitext: string, config?: TemplateConfig, nestle
             return acc;
         }, accumulator);
         parsed = parsed.concat(subtemplates);
-    }
-    // Filter the array by template name(s)?
-    if (cfg.namePredicate) {
-        parsed = parsed.filter(({name}) => cfg.namePredicate!(name));
     }
     // Filter the array by a user-defined condition?
     if (cfg.templatePredicate) {
@@ -664,7 +672,7 @@ function parseTemplateArguments(template: string): TemplateArgument[] {
 
 }
 
-function capitalizeFirstLetter(string: string) {
+function ucFirst(string: string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
@@ -959,7 +967,7 @@ export function parseSections(content: string): Array<ParsedSection> {
     }
 
     // Get headers
-    const headers: {text:string, title:string, level: number, index: number}[] = [];
+    const headers: {text: string; title: string; level: number; index: number;}[] = [];
     while ((m = regex.headerG.exec(content))) {
         headers.push({
             text: m[0],
@@ -972,9 +980,10 @@ export function parseSections(content: string): Array<ParsedSection> {
 
     // Return an array of objects
     return headers.map(({text, title, level, index}, i, arr) => {
+        const isTopSection = i === 0;
         let sectionContent = arr.length > 1 ? content.slice(0, arr[1].index) : content; // For the top section
         let deepest: null|boolean = null;
-        if (i !== 0) { // For non-top sections
+        if (!isTopSection) { // For non-top sections
             const nextSameLevelSection = arr.slice(i + 1).filter(obj => obj.level <= level);
             sectionContent = content.slice(index, nextSameLevelSection.length ? nextSameLevelSection[0].index : content.length);
             const dRegex = new RegExp(`(={${level + 1},})[^\\S\\n\\r]*.+[^\\S\\n\\r]*\\1`);
@@ -982,8 +991,8 @@ export function parseSections(content: string): Array<ParsedSection> {
         }
         comments.forEach((el, j) => sectionContent = sectionContent.replace(`$CM${j}`, el)); // Get comments back
         return {
-            header: i === 0 ? null : text,
-            title: i === 0 ? null : title,
+            header: isTopSection ? null : text,
+            title: isTopSection ? null : title,
             level: level,
             index: i,
             content: sectionContent,
@@ -1407,12 +1416,26 @@ export function split2(str: string, delimiter: string, bottomup?: boolean): stri
     }
 }
 
-type nonObject = boolean | string | number | undefined | null;
+type PrimitiveArray = (string|number|bigint|boolean|null|undefined)[];
+
 /** Check whether two arrays are equal. Neither array should contain objects nor other arrays. */
-export function arraysEqual(array1: nonObject[], array2: nonObject[], orderInsensitive = false): boolean {
+export function arraysEqual(array1: PrimitiveArray, array2: PrimitiveArray, orderInsensitive = false): boolean {
     if (orderInsensitive) {
         return array1.every(el => array2.includes(el)) && array1.length === array2.length;
     } else {
         return array1.every((el, i) => array2[i] === el) && array1.length === array2.length;
     }
+}
+
+/** Compare elements in two arrays. */
+export function arrayDiff(sourceArray: PrimitiveArray, targetArray: PrimitiveArray) {
+    const added: PrimitiveArray = [];
+    const removed: PrimitiveArray = [];
+    sourceArray.forEach((el) => {
+        if (!targetArray.includes(el)) removed.push(el);
+    });
+    targetArray.forEach((el) => {
+        if (!sourceArray.includes(el)) added.push(el);
+    });
+    return {added, removed};
 }

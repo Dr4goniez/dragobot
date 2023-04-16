@@ -4,6 +4,7 @@ import {
     ApiResponseQueryListLogevents,
     ApiResponseQueryListBlocks,
     ApiParamsQueryBlocks,
+    ApiResponseQueryListGlobalallusers,
     ApiResponseQueryListGlobalblocks,
     ApiParamsEditPage
 } from '.';
@@ -13,52 +14,50 @@ import { log } from './server';
 //********************** MAIN FUNCTION **********************/
 
 interface UserANInfo {
-    old: string,
-    new: string,
-    modified: string,
-    timestamp: string,
-    section: string,
-    user: string,
-    type: string,
-    logid: string,
-    diffid: string,
-    none: string,
-    domain: string,
-    duration: string,
-    flags: string,
-    date: string,
-    reblocked: string
+    old: string;
+    new: string;
+    modified: string;
+    timestamp: string;
+    section: string;
+    user: string;
+    type: string;
+    logid: string;
+    diffid: string;
+    none: string;
+    domain: string;
+    duration: string;
+    flags: string;
+    date: string;
+    reblocked: string;
 }
 let UserAN: UserANInfo[];
 
+interface IdList {
+    [id: string]: string;
+}
+
 interface LogidList {
-    /** An array of objects consisting of API responses.  */
-    list: Array<{
-        logid: string,
-        username: string
-    }>,
+    /** An object of logid-username pairs.  */
+    list: IdList;
     /** An array of logids that can't be converted to a username either by API query or by web scraping. */
-    unprocessable: string[],
+    unprocessable: string[];
     /** JSON timestamp passed to the API as a list=logevents query parameter (leend). Look only for log entries newer than this timestamp. */
-    lookUntil: string
+    lookUntil: string;
 }
 const Logids: LogidList = {
-    list: [],
+    list: {},
     unprocessable: [],
     lookUntil: ''
 };
 
 interface DiffidList {
-    /** An array of objects consisting of API responses.  */
-    list: Array<{
-        diffid: string,
-        username: string
-    }>,
+    /** An object of diffid-username pairs.  */
+    list: IdList;
     /** An array of diffids that can't be converted to a username. */
-    unprocessable: string[],
+    unprocessable: string[];
 }
 const Diffids: DiffidList = {
-    list: [],
+    list: {},
     unprocessable: []
 };
 
@@ -84,11 +83,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
     const templates = lib.parseTemplates(wkt, {
         templatePredicate: (template) => {
 
-            const isUserAN = template.name === 'UserAN';
-            const params = template.arguments.filter(param => param.text); // Remove empty parameters
-            const isBotNo = params.filter(param => /bot/i.test(param.name) && /no/i.test(param.value)).length > 0;
-
-            /**********************************************************************************************************\
+            /*/********************************************************************************************************\
                 A full list of parameter combinations
                     params.length === 1
                     - [(1=)username] (open)
@@ -107,9 +102,20 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
                 Only UserANs with params in one of the four patterns need to be configured with obj.closed = false
             \***********************************************************************************************************/
 
-            const hasOnlyOneIntegerParam = params.filter(param => /^\d+$/.test(param.name)).length === 1;
-            const hasTypeParam = params.filter(param => /t|[tT]ype/.test(param.name)).length === 1;
-            const hasUnvaluedStatusParam = params.filter(param => /状態|s|[Ss]tatus/.test(param.name) && param.value === '').length === 1;
+            const isUserAN = template.name === 'UserAN';
+            let isBotNo = false,
+                hasTypeParam = false,
+                hasUnvaluedStatusParam = false;
+            let integerParamCount = 0;
+            const params = template.arguments.filter(({text, name, value}) => {
+                if (!text) return false; // Remove empty parameters
+                if (!isBotNo) isBotNo = /bot/i.test(name) && /no/i.test(value);
+                if (!hasTypeParam) hasTypeParam = /t|[tT]ype/.test(name);
+                if (!hasUnvaluedStatusParam) hasUnvaluedStatusParam = /状態|s|[Ss]tatus/.test(name) && value === '';
+                if (/^\d+$/.test(name)) integerParamCount++;
+                return true;
+            });
+            const hasOnlyOneIntegerParam = integerParamCount === 1;
 
             const isOpen = (
                 params.length === 1 && hasOnlyOneIntegerParam ||
@@ -122,20 +128,12 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
         }
     });
-    if (templates.length === 0) return log('Procedure cancelled: There\'s no UserAN to update.');
+    if (!templates.length) return log('Procedure cancelled: There\'s no UserAN to update.');
 
     // Initialize the 'UserAN' array of objects
     UserAN = templates.reduce((acc: UserANInfo[], obj) => {
 
-        const params = obj.arguments
-            .filter(param => { // Remove bot=, 状態=, and empty params
-                const isBotParam = /bot/i.test(param.name);
-                const isStatusParam = /状態|s|[Ss]tatus/.test(param.name);
-                const isEmptyParam = !param.value;
-                return !isBotParam && !isStatusParam && !isEmptyParam;
-            });
-
-        /**********************************************************************************************************\
+        /*/********************************************************************************************************\
             A full list of open UserANs' parameter combinations
                 [(1=)username]
                 [(1=)username, 状態=] => [(1=)username]
@@ -144,20 +142,25 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
             Now we can differentiate these four in whether they have a t= param
         \***********************************************************************************************************/
 
+        let param1: lib.TemplateArgument|undefined,
+            paramType: lib.TemplateArgument|undefined;
+        const params = obj.arguments.filter((param) => { // Remove bot=, 状態=, and empty params
+            const isBotParam = /bot/i.test(param.name);
+            const isStatusParam = /状態|s|[Ss]tatus/.test(param.name);
+            const isEmptyParam = !param.value;
+            if (!param1 && param.name === '1') param1 = param;
+            if (!paramType && /t|[tT]ype/.test(param.name)) paramType = param;
+            return !isBotParam && !isStatusParam && !isEmptyParam;
+        });
+
         if (params.length > 2) return acc; // Contains an undefined parameter
 
         // Ensure that the UserAN has a 1= param, otherwise unprocessable
-        let u;
-        if ((u = params.filter(param => param.name === '1'))) {
-            u = u[0].value;
-        } else {
-            return acc;
-        }
-        if (lib.isIPv6Address(u)) u = u.toUpperCase();
+        if (!param1) return acc;
+        const u = lib.isIPv6Address(param1.value) ? param1.value.toUpperCase() : param1.value;
 
         // Get the type param
-        let ttemp;
-        const t = (ttemp = params.filter(param => /t|[tT]ype/.test(param.name))).length > 0 ? ttemp[0].value.toLowerCase() : 'user2';
+        const t = paramType ? paramType.value.toLowerCase() : 'user2';
 
         // Create the object to push into the array
         const info = {
@@ -217,6 +220,9 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
                 }
         }
 
+        // Remove UserANs that can't be forwarded to block check
+        if (!info.user && !info.logid && !info.diffid) return acc;
+
         // Get a timestamp for the UserAN
         const wktSp = lib.split2(wkt, info.old, true); // Split the source text at the template and find the first signature following it
         const sig = wktSp[1].match(/(\d{4})年(\d{1,2})月(\d{1,2})日 \(.{1}\) (\d{2}:\d{2}) \(UTC\)/); // YYYY年MM月DD日 (日) hh:mm (UTC)
@@ -225,57 +231,59 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
         info.timestamp = `${ts[1]}-${ts[2]}-${ts[3]}T${ts[4]}:00Z`; // YYYY-MM-DDThh:mm:00Z (hh:mm is one capturing group)
 
         // Get a section title
-        const wktSp2 = lib.split2(wkt, info.old);
-        const headers = wktSp2[0].match(/={2,5}[^\S\r\n]*.+[^\S\r\n]*={2,5}/g); // Split the srctxt at tpl and get the last section header in arr[0]
-        if (headers) info.section = headers[headers.length - 1].replace(/(^={2,5}[^\S\r\n]*|[^\S\r\n]*={2,5}$)/g, ''); // Remove '='s
+        const wktSp2 = lib.split2(wkt, info.old); // Split the srctxt at the template
+        const headingRegex = /={2,5}[^\S\r\n]*(.+?)[^\S\r\n]*={2,5}/g;
+        let m;
+        while ((m = headingRegex.exec(wktSp2[0]))) {
+            info.section = m[1]; // Get the last section header in wktSp2[0]
+        }
 
         // Push the object into the array
         acc.push(info);
         return acc;
 
     }, []);
-    UserAN = UserAN.filter(obj => obj.user || obj.logid || obj.diffid); // Remove UserANs that can't be forwarded to block check
 
-    // Some functions to process logids and diffids
+    /** Function to evaluate whether a given logid/diffid's corresponding username is already in the list and not listed as unprocessable. */
+    const isIdAlreadyConverted = (id: string, idType: "logid"|"diffid"): boolean => {
+        const ListObj = idType === 'logid' ? Logids : Diffids;
+        return !!ListObj.list[id] && !ListObj.unprocessable.includes(id);
+    };
 
-    // Function to evaluate whether a given logid's corresponding username is already in the list and not listed as unprocessable
-    const isLogidAlreadyConverted = (logid: string): boolean => {
-        return Logids.list.filter(obj => obj.logid === logid).length > 0 && !Logids.unprocessable.includes(logid);
-    };
-    // Function to extract logids that aren't paired with a username and haven't been forwarded to the API yet
-    const collectLogids = () => {
-        return UserAN
-            .filter(obj => obj.logid && !obj.user && !isLogidAlreadyConverted(obj.logid))
-            .map(obj => obj.logid)
-            .filter((el, i, arr) => arr.indexOf(el) === i);
-    };
-    // Function to extract diffids that aren't paired with a username and haven't been forwarded to the API yet
-    const isDiffidAlreadyConverted = (diffid: string): boolean => {
-        return Diffids.list.filter(obj => obj.diffid === diffid).length > 0 && !Diffids.unprocessable.includes(diffid)
+    /** Function to extract logids/diffids that aren't paired with a username and haven't been forwarded to the API yet. */
+    const collectIds = (idType: "logid"|"diffid") => {
+        return UserAN.reduce((acc: string[], obj) => {
+            const id = obj[idType];
+            if (id && !obj.user && !isIdAlreadyConverted(id, idType)) {
+                if (!acc.includes(id)) acc.push(id);
+            }
+            return acc;
+        }, []);
     };
 
     // Get an array of logids and diff numbers (these need to be converted to usernames through API requests before block check)
-    let logids = collectLogids();
-    const diffids = UserAN.filter(obj => obj.diffid && !obj.user && !isDiffidAlreadyConverted(obj.diffid)).map(obj => obj.diffid);
+    let logids = collectIds('logid');
+    const diffids = collectIds('diffid');
 
     // Convert logids and diffids to usernames through API queries
     let usernameQueries: Promise<void|string|null|undefined>[] = [queryAccountCreations(), queryEditDiffs(diffids)];
     await Promise.all(usernameQueries);
     UserAN.forEach(obj => { // Set the 'user' property of UserAN if possible
-        let arr;
-        if (obj.logid && !obj.user && (arr = Logids.list.filter(objL => objL.logid === obj.logid)).length > 0) obj.user = arr[0].username;
-        if (obj.diffid && !obj.user && (arr = Diffids.list.filter(objD => objD.diffid === obj.diffid)).length > 0) obj.user = arr[0].username;
+        if (!obj.user) {
+            if (obj.logid && Logids.list[obj.logid]) obj.user = Logids.list[obj.logid];
+            if (obj.diffid && Diffids.list[obj.diffid]) obj.user = Diffids.list[obj.diffid];
+        }
     });
 
     // Another attempt to convert logids
-    logids = collectLogids();
+    logids = collectIds('logid');
     usernameQueries = [];
     logids.forEach(logid => {
         usernameQueries.push(
             scrapeUsernameFromLogid(logid).then(username => {
                 if (typeof username === 'string') {
-                    Logids.list.push({logid: logid, username: username});
-                } else if (typeof username === 'undefined') {
+                    Logids.list[logid] = username;
+                } else {
                     Logids.unprocessable.push(logid);
                 }
             })
@@ -283,160 +291,141 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
     });
     await Promise.all(usernameQueries);
     UserAN.forEach(obj => {
-        let arr;
-        if (obj.logid && !obj.user && (arr = Logids.list.filter(objL => objL.logid === obj.logid)).length > 0) obj.user = arr[0].username;
+        if (obj.logid && !obj.user && Logids.list[obj.logid]) obj.user = Logids.list[obj.logid];
     });
 
     // Sort registered users and IPs
-    let users = UserAN.filter(obj => obj.user).map(obj => obj.user).filter((el, i, arr) => arr.indexOf(el) === i);
-    const ips = users.filter(username => lib.isIPAddress(username)); // An array of IPs
-    users = users.filter(username => !lib.isIPAddress(username)); // An array of registered users
+    const users: string[] = [];
+    const ips: string[] = [];
+    UserAN.forEach(({user}) => {
+        if (!user) {
+            return;
+        } else if (lib.isIPAddress(user)) {
+            if (!ips.includes(user)) ips.push(user);
+        } else {
+            if (!users.includes(user)) users.push(user);
+        }
+    });
+    if (!users.length && !ips.length) return log('Procedure cancelled: There\'s no UserAN to update.');
 
-    // Check if the users and IPs in the arrays are locally blocked
-    const blockQueries = [];
-    const blockQueryParams: ApiParamsQueryBlocks = {
-        action: 'query',
-        list: 'blocks',
-        bkprop: 'user|timestamp|expiry|restrictions|flags',
-        formatversion: '2'
-    };
-    blockQueries.push( // Get domain/duration/date properties of UserAN if blocked
-        lib.massRequest({...blockQueryParams, bklimit: 'max', bkusers: users, bkshow: pagetitle === ANS ? 'account|!temp' : ''}, 'bkusers'),
-        lib.massRequest({...blockQueryParams, bkip: ips, bklimit: 1}, 'bkip', 1)
-    );
-    const blockQueryResult = await Promise.all(blockQueries); // Wait until all the async procedures finish
-    const queryResultUsers: (ApiResponse|null)[] = blockQueryResult[0];
-    const queryResultIps: (ApiResponse|null)[] = blockQueryResult[1];
-
-    // Update the UserAN array for blocked registered users
-    const resBlckUsers = queryResultUsers
-        .filter(obj => obj && obj.query && obj.query.blocks)
-        .map(obj => obj!.query!.blocks!)
-        .flat();
-
-    // Stores the names of registered users and IPs that need to be reblocked. This array will contain users that are currently blocked but reported
-    // after that block. This can't be dealt with only by list=blocks because it returns the timestamp of the initial block and doesn't let us know
-    // when a given reblock is applied.  
+    /** An array of the names of users and IPs that need to be reblocked, prefixed by '利用者:'. */
     const usersToBeReblocked: string[] = [];
 
-    for (const blck of resBlckUsers) {
-        const nousertalk = !blck.allowusertalk;
-        const noemail = blck.noemail;
-        const partial = blck.restrictions && !Array.isArray(blck.restrictions);
-        const indef = blck.expiry === 'infinity';
-        UserAN.filter(obj => obj.user === blck.user).forEach(obj => {
-            const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true) >= 0;
-            if (newlyReported) {
-                obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry)!;
-                obj.date = getBlockedDate(blck.timestamp);
-                obj.domain = partial ? '部分ブロック ' : '';
-                if (nousertalk && noemail) {
-                    obj.flags = ' 会話×・メール×';
-                } else if (nousertalk) {
-                    obj.flags = ' 会話×';
-                } else if (noemail) {
-                    obj.flags = ' メール×';
-                }
-            } else {
-                usersToBeReblocked.push(obj.user);
+    const localBlockStatusQueryUsers = async (usersArr: string[]) => {
+
+        if (!usersArr.length) return;
+
+        const params: ApiParamsQueryBlocks = {
+            action: 'query',
+            list: 'blocks',
+            bkprop: 'user|timestamp|expiry|restrictions|flags',
+            bklimit: 'max',
+            bkusers: usersArr,
+            bkshow: pagetitle === ANS ? 'account|!temp' : '',
+            formatversion: '2'
+        };
+        const response = await lib.massRequest(params, 'bkusers');
+
+        response.forEach((res) => {
+
+            let resBlck: ApiResponseQueryListBlocks[]|undefined;
+            if (!res || !res.query || !(resBlck = res.query.blocks) || !resBlck.length) return;
+
+            for (const blck of resBlck) {
+                const nousertalk = !blck.allowusertalk;
+                const noemail = blck.noemail;
+                const partial = blck.restrictions && !Array.isArray(blck.restrictions);
+                const indef = blck.expiry === 'infinity';
+                UserAN.forEach(obj => {
+                    if (obj.user !== blck.user) return;
+                    const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true) >= 0;
+                    if (newlyReported) {
+                        obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry)!;
+                        obj.date = getBlockedDate(blck.timestamp);
+                        obj.domain = partial ? '部分ブロック' : '';
+                        const flags: string[] = [];
+                        if (nousertalk) flags.push('会話×');
+                        if (noemail) flags.push('メール×');
+                        obj.flags = flags.join('・');
+                    } else {
+                        usersToBeReblocked.push(`利用者:${obj.user}`);
+                    }
+                });
             }
+
         });
-    }
 
-    // Update the UserAN array for blocked IPs
-    // It's a bit complicated here. IPs can be range-blocked but the API only returns the blocked IP itself, for example if 255.255.255.255 is
-    // range-blocked by 255.255.255.0/24, the response only involves the range, not the queried IP. If we simply do a .filter().map().flat() to
-    // concatenate res.query.blocks just as we do for registered users above, res.query.blocks that are empty arrays (meaning the relevant IP
-    // isn't blocked) and those that are of the value null (meaning the Promise was rejected) are just gone, and there'll be no way to figure out
-    // which element of the concatenated res.query.blocks array is for which IP. Below is a workaround for this. (One could prepare an independent
-    // function and pass to it one IP for one API call alternatively, though.)
-    const queriedIps: string[] = [];
-    let resBlckIps: ApiResponseQueryListBlocks[] = [];
-    for (let i = 0; i < queryResultIps.length; i++) {
-        const res = queryResultIps[i];
-        if (res && res.query && res.query.blocks && res.query.blocks.length !== 0) {
-            queriedIps.push(ips[i]);
-            resBlckIps = resBlckIps.concat(res.query.blocks);
-        }
-    }
-
-    for (let i = 0; i < resBlckIps.length; i++) {
-        const ip = queriedIps[i];
-        const blck = resBlckIps[i];
-        const nousertalk = !blck.allowusertalk;
-        const noemail = blck.noemail;
-        const hardblock = !blck.anononly;
-        const partial = blck.restrictions && !Array.isArray(blck.restrictions);
-        const indef = blck.expiry === 'infinity';
-        const rangeblock = blck.user !== ip && blck.user.slice(-3) !== ip.slice(-3);
-        UserAN.filter(obj => obj.user === ip).forEach(obj => {
-            const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true) >= 0;
-            if (newlyReported) {
-                obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry)!;
-                if (rangeblock) obj.duration = blck.user.substring(blck.user.length - 3) + 'で' + obj.duration;
-                obj.date = getBlockedDate(blck.timestamp);
-                obj.domain = partial ? '部分ブロック ' : '';
-                if (nousertalk && noemail) {
-                    obj.flags = ' 会話×・メール×';
-                } else if (nousertalk) {
-                    obj.flags = ' 会話×';
-                } else if (noemail) {
-                    obj.flags = ' メール×';
-                }
-                if (hardblock) obj.flags = ' ハードブロック' + (obj.flags ? obj.flags.replace(/^ /, '・') : '');
-            } else {
-                usersToBeReblocked.push(ip);
-            }
-        });
-    }
-
-    // Check for reblocked users and IPs
-    const reblockQueryParams = {
-        action: 'query',
-        list: 'logevents',
-        letype: 'block',
-        letitle: usersToBeReblocked.map(name => `利用者:${name}`),
-        formatversion: '2'
     };
-    const reblockQueryResult = await lib.massRequest(reblockQueryParams, 'letitle', 1);
 
-    for (let i = 0; i < reblockQueryResult.length; i++) {
+    const localBlockStatusQueryIps = async (ipsArr: string[]) => {
 
-        let resLgev: ApiResponseQueryListLogevents[];
-        const res = reblockQueryResult[i];
-        const username = usersToBeReblocked[i];
-        if (!res || !res.query || !res.query.logevents || (resLgev = res.query.logevents).length === 0) continue;
-        resLgev = resLgev.filter(obj => obj.action !== 'unblock'); // Remove irrelevant unblock logs
+        if (!ipsArr.length) return;
 
-        // Get the latest block and reblocks (e.g. [reblock, reblock, block, reblock, block] => [reblock, reblock, block])
-        let latestBlockIndex: number;
-        for (let j = 0; j < resLgev.length; j++) {
-            if (resLgev[j].action === 'block') {
-                latestBlockIndex = j;
-                break;
-            }
-        }
-        resLgev = resLgev.slice(0, latestBlockIndex! + 1); // latestBlockIndex is never undefined because we're processing information about blocked users
-        if (!resLgev.some(obj => obj.action === 'reblock')) continue; // Go on to the next loop if there's no reblock log
+        const params = {
+            action: 'query',
+            list: 'blocks',
+            bkprop: 'user|timestamp|expiry|restrictions|flags',
+            bklimit: 1,
+            bkip: ips,
+            formatversion: '2'
+        };
+        const response = await lib.massRequest(params, 'bkip', 1);
 
-        // ---- At this point, resLgev has two or more block logs (the log of the initial block, that of a reblock, +α) ----
+        response.forEach((res, i) => {
 
-        // Shrink the resLgev array to two elements
-        // [
-        //      {...}, => Reblock log generated after the user was reported
-        //      {...}  => Initial block log or an older reblock log generated at least 1 hour before the latest reblock
-        // ]
-        if (resLgev.length > 2) { // If reblocked multiple times
-            // Get the element that's to be the second in the array (action=block, or action=reblock applied more than 1 hour before the latest reblock)
-            const base = resLgev.find((obj, i, arr) => {
-                return obj.action === 'block' || lib.compareTimestamps(obj.timestamp!, arr[0].timestamp!) > 1*60*60*1000
+            let resBlck: ApiResponseQueryListBlocks[]|undefined;
+            if (!res || !res.query || !(resBlck = res.query.blocks) || !resBlck.length) return;
+            const blck = resBlck[0];
+
+            const ip = ipsArr[i];
+            const nousertalk = !blck.allowusertalk;
+            const noemail = blck.noemail;
+            const hardblock = !blck.anononly;
+            const partial = blck.restrictions && !Array.isArray(blck.restrictions);
+            const indef = blck.expiry === 'infinity';
+            const rangeblock = blck.user !== ip && blck.user.slice(-3) !== ip.slice(-3);
+            UserAN.forEach(obj => {
+                if (obj.user !== ip) return;
+                const newlyReported = lib.compareTimestamps(obj.timestamp, blck.timestamp, true) >= 0;
+                if (newlyReported) {
+                    obj.duration = indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry)!;
+                    if (rangeblock) obj.duration = blck.user.substring(blck.user.length - 3) + 'で' + obj.duration;
+                    obj.date = getBlockedDate(blck.timestamp);
+                    obj.domain = partial ? '部分ブロック' : '';
+                    const flags: string[] = [];
+                    if (nousertalk) flags.push('会話×');
+                    if (noemail) flags.push('メール×');
+                    if (hardblock) flags.push('ハードブロック');
+                    obj.flags = flags.join('・');
+                } else {
+                    usersToBeReblocked.push(`利用者:${ip}`);
+                }
             });
-            const latest = resLgev[0];
-            resLgev = [latest, base!];
-        }
 
-        // Clean up some properties
-        resLgev.forEach(obj => {
+        });
+    };
+
+    // Check if the users and IPs in the arrays are locally blocked
+    const blockQueries = [localBlockStatusQueryUsers(users), localBlockStatusQueryIps(ips)];
+    await Promise.all(blockQueries); // Get domain/duration/date properties of UserAN if blocked
+
+    /**
+     * @param usersArr Each element must be prefixed by '利用者:'.
+     */
+    const reblockStatusQuery = async (usersArr: string[]) => {
+
+        if (!usersArr.length) return;
+
+        const params = {
+            action: 'query',
+            list: 'logevents',
+            letype: 'block',
+            letitle: usersArr,
+            formatversion: '2'
+        };
+        const response = await lib.massRequest(params, 'letitle', 1);
+
+        const cleanupBlockLog = (obj: ApiResponseQueryListLogevents, username: string) => {
 
             if (!obj.params) obj.params = {};
             if (!obj.params.flags) obj.params.flags = [];
@@ -445,180 +434,237 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
             if (obj.params.duration === 'infinity' && !obj.params.expiry) obj.params.expiry = 'infinity';
 
             // Remove 'nocreate' and 'noautoblock' because they're irrelevant
-            let elementIdx;
+            let elementIdx: number;
             if ((elementIdx = obj.params.flags.indexOf('nocreate')) !== -1) obj.params.flags.splice(elementIdx, 1);
             if ((elementIdx = obj.params.flags.indexOf('noautoblock')) !== -1) obj.params.flags.splice(elementIdx, 1);
 
             // If the user is an IP, change 'anononly' to 'hardblock'
             if (lib.isIPAddress(username)) {
                 if ((elementIdx = obj.params.flags.indexOf('anononly')) !== -1) {
-                    obj.params.flags.splice(elementIdx, 1);
+                    obj.params.flags.splice(elementIdx, 1).unshift('hardblock');
+                }
+            }
+
+        };
+
+        response.forEach((res, i) => {
+
+            let resLgev: ApiResponseQueryListLogevents[]|undefined;
+            if (!res || !res.query || !(resLgev = res.query.logevents) || !resLgev.length) return;
+            const username = usersArr[i].replace(/^利用者:/, '');
+
+            // Shrink the resLgev array to two elements
+            // [
+            //      {...}, => Latest block/reblock log
+            //      {...}  => Initial block log or an older reblock log generated at least 30 minutes before the latest reblock
+            // ]
+            let latestBlockTs = '';
+            let initialBlockFetched = false;
+            resLgev = resLgev.filter((obj) => {
+
+                if (!obj.action || !obj.timestamp) return false;
+
+                if (['block', 'reblock'].includes(obj.action)) {
+                    if (obj.action === 'reblock' && !latestBlockTs) {
+                        latestBlockTs = obj.timestamp;
+                        cleanupBlockLog(obj, username);
+                        return true;
+                    } else if (!initialBlockFetched && lib.compareTimestamps(obj.timestamp, latestBlockTs) > 30*60*1000) {
+                        initialBlockFetched = true;
+                        cleanupBlockLog(obj, username);
+                        return true;
+                    } else {
+                        return false;
+                    }
                 } else {
-                    obj.params.flags.unshift('hardblock');
+                    return false;
                 }
-            }
 
-        });
+            });
+            if (resLgev.length !== 2 || !latestBlockTs || !initialBlockFetched) return;
 
-        // Get what's changed
-        const latestBlock = resLgev[0];
-        const olderBlock = resLgev[1];
+            // Get what's changed
+            const latestBlock = resLgev[0];
+            const olderBlock = resLgev[1];
 
-        // Domain
-        let domain = '';
-        if (olderBlock.params!.sitewide && latestBlock.params!.sitewide) {
-            // Do nothing
-        } else if (olderBlock.params!.sitewide && !latestBlock.params!.sitewide) {
-            domain = '部分ブロック';
-        } else if (!olderBlock.params!.sitewide && latestBlock.params!.sitewide) {
-            domain = 'サイト全体';
-        } else { // !olderBlock.params.sitewide && !latestBlock.params.sitewide
-            if (JSON.stringify(olderBlock.params!.restrictions) === JSON.stringify(latestBlock.params!.restrictions)) {
+            // Domain
+            let domain = '';
+            if (olderBlock.params!.sitewide && latestBlock.params!.sitewide) {
                 // Do nothing
+            } else if (olderBlock.params!.sitewide && !latestBlock.params!.sitewide) {
+                domain = '部分ブロック';
+            } else if (!olderBlock.params!.sitewide && latestBlock.params!.sitewide) {
+                domain = 'サイト全体';
             } else {
-                domain = '部分ブロック条件変更';
-            }
-        }
-
-        // Duration (if changed, substitute the 'duration' variable with the new expiry)
-        let duration = '';
-        if (olderBlock.params!.expiry! !== latestBlock.params!.expiry!) duration = latestBlock.params!.expiry!;
-
-        // Flags
-        let flags: string|string[];
-        if (!lib.arraysEqual(olderBlock.params!.flags!, latestBlock.params!.flags!, true)) {
-
-            const translate = (str: string, removed: boolean): string => {
-                switch (str) {
-                    case 'hardblock':
-                        return removed ? 'ソフトブロック' : 'ハードブロック';
-                    case 'noemail':
-                        return 'メール' + (removed ? '〇' : '×');
-                    case 'nousertalk':
-                        return '会話' + (removed ? '〇' : '×');
-                    default:
-                        log('translate() encountered an unrecognized value of ' + str + '.');
-                        return '';
+                if (JSON.stringify(olderBlock.params!.restrictions) === JSON.stringify(latestBlock.params!.restrictions)) {
+                    // Do nothing
+                } else {
+                    domain = '部分ブロック条件変更';
                 }
-            };
-
-            if (olderBlock.params!.flags!.length > latestBlock.params!.flags!.length) { // Flags removed
-                flags = olderBlock.params!.flags!.filter(el => !latestBlock.params!.flags!.includes(el));
-                flags = flags.map(el => translate(el, true));
-            } else { // Flags added
-                flags = latestBlock.params!.flags!.filter(el => !olderBlock.params!.flags!.includes(el));
-                flags = flags.map(el => translate(el, false));
             }
-            if (flags.includes('')) continue;
-            flags = flags.join('・');
 
-        }
+            // Duration (if changed, substitute the 'duration' variable with the new expiry)
+            let duration = '';
+            if (olderBlock.params!.expiry! !== latestBlock.params!.expiry!) duration = latestBlock.params!.expiry!;
 
-        // Set properties of the UserAN array
-        UserAN.filter(obj => obj.user === username).forEach(obj => {
-            const newlyReported = lib.compareTimestamps(obj.timestamp, latestBlock.timestamp!, true) >= 0;
-            if (newlyReported) {
-                obj.domain = domain;
-                obj.duration = duration === 'infinity' ? '無期限' : duration ? lib.getDuration(latestBlock.timestamp!, duration)! : duration;
-                if (domain) obj.duration = ' ' + obj.duration;
-                obj.flags = (domain || duration ? ' ' : '') + flags;
-                obj.date = getBlockedDate(latestBlock.timestamp);
-                obj.reblocked = '条件変更';
+            // Flags
+            const flags: string[] = [];
+            const diff = lib.arrayDiff(olderBlock.params!.flags!, latestBlock.params!.flags!);
+            if (diff.added.length || diff.removed.length) {
+
+                const translate = (str: string, removed: boolean): string => {
+                    switch (str) {
+                        case 'hardblock':
+                            return removed ? 'ソフトブロック' : 'ハードブロック';
+                        case 'noemail':
+                            return 'メール' + (removed ? '〇' : '×');
+                        case 'nousertalk':
+                            return '会話' + (removed ? '〇' : '×');
+                        default:
+                            log('translate() encountered an unrecognized value of ' + str + '.');
+                            return '';
+                    }
+                };
+
+                [diff.added, diff.removed].forEach((arr, j) => {
+                    const removed = j === 1;
+                    arr.forEach((el) => {
+                        if (typeof el === 'string') {
+                            flags.push(translate(el, removed));
+                        }
+                    });
+                });
+
             }
+
+            // Set properties of the UserAN array
+            UserAN.forEach((obj) => {
+                if (obj.user !== username) return;
+                const newlyReported = lib.compareTimestamps(obj.timestamp, latestBlock.timestamp!, true) >= 0;
+                if (newlyReported) {
+                    obj.domain = domain;
+                    obj.duration = duration === 'infinity' ? '無期限' : duration ? lib.getDuration(latestBlock.timestamp!, duration)! : duration;
+                    obj.flags = flags.join('・');
+                    obj.date = getBlockedDate(latestBlock.timestamp!);
+                    obj.reblocked = '条件変更';
+                }
+            });
+
         });
-
-    }
+    };
+    await reblockStatusQuery(usersToBeReblocked);
 
     // Check if the users and IPs in the arrays are globally (b)locked
     if (checkGlobal) {
 
         // Only check users that aren't locally blocked
-        let gUsers = UserAN.filter(obj => obj.user && !obj.date).map(obj => obj.user).filter((el, i, arr) => arr.indexOf(el) === i);
-        const gIps = gUsers.filter(username => lib.isIPAddress(username));
-        gUsers = gUsers.filter(username => !lib.isIPAddress(username));
+        const gUsers: string[] = [];
+        const gIps: string[] = [];
+        UserAN.forEach(({user, date}) => {
+            if (!user || date) { // Updated UserANs have a nonempty 'date' property
+                return;
+            } else if (lib.isIPAddress(user)) {
+                if (!gIps.includes(user)) gIps.push(user);
+            } else {
+                if (!gUsers.includes(user)) gUsers.push(user);
+            }
+        });
 
-        const globalStatusQueries = [];
-        const globalStatusQueryParamUsers = {
-            action: 'query',
-            list: 'globalallusers',
-            agufrom: gUsers,
-            aguto: gUsers,
-            aguprop: 'lockinfo',
-            agulimit: 1,
-            formatversion: '2'
-        };
-        const globalStatusQueryParamIps = {
-            action: 'query',
-            list: 'globalblocks',
-            bgip: gIps,
-            bgprop: 'address|expiry|timestamp',
-            bglimit: 1,
-            formatversion: '2'
-        };
-        globalStatusQueries.push(
-            lib.massRequest(globalStatusQueryParamUsers, ['agufrom', 'aguto'], 1),
-            lib.massRequest(globalStatusQueryParamIps, 'bgip', 1)
-        );
-        const globalStatusQueryResult = await Promise.all(globalStatusQueries);
-        const globalStatusResponseUsers = globalStatusQueryResult[0];
-        const globalStatusResponseIps = globalStatusQueryResult[1];
+        const globalLockStatusQuery = async (usersArr: string[]) => {
 
-        const resGLock = globalStatusResponseUsers
-            .filter(obj => obj && obj.query && obj.query.globalallusers)
-            .map(obj => obj!.query!.globalallusers)
-            .flat();
-        const globallyLockedUsers = resGLock
-            .filter(obj => obj && obj.locked === '')
-            .map(obj => obj!.name);
-        const lockedDate = getBlockedDate();
-        globallyLockedUsers.forEach(lockedUser => {
-            UserAN.filter(obj => obj.user === lockedUser).forEach(obj => {
+            if (!usersArr.length) return;
+
+            const params = {
+                action: 'query',
+                list: 'globalallusers',
+                agufrom: usersArr,
+                aguto: usersArr,
+                aguprop: 'lockinfo',
+                agulimit: 1,
+                formatversion: '2'
+            };
+            const response = await lib.massRequest(params, ['agufrom', 'aguto'], 1);
+
+            const lockedUsers = response.reduce((acc: string[], res, i) => {
+                let resLck: ApiResponseQueryListGlobalallusers[]|undefined;
+                if (!res || !res.query || !(resLck = res.query.globalallusers) || !resLck.length) return acc;
+                const username = usersArr[i];
+                if (resLck[0].locked === '' && !acc.includes(username)) {
+                    acc.push(username);
+                }
+                return acc;
+            }, []);
+
+            const lockedDate = getBlockedDate();
+            UserAN.forEach((obj) => {
+                if (obj.date || !lockedUsers.includes(obj.user)) return;
                 obj.domain = 'グローバルロック';
                 obj.date = lockedDate;
             });
-        });
 
-        const gQueriedIps: string[] = [];
-        let resGBlock: ApiResponseQueryListGlobalblocks[] = [];
-        for (let i = 0; i < queryResultIps.length; i++) {
-            const res = globalStatusResponseIps[i];
-            if (res && res.query && res.query.globalblocks && res.query.globalblocks.length !== 0) {
-                gQueriedIps.push(gIps[i]);
-                resGBlock = resGBlock.concat(res.query.globalblocks);
-            }
-        }
+        };
 
-        for (let i = 0; i < resGBlock.length; i++) {
-            const ip = gQueriedIps[i];
-            const gBlck = resGBlock[i];
-            const indef = (gBlck.expiry === 'infinity');
-            UserAN.filter(obj => obj.user === ip).forEach(obj => {
-                const newlyReported = lib.compareTimestamps(obj.timestamp, gBlck.timestamp, true) >= 0;
-                if (newlyReported) {
-                    obj.duration = indef ? '無期限' : lib.getDuration(gBlck.timestamp, gBlck.expiry)!;
-                    obj.date = getBlockedDate(gBlck.timestamp);
-                    obj.domain = 'グローバルブロック ';
-                }
+        const globalBlockStatusQuery = async (ipsArr: string[]) => {
+
+            if (!ipsArr.length) return;
+
+            const params = {
+                action: 'query',
+                list: 'globalblocks',
+                bgip: ipsArr,
+                bgprop: 'address|expiry|timestamp',
+                bglimit: 1,
+                formatversion: '2'
+            };
+            const response = await lib.massRequest(params, 'bgip', 1);
+
+            response.forEach((res, i) => {
+
+                let resGBlck: ApiResponseQueryListGlobalblocks[]|undefined;
+                if (!res || !res.query || !(resGBlck = res.query.globalblocks) || !resGBlck.length) return;
+
+                const ip = ipsArr[i];
+                const gBlck = resGBlck[0];
+                const indef = (gBlck.expiry === 'infinity');
+                UserAN.forEach((obj) => {
+                    if (obj.date || obj.user !== ip) return;
+                    const newlyReported = lib.compareTimestamps(obj.timestamp, gBlck.timestamp, true) >= 0;
+                    if (newlyReported) {
+                        obj.duration = indef ? '無期限' : lib.getDuration(gBlck.timestamp, gBlck.expiry)!;
+                        obj.date = getBlockedDate(gBlck.timestamp);
+                        obj.domain = 'グローバルブロック';
+                    }
+                });
+
             });
-        }
-        
+
+        };
+
+        const globalStatusQueries = [globalLockStatusQuery(gUsers), globalBlockStatusQuery(gIps)];
+        await Promise.all(globalStatusQueries);
+
     }
 
     // --- Note: UserANs to mark up all have a 'date' property at this point ---
 
     // Final check before edit
+    let newlyBlocked = false;
+    let newlyModified = false;
     let modOnly = false; // True if no user is newly blocked but some UserANs need to be modified
-    if (UserAN.some(obj => obj.date)) { // Someone is newly blocked
-        UserAN.filter(obj => obj.modified).forEach(obj => obj.new = obj.modified);
-        UserAN.filter(obj => obj.date).forEach(obj => { // Get new UserANs to replace old ones with
-            const replacee = obj.modified ? obj.modified : obj.old;
-            obj.new = replacee.replace(/\|*\}{2}$/, '') + '|' + obj.domain + obj.duration + obj.flags + obj.date + '}}';
-        });
-    } else if (UserAN.some(obj => obj.modified)) {
-        modOnly = true;
-        UserAN.filter(obj => obj.modified).forEach(obj => obj.new = obj.modified); // Get the modified UserANs to replace old ones with
-    } else {
+    UserAN.forEach((obj) => {
+        if (!newlyBlocked) newlyBlocked = !!obj.date;
+        if (!newlyModified) newlyModified = !!obj.modified;
+        if (obj.date) {
+            const display = [obj.domain + obj.duration, obj.flags, obj.date].filter(el => el);
+            obj.new = (obj.modified || obj.old).replace(/\|*\}{2}$/, '') + '|' + display.join(' ') + '}}';
+        } else if (obj.modified) {
+            obj.new = obj.modified;
+        }
+    });
+    if (!newlyBlocked && !newlyModified) {
         return log('Procedure cancelled: There\'s no UserAN to update.');
+    } else if (!newlyBlocked) {
+        modOnly = true;
     }
 
     // Get summary
@@ -649,18 +695,20 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
             /** The array set as the object's properties only contains UserANs that need to be updated. */
             [sectiontitle: string]: UserANInfo[]
         }
-        const reportsBySection: ReportsBySection = UserAN
-            .filter(obj => obj.new && obj.date) // Filter out UserANs that need to be marked up
-            .reduce((acc, obj) => {
-                if (!acc[obj.section]) acc[obj.section] = []; // Create key and set an empty array as its value
-                // Push the current object only if the array doesn't contain an object whose 'user' property is the same as the current object's
-                //  'user' property. This prevents the output from having multiple occurrences of the same username. (One user could be reported
-                // multiple times in one section.)
-                if (acc[obj.section].every((obj2: UserANInfo) => obj2.user !== obj.user)) {
-                    acc[obj.section].push({...obj});
-                }
-                return acc;
-            }, Object.create(null));
+        const reportsBySection: ReportsBySection = UserAN.reduce((acc: ReportsBySection, obj) => {
+
+            if (!obj.new || !obj.date) return acc; // Filter out UserANs that need to be marked up
+            if (!acc[obj.section]) acc[obj.section] = []; // Create key and set an empty array as its value
+
+            // Push the current object only if the array doesn't contain an object whose 'user' property is the same as the current object's
+            //  'user' property. This prevents the output from having multiple occurrences of the same username. (One user could be reported
+            // multiple times in one section.)
+            if (acc[obj.section].every((obj2: UserANInfo) => obj2.user !== obj.user)) {
+                acc[obj.section].push({...obj});
+            }
+            return acc;
+
+        }, Object.create(null));
 
         for (const sectiontitle in reportsBySection) { // Loop through all keys of the created object (i.e. section titles)
 
@@ -697,7 +745,10 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
     let newContent = lr.content;
 
     // Update UserANs in the source text
-    UserAN.filter(obj => obj.new).forEach(obj => newContent = newContent.split(obj.old).join(obj.new));
+    UserAN.forEach((obj) => {
+        if (!obj.new) return;
+        newContent = newContent.split(obj.old).join(obj.new);
+    });
 
     // Edit the page
     const editParams: ApiParamsEditPage = {
@@ -729,23 +780,25 @@ async function queryAccountCreations() {
     if (Logids.lookUntil) Object.assign(params, {leend: Logids.lookUntil});
 
     const response: ApiResponse[] = await lib.continuedRequest(params);
-    const resLgev = response
-        .filter((obj) => {
-            return obj && obj.query && obj.query.logevents;
-        }).map(obj => {
-            return obj.query && obj.query.logevents;
-        }).flat();
-    if (resLgev[0] && resLgev[0].timestamp) Logids.lookUntil = resLgev[0].timestamp;
 
-    let list = resLgev.filter((obj): obj is ApiResponseQueryListLogevents => typeof obj === 'object').filter((obj) => obj && obj.title).map(({logid, title}) => {
-        return {
-            logid: logid!.toString(),
-            username: title!.replace(/^利用者:/, '')
-        };
-    });
-    list = list.filter(obj => !Logids.list.some(({logid}) => obj.logid === logid)); // Filter out log entries that are not in Logids.list
+    let ts = '';
+    const list = response.reduce((acc: IdList, obj) => {
+        let resLgev: ApiResponseQueryListLogevents[]|undefined;
+        if (obj && obj.query && (resLgev = obj.query.logevents)) {
+            const innerList = resLgev.reduce((accLg: IdList, objLg) => {
+                if (!ts && objLg.timestamp) ts = objLg.timestamp;
+                if (objLg.logid !== undefined && objLg.title) {
+                    accLg[objLg.logid.toString()] = objLg.title.replace(/^利用者:/, '');
+                }
+                return accLg;
+            }, Object.create(null));
+            Object.assign(acc, innerList);
+        }
+        return acc;
+    }, Object.create(null));
 
-    Logids.list = list.concat(Logids.list);
+    if (ts) Logids.lookUntil = ts;
+    Object.assign(Logids.list, list);
 
 }
 
@@ -756,30 +809,30 @@ async function queryEditDiffs(diffIdsArr: string[]) {
         action: 'query',
         revids: diffIdsArr,
         prop: 'revisions',
+        rvprop: 'ids|user',
         formatversion: '2'
     };
-    let response: (ApiResponse|null)[] = await lib.massRequest(params, 'revids');
-    response = response.filter((obj) => obj && obj.query); // Remove null elements from the result
+    const response: (ApiResponse|null)[] = await lib.massRequest(params, 'revids');
 
-    const diffidUsernameList = response
-        .filter(obj => obj && obj.query && obj.query.pages)
-        .map(obj => obj!.query!.pages!)
-        .flat()
-        .filter(obj => obj && obj.revisions)
-        .map(obj => obj.revisions!)
-        .flat()
-        .filter(({revid}) => !Diffids.list.some(({diffid}) => revid.toString() === diffid))
-        .map(({revid, user}) => ({diffid: revid.toString(), username: user}));
-    Diffids.list = Diffids.list.concat(diffidUsernameList);
+    const list = response.reduce((acc: IdList, obj) => {
+        if (obj && obj.query) {
+            (obj.query.pages || []).forEach((objPg) => {
+                const innerList = (objPg.revisions || []).reduce((accRv: IdList, objRv) => {
+                    if (objRv.revid !== undefined && objRv.user) {
+                        accRv[objRv.revid.toString()] = objRv.user;
+                    }
+                    return accRv;
+                }, Object.create(null));
+                Object.assign(acc, innerList);
+            });
+            Object.keys(obj.query.badrevids || {}).forEach((badrevid) => {
+                if (!Diffids.unprocessable.includes(badrevid)) Diffids.unprocessable.push(badrevid);
+            });
+        }
+        return acc;
+    }, Object.create(null));
 
-    const badRevids = response
-        .filter(obj => obj && obj.query && obj.query.badrevids)
-        .map(obj => obj!.query!.badrevids)
-        .flat()
-        .filter(obj => obj)
-        .map(obj => Object.keys(obj!).map(key => key))
-        .flat();
-    Diffids.unprocessable = Diffids.unprocessable.concat(badRevids).filter((el, i, arr) => arr.indexOf(el) === i);
+    Object.assign(Diffids.list, list);
 
 }
 
@@ -812,11 +865,11 @@ async function scrapeUsernameFromLogid(logid: string|number): Promise<string|und
 
 }
 
-/** Get ' (MM/DD)' from a JSON timestamp or the current time. */
+/** Get '(MM/DD)' from a JSON timestamp or the current time. */
 function getBlockedDate(timestamp?: string): string {
     const d = timestamp ? new Date(timestamp) : new Date();
     d.setHours(d.getHours() + 9);
-    return ` (${d.getMonth() + 1}/${d.getDate()})`;
+    return `(${d.getMonth() + 1}/${d.getDate()})`;
 }
 
 /** Check whether a string contains a Japanese character. */
