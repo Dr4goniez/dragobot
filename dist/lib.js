@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseLinks = exports.parseSections = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.searchText = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
+exports.arrayDiff = exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseLinks = exports.parseSections = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.searchText = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
 const net_1 = __importDefault(require("net"));
 const is_cidr_1 = __importStar(require("is-cidr"));
 const cheerio = __importStar(require("cheerio"));
@@ -164,7 +164,12 @@ async function getBackLinks(pagetitle, nsExclude) {
                 let resBL, resCont;
                 if (!res || !res.query || !(resBL = res.query.backlinks))
                     return resolve((0, server_1.log)('getBackLinks: Query failed.'));
-                const titles = resBL.filter(obj => !nsExclude.includes(obj.ns)).map(obj => obj.title);
+                const titles = resBL.reduce((acc, obj) => {
+                    if (!nsExclude.includes(obj.ns)) {
+                        acc.push(obj.title);
+                    }
+                    return acc;
+                }, []);
                 pages = pages.concat(titles);
                 if (res && res.continue && (resCont = res.continue.blcontinue)) {
                     await query(resCont);
@@ -204,7 +209,12 @@ async function getCatMembers(cattitle, nsExclude) {
                 let resCM, resCont;
                 if (!res || !res.query || !(resCM = res.query.categorymembers))
                     return resolve((0, server_1.log)('getCatMembers: Query failed.'));
-                const titles = resCM.filter(obj => !nsExclude.includes(obj.ns)).map(obj => obj.title);
+                const titles = resCM.reduce((acc, obj) => {
+                    if (!nsExclude.includes(obj.ns)) {
+                        acc.push(obj.title);
+                    }
+                    return acc;
+                }, []);
                 cats = cats.concat(titles);
                 if (res && res.continue && (resCont = res.continue.cmcontinue)) {
                     await query(resCont);
@@ -277,17 +287,13 @@ async function filterOutProtectedPages(pagetitles) {
                         return d < protectedUntil;
                     });
                 };
-                const titles = resPg.filter(obj => {
+                const titles = resPg.reduce((acc, obj) => {
                     let prtArr;
-                    if (!obj.title)
-                        return false;
-                    if (!(prtArr = obj.protection) || prtArr.length === 0) {
-                        return false;
+                    if (obj.title && (prtArr = obj.protection) && prtArr.length && isProtected(prtArr)) {
+                        acc.push(obj.title);
                     }
-                    else {
-                        return isProtected(prtArr);
-                    }
-                }).map(obj => obj.title);
+                    return acc;
+                }, []);
                 resolve(titles);
             }).catch((err) => {
                 (0, server_1.log)(err.info);
@@ -496,12 +502,16 @@ function parseTemplates(wikitext, config, nestlevel = 0) {
                     endIdx = i + 2;
                     const templateText = wikitext.slice(startIdx, endIdx); // Pipes could have been replaced with a control character if they're part of nested templates
                     const templateTextPipesBack = replacePipesBack(templateText);
-                    parsed.push({
-                        text: templateTextPipesBack,
-                        name: capitalizeFirstLetter(templateTextPipesBack.replace(/^\{\{/, '').split(/\||\}/)[0].trim().replace(/^:?(template:|テンプレート:)/i, '').replace(/ /g, '_').trim()),
-                        arguments: parseTemplateArguments(templateText),
-                        nestlevel: nestlevel
-                    });
+                    let templateName = templateTextPipesBack.replace(/\u200e|^\{\{\s*(:?\s*template\s*:|:?\s*テンプレート\s*:)?\s*|\s*[|}][\s\S]*$/gi, '').replace(/ /g, '_');
+                    templateName = ucFirst(templateName);
+                    if (!cfg.namePredicate || cfg.namePredicate(templateName)) {
+                        parsed.push({
+                            text: templateTextPipesBack,
+                            name: templateName,
+                            arguments: parseTemplateArguments(templateText),
+                            nestlevel: nestlevel
+                        });
+                    }
                 }
                 numUnclosed -= 2;
                 i++;
@@ -549,10 +559,6 @@ function parseTemplates(wikitext, config, nestlevel = 0) {
             return acc;
         }, accumulator);
         parsed = parsed.concat(subtemplates);
-    }
-    // Filter the array by template name(s)?
-    if (cfg.namePredicate) {
-        parsed = parsed.filter(({ name }) => cfg.namePredicate(name));
     }
     // Filter the array by a user-defined condition?
     if (cfg.templatePredicate) {
@@ -611,7 +617,7 @@ function parseTemplateArguments(template) {
     });
     return parsedArgs;
 }
-function capitalizeFirstLetter(string) {
+function ucFirst(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 function strReplaceAt(string, index, char) {
@@ -762,12 +768,12 @@ function parseHtml(html, config) {
 }
 exports.parseHtml = parseHtml;
 /**
- * Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, and \<source />, not including those nested
+ * Get strings enclosed by \<!-- -->, \<nowiki />, \<pre />, \<syntaxhighlight />, \<source />, and \<math />,not including those nested
  * inside other occurrences of these tags.
  */
 function getCommentTags(wikitext) {
     const namePredicate = (name) => {
-        return ['comment', 'nowiki', 'pre', 'syntaxhighlight', 'source'].includes(name);
+        return ['comment', 'nowiki', 'pre', 'syntaxhighlight', 'source', 'math'].includes(name);
     };
     const commentTags = parseHtml(wikitext, { namePredicate: namePredicate })
         .filter((Html, i, arr) => {
@@ -820,48 +826,51 @@ exports.replaceWikitext = replaceWikitext;
 /** Parse the content of a page into that of each section. */
 function parseSections(content) {
     const regex = {
-        header: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/,
-        headerG: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}?/g,
+        comments: /<!--[\s\S]*?-->|<(nowiki|pre|syntaxhighlight|source|math)[\s\S]*?<\/\1\s*>/gi,
+        header: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}/,
+        headerG: /={2,5}[^\S\n\r]*.+[^\S\n\r]*={2,5}/g,
         headerEquals: /(?:^={2,5}[^\S\n\r]*|[^\S\n\r]*={2,5}$)/g
     };
-    // Get headers and exclude those in comment tags
-    const matched = content.match(regex.headerG);
-    let headers = matched ? matched.slice() : [];
-    getCommentTags(content).forEach(co => {
-        headers = headers.filter(header => !co.includes(header));
-    });
-    headers.unshift(''); // For the top section
-    // Create an array of objects
-    const sections = headers.map((header, i, arr) => {
+    // Replace comment-related tags
+    let idx = 0;
+    const comments = [];
+    let m;
+    while ((m = regex.comments.exec(content))) {
+        content = content.replace(m[0], '$CM' + (idx++));
+        comments.push(m[0]);
+    }
+    // Get headers
+    const headers = [];
+    while ((m = regex.headerG.exec(content))) {
+        headers.push({
+            text: m[0],
+            title: m[0].replace(regex.headerEquals, ''),
+            level: (m[0].match(/=/g) || []).length / 2,
+            index: m.index // This is the index number of the header in the content
+        });
+    }
+    headers.unshift({ text: '', title: '', level: 1, index: 0 }); // For the top section
+    // Return an array of objects
+    return headers.map(({ text, title, level, index }, i, arr) => {
         const isTopSection = i === 0;
+        let sectionContent = arr.length > 1 ? content.slice(0, arr[1].index) : content; // For the top section
+        let deepest = null;
+        if (!isTopSection) { // For non-top sections
+            const nextSameLevelSection = arr.slice(i + 1).filter(obj => obj.level <= level);
+            sectionContent = content.slice(index, nextSameLevelSection.length ? nextSameLevelSection[0].index : content.length);
+            const dRegex = new RegExp(`(={${level + 1},})[^\\S\\n\\r]*.+[^\\S\\n\\r]*\\1`);
+            deepest = !dRegex.test(sectionContent.slice(text.length));
+        }
+        comments.forEach((el, j) => sectionContent = sectionContent.replace(`$CM${j}`, el)); // Get comments back
         return {
-            header: isTopSection ? null : header,
-            title: isTopSection ? null : header.replace(regex.headerEquals, ''),
-            level: isTopSection ? 1 : header.match(/=/g).length / 2,
+            header: isTopSection ? null : text,
+            title: isTopSection ? null : title,
+            level: level,
             index: i,
-            content: isTopSection ? (arr.length > 1 ? content.split(headers[1])[0] : content) : '',
-            deepest: isTopSection ? null : false
+            content: sectionContent,
+            deepest: deepest
         };
     });
-    // Get the content property
-    sections.forEach((obj, i, arr) => {
-        // For top section
-        if (!obj.header)
-            return;
-        // Check if there's any section of the same level or shallower following this section
-        const nextBoundarySection = arr.slice(i + 1).find(objF => objF.level <= obj.level);
-        // Get the content of this section
-        let sectionContent;
-        if (nextBoundarySection) {
-            sectionContent = content.substring(content.indexOf(obj.header), content.indexOf(nextBoundarySection.header));
-        }
-        else {
-            sectionContent = content.substring(content.indexOf(obj.header));
-        }
-        obj.content = sectionContent;
-        obj.deepest = typeof arr.slice(i + 1).find(objF => sectionContent.includes(objF.header)) === 'undefined';
-    });
-    return sections;
 }
 exports.parseSections = parseSections;
 /**
@@ -1199,3 +1208,18 @@ function arraysEqual(array1, array2, orderInsensitive = false) {
     }
 }
 exports.arraysEqual = arraysEqual;
+/** Compare elements in two arrays. */
+function arrayDiff(sourceArray, targetArray) {
+    const added = [];
+    const removed = [];
+    sourceArray.forEach((el) => {
+        if (!targetArray.includes(el))
+            removed.push(el);
+    });
+    targetArray.forEach((el) => {
+        if (!sourceArray.includes(el))
+            added.push(el);
+    });
+    return { added, removed };
+}
+exports.arrayDiff = arrayDiff;
