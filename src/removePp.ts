@@ -53,7 +53,12 @@ export async function removePp(botRunTs?: string): Promise<void> {
         queries.push(lib.getTranscludingPages(tl));
     }
     const result = await Promise.all(queries);
-    const transcludingPp = result.flat().filter((el, i, arr) => arr.indexOf(el) === i);
+    const transcludingPp = result.reduce((acc: string[], arr) => { // flat and remove duplicates
+        arr.forEach((pagetitle) => {
+            if (!acc.includes(pagetitle)) acc.push(pagetitle);
+        });
+        return acc;
+    }, []);
 
     // Filter out unprotected pages 
     const protectedPages = await lib.filterOutProtectedPages(transcludingPp);
@@ -128,7 +133,7 @@ export async function editPageWithPp(pagetitle: string): Promise<void|null> {
     const params = {
         title: pagetitle,
         text: content,
-        summary: 'Bot: 保護テンプレートの除去',
+        summary: 'Bot: [[Template:Pp|保護テンプレート]]の除去',
         minor: true,
         bot: true,
         basetimestamp: lr.basetimestamp,
