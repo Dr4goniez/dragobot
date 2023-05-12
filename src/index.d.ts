@@ -228,7 +228,7 @@ export interface ApiResponseQuery {
     };
     // tags?: ApiResponseQueryListTags;
     // threads?: ApiResponseQueryListThreads;
-    // usercontribs?: ApiResponseQueryListUsercontribs;
+    usercontribs?: ApiResponseQueryListUsercontribs[];
     // users?: ApiResponseQueryListUsers;
     // watchlist?: ApiResponseQueryListWatchlist;
     // watchlistraw?: ApiResponseQueryListWatchlistraw;
@@ -501,7 +501,26 @@ export interface ApiResponseQueryListSearch {
 }
 // export interface ApiResponseQueryListTags {}
 // export interface ApiResponseQueryListThreads {}
-// export interface ApiResponseQueryListUsercontribs {}
+export interface ApiResponseQueryListUsercontribs {
+    userid: number;
+    user: string;
+    pageid: number;
+    revid: number;
+    parentid: number;
+    ns: number;
+    title: string;
+    timestamp: string;
+    new: boolean;
+    minor: boolean;
+    top: boolean;
+    comment: string;
+    parsedcomment: string;
+    patrolled: boolean;
+    autopatrolled: boolean;
+    size: number;
+    sizediff: number;
+    tags: string[];
+}
 // export interface ApiResponseQueryListUsers {}
 // export interface ApiResponseQueryListWatchlist {}
 // export interface ApiResponseQueryListWatchlistraw {}
