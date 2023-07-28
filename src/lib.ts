@@ -222,7 +222,7 @@ export async function getCatMembers(cattitle: string, nsExclude?: number[]): Pro
 }
 
 /** Get a list of pages that transclude a given page. */
-export async function getTranscludingPages(pagetitle: string): Promise<string[]> {
+export async function getTranscludingPages(pagetitle: string, namespaceNumbers?: number[]): Promise<string[]> {
 
     let pages: string[] = [];
     const mw = getMw();
@@ -232,6 +232,7 @@ export async function getTranscludingPages(pagetitle: string): Promise<string[]>
                 action: 'query',
                 list: 'embeddedin',
                 eititle: pagetitle,
+                einamespace: namespaceNumbers ? namespaceNumbers.join('|') : '*',
                 eifilterredir: 'nonredirects',
                 eilimit: 'max',
                 eicontinue: eicontinue,
@@ -672,8 +673,12 @@ function parseTemplateArguments(template: string): TemplateArgument[] {
 
 }
 
-function ucFirst(string: string) {
+export function ucFirst(string: string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+export function lcFirst(string: string) {
+    return string.charAt(0).toLowerCase() + string.slice(1);
 }
 
 function strReplaceAt(string: string, index: number, char: string): string {
@@ -896,7 +901,7 @@ export function getCommentTags(wikitext: string): string[] {
 }
 
 /**
- * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlight, source).
+ * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlight, source, math).
  * The replacees array and the replacers array must have the same number of elements in them. This restriction does not apply only if the replacees are to be 
  * replaced with one unique replacer, and the 'replacers' argument is a string or an array containing only one element. 
  */

@@ -491,10 +491,10 @@ export interface ApiResponseQueryListSearch {
     ns: number;
     title: string;
     pageid: number;
-    size: number;
-    wordcount: number;
-    snippet: string;
-    timestamp: string;
+    size?: number;
+    wordcount?: number;
+    snippet?: string;
+    timestamp?: string;
     titlesnippet?: string;
     categorysnippet?: string;
     isfilematch?: boolean;
