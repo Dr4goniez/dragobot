@@ -6,7 +6,7 @@ import { log } from './server';
 import { getMw, init, isBot } from './mw';
 import { DynamicObject, ApiResponse, ApiResponseError, ApiResponseQueryPagesProtection, ApiResponseQueryListSearch, ApiParamsEditPage } from '.';
 import * as siteinfo from './siteinfo';
-
+import { ucFirst } from './string';
 
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
 
@@ -671,14 +671,6 @@ function parseTemplateArguments(template: string): TemplateArgument[] {
 
     return parsedArgs;
 
-}
-
-export function ucFirst(string: string) {
-    return string.charAt(0).toUpperCase() + string.slice(1);
-}
-
-export function lcFirst(string: string) {
-    return string.charAt(0).toLowerCase() + string.slice(1);
 }
 
 function strReplaceAt(string: string, index: number, char: string): string {
