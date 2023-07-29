@@ -14,24 +14,24 @@ let ID: string | number; // Ensure that init() is run for the same account when 
  */
 export const init = async (identifier?: string | number) => {
 
-    if (typeof identifier === 'undefined') identifier = '';
-    if (!ID) ID = identifier;
-    const userinfo: keyof typeof my = 'userinfo' + ID;
+	if (typeof identifier === 'undefined') identifier = '';
+	if (!ID) ID = identifier;
+	const userinfo: keyof typeof my = 'userinfo' + ID;
 
-    mw = new MWBot(); // Edit fails if the mwbot instance isn't updated everytime when it's initialized
-    const loggedIn = await mw.loginGetEditToken(my[userinfo])
-    .then((res: DynamicObject) => {
-        return res && res.result === 'Success';
-    }).catch((err: DynamicObject) => log(err.response.login.reason));
+	mw = new MWBot(); // Edit fails if the mwbot instance isn't updated everytime when it's initialized
+	const loggedIn = await mw.loginGetEditToken(my[userinfo])
+	.then((res: DynamicObject) => {
+		return res && res.result === 'Success';
+	}).catch((err: DynamicObject) => log(err.response.login.reason));
 
-    if (loggedIn) {
-        const host = my[userinfo].apiUrl.replace(/^(https?:)?\/\//, '').split('/')[0];
-        log(`Logged in as ${my[userinfo].username}@${host}`);
-        return mw;
-    } else {
-        log('Failed to log in.');
-        return;
-    }
+	if (loggedIn) {
+		const host = my[userinfo].apiUrl.replace(/^(https?:)?\/\//, '').split('/')[0];
+		log(`Logged in as ${my[userinfo].username}@${host}`);
+		return mw;
+	} else {
+		log('Failed to log in.');
+		return;
+	}
 
 };
 
@@ -40,6 +40,6 @@ export const getMw = () => mw;
 
 /** Check whether the current user is a bot. Accounts need to be added to my.ts. */
 export const isBot = () => { // Must be a function because mw.state is available only when the Promise of init has been settled
-    if (!mw.state.lgusername) return null;
-    return bots.includes(mw.state.lgusername);
+	if (!mw.state.lgusername) return null;
+	return bots.includes(mw.state.lgusername);
 };
