@@ -1,3 +1,9 @@
+/**
+ * This module is adapted from mediawiki-core.
+ * @link https://gerrit.wikimedia.org/g/mediawiki/core/+/2a0de02aabec6adc00606acce7372b38956e08d1/resources/src/mediawiki.Title/phpCharToUpper.json
+ */
+
+/** Object that maps unicode characters as in PHP's `strtoupper`. */
 export const toUpperMap: {[key: string]: string|0;} = {
 	"ß": 0,
 	"ŉ": 0,
