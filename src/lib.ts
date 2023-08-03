@@ -4,7 +4,7 @@ import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { log } from './server';
 import { getMw, init, isBot } from './mw';
-import { DynamicObject, ApiResponse, ApiResponseError, ApiResponseQueryPagesProtection, ApiResponseQueryListSearch, ApiParamsEditPage } from '.';
+import { DynamicObject, ApiResponse, ApiResponseError, ApiResponseQueryPagesProtection, ApiResponseQueryListSearch, ApiParamsEditPage, ApiParamsQueryEmbeddedIn } from '.';
 import * as siteinfo from './siteinfo';
 import { ucFirst } from './string';
 
@@ -221,41 +221,72 @@ export async function getCatMembers(cattitle: string, nsExclude?: number[]): Pro
 
 }
 
-/** Get a list of pages that transclude a given page. */
-export async function getTranscludingPages(pagetitle: string, namespaceNumbers?: number[]): Promise<string[]> {
+interface EmbeddedInOptions {
+	/** The namespace to enumerate. Values (separate with "|"). To specify all values, use "*". */
+	einamespace?: string;
+	/** The direction in which to list. (Default: ascending) */
+	eidir?: 'ascending'|'descending';
+	/** How to filter for redirects. (Default: all) */
+	eifilterredir?: 'all'|'nonredirects'|'redirects';
+	/** How many total pages to return. (Default: 'max') */
+	eilimit?: number|'max';
+}
+/**
+ * Find all pages that embed (transclude) the given title.
+ * 
+ * Default query parameters:
+ * ```
+ * {
+ * 	action: 'query',
+ * 	list: 'embeddedin',
+ * 	eititle: pagetitle,
+ * 	eilimit: 'max',
+ * 	formatversion: '2'
+ * }
+ * ```
+ * @param pagetitle
+ * @param options Additional query parameters.
+ * @returns Null when any (continued) request fails.
+ */
+export async function getEmbeddedIn(pagetitle: string, options?: EmbeddedInOptions): Promise<string[]|null> {
 
 	let pages: string[] = [];
+	let failed = false;
 	const mw = getMw();
-	const query = function(eicontinue?: string) {
-		return new Promise<void>(resolve => {
-			mw.request({
-				action: 'query',
-				list: 'embeddedin',
-				eititle: pagetitle,
-				einamespace: namespaceNumbers ? namespaceNumbers.join('|') : '*',
-				eifilterredir: 'nonredirects',
-				eilimit: 'max',
-				eicontinue: eicontinue,
-				formatversion: '2'
-			}).then(async (res: ApiResponse) => {
-
-				let resEi, resCont;
-				if (!res || !res.query || !(resEi = res.query.embeddedin)) return resolve();
-
-				const titles = resEi.map(obj => obj.title);
-				pages = pages.concat(titles);
-
-				if (res && res.continue && (resCont = res.continue.eicontinue)) {
-					await query(resCont);
-				}
-				resolve();
-
-			}).catch((err: ApiResponseError) => resolve(log(err.info)));
-		});
+	const params: ApiParamsQueryEmbeddedIn = {
+		action: 'query',
+		list: 'embeddedin',
+		eititle: pagetitle,
+		eilimit: 'max',
+		formatversion: '2'
 	};
+	if (options) {
+		Object.assign(params, options);
+	}
 
-	await query();
-	return pages;
+	const req = (eicontinue?: string): Promise<void> => {
+		if (eicontinue) {
+			Object.assign(params, {eicontinue});
+		}
+		return mw.request(params)
+			.then((res: ApiResponse) => {
+				let resEi, resCont;
+				if (!res || !res.query || !(resEi = res.query.embeddedin)) {
+					failed = true;
+					return;
+				}
+				pages = pages.concat(resEi.map(obj => obj.title));
+				if (res && res.continue && (resCont = res.continue.eicontinue)) {
+					return req(resCont);
+				}
+			})
+			.catch((err: ApiResponseError) => {
+				log(err.info);
+				failed = true;
+			});
+	};
+	await req();
+	return failed ? null : pages.filter((el, i, arr) => arr.indexOf(el) === i);
 
 }
 

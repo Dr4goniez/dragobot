@@ -148,7 +148,11 @@ async function collectPages(limit?: number): Promise<string[]|null> {
 		}
 	}
 	log('Fetching pages that transclude Template:削除依頼過去ログ...');
-	titles = await lib.getTranscludingPages('Template:削除依頼過去ログ', talkNsNum);
+	titles = await lib.getEmbeddedIn('Template:削除依頼過去ログ', {einamespace: talkNsNum.join('|')});
+	if (!titles) {
+		log('getEmbeddedIn returned null.');
+		return [];
+	}
 	log(`${titles.length} page(s) found.`);
 	processed = processed.concat(titles);
 	return titles;

@@ -3153,13 +3153,20 @@ export interface ApiParamsQueryDuplicateFiles extends ApiParamsQuery {
 	dflocalonly?: boolean;
 }
 
-export interface ApiParamsQueryBacklinks extends ApiParamsQuery {
+export interface ApiParamsQueryEmbeddedIn extends ApiParamsQuery {
+	/** Title to search. Cannot be used together with eipageid. */
 	eititle?: string;
+	/** Page ID to search. Cannot be used together with eititle. */
 	eipageid?: number;
+	/** When more results are available, use this to continue. */
 	eicontinue?: string;
-	einamespace?: namespace | namespace[];
+	/** The namespace to enumerate. Values (separate with "|"). To specify all values, use *. */
+	einamespace?: string;
+	/** The direction in which to list. (Default: ascending) */
 	eidir?: "ascending" | "descending";
+	/** How to filter for redirects. (Default: all) */
 	eifilterredir?: "all" | "nonredirects" | "redirects";
+	/** How many total pages to return. */
 	eilimit?: limit;
 }
 
@@ -3273,15 +3280,15 @@ export interface ApiParamsQueryFileRepoInfo extends ApiParamsQuery {
 	friprop?: string;
 }
 
-export interface ApiParamsQueryBacklinksprop extends ApiParamsQuery {
-	/** One or more of the following: "pageid" | "redirect" | "title" */
-	fuprop?: string;
-	funamespace?: namespace | namespace[];
-	/** One or more of the following: "!redirect" | "redirect" */
-	fushow?: string;
-	fulimit?: limit;
-	fucontinue?: string;
-}
+// export interface ApiParamsQueryBacklinksprop extends ApiParamsQuery {
+// 	/** One or more of the following: "pageid" | "redirect" | "title" */
+// 	fuprop?: string;
+// 	funamespace?: namespace | namespace[];
+// 	/** One or more of the following: "!redirect" | "redirect" */
+// 	fushow?: string;
+// 	fulimit?: limit;
+// 	fucontinue?: string;
+// }
 
 export interface ApiParamsQueryFlagged extends ApiParamsQuery {}
 
@@ -3403,16 +3410,16 @@ export interface ApiParamsQueryImages extends ApiParamsQuery {
 	imdir?: "ascending" | "descending";
 }
 
-export interface ApiParamsQueryBacklinks extends ApiParamsQuery {
-	iutitle?: string;
-	iupageid?: number;
-	iucontinue?: string;
-	iunamespace?: namespace | namespace[];
-	iudir?: "ascending" | "descending";
-	iufilterredir?: "all" | "nonredirects" | "redirects";
-	iulimit?: limit;
-	iuredirect?: boolean;
-}
+// export interface ApiParamsQueryBacklinks extends ApiParamsQuery {
+// 	iutitle?: string;
+// 	iupageid?: number;
+// 	iucontinue?: string;
+// 	iunamespace?: namespace | namespace[];
+// 	iudir?: "ascending" | "descending";
+// 	iufilterredir?: "all" | "nonredirects" | "redirects";
+// 	iulimit?: limit;
+// 	iuredirect?: boolean;
+// }
 
 export interface ApiParamsQueryInfo extends ApiParamsQuery {
 	/** One or more of the following: "displaytitle" | "linkclasses" | "notificationtimestamp" | "preload" | "protection" | "subjectid" | "talkid" | "url" | "varianttitles" | "visitingwatchers" | "watched" | "watchers" | "readable" */
@@ -3485,15 +3492,15 @@ export interface ApiParamsQueryLinks extends ApiParamsQuery {
 	pldir?: "ascending" | "descending";
 }
 
-export interface ApiParamsQueryBacklinksprop extends ApiParamsQuery {
-	/** One or more of the following: "pageid" | "redirect" | "title" */
-	lhprop?: string;
-	lhnamespace?: namespace | namespace[];
-	/** One or more of the following: "!redirect" | "redirect" */
-	lhshow?: string;
-	lhlimit?: limit;
-	lhcontinue?: string;
-}
+// export interface ApiParamsQueryBacklinksprop extends ApiParamsQuery {
+// 	/** One or more of the following: "pageid" | "redirect" | "title" */
+// 	lhprop?: string;
+// 	lhnamespace?: namespace | namespace[];
+// 	/** One or more of the following: "!redirect" | "redirect" */
+// 	lhshow?: string;
+// 	lhlimit?: limit;
+// 	lhcontinue?: string;
+// }
 
 export interface MediaWikiLinterApiQueryLintErrorsParams extends ApiParamsQuery {
 	/** One or more of the following: "bogus-image-options" | "deletable-table-tag" | "fostered" | "html5-misnesting" | "misc-tidy-replacement-issues" | "misnested-tag" | "missing-end-tag" | "multi-colon-escape" | "multiline-html-table-in-list" | "multiple-unclosed-formatting-tags" | "obsolete-tag" | "pwrap-bug-workaround" | "self-closed-tag" | "stripped-tag" | "tidy-font-bug" | "tidy-whitespace-bug" | "unclosed-quotes-in-heading" | "wikilink-in-extlink" */
@@ -3915,15 +3922,15 @@ export interface ApiParamsQueryRecentChanges extends ApiParamsQuery {
 	rcslot?: "main";
 }
 
-export interface ApiParamsQueryBacklinksprop extends ApiParamsQuery {
-	/** One or more of the following: "fragment" | "pageid" | "title" */
-	rdprop?: string;
-	rdnamespace?: namespace | namespace[];
-	/** One or more of the following: "!fragment" | "fragment" */
-	rdshow?: string;
-	rdlimit?: limit;
-	rdcontinue?: string;
-}
+// export interface ApiParamsQueryBacklinksprop extends ApiParamsQuery {
+// 	/** One or more of the following: "fragment" | "pageid" | "title" */
+// 	rdprop?: string;
+// 	rdnamespace?: namespace | namespace[];
+// 	/** One or more of the following: "!fragment" | "fragment" */
+// 	rdshow?: string;
+// 	rdlimit?: limit;
+// 	rdcontinue?: string;
+// }
 
 export interface ApiParamsQueryRevisions extends ApiParamsQuery {
 	/** One or more of the following: "comment" | "content" | "contentmodel" | "flagged" | "flags" | "ids" | "oresscores" | "parsedcomment" | "roles" | "sha1" | "size" | "slotsha1" | "slotsize" | "tags" | "timestamp" | "user" | "userid" | "parsetree" */
@@ -4041,15 +4048,15 @@ export interface ApiParamsQueryTokens extends ApiParamsQuery {
 	type?: string;
 }
 
-export interface ApiParamsQueryBacklinksprop extends ApiParamsQuery {
-	/** One or more of the following: "pageid" | "redirect" | "title" */
-	tiprop?: string;
-	tinamespace?: namespace | namespace[];
-	/** One or more of the following: "!redirect" | "redirect" */
-	tishow?: string;
-	tilimit?: limit;
-	ticontinue?: string;
-}
+// export interface ApiParamsQueryBacklinksprop extends ApiParamsQuery {
+// 	/** One or more of the following: "pageid" | "redirect" | "title" */
+// 	tiprop?: string;
+// 	tinamespace?: namespace | namespace[];
+// 	/** One or more of the following: "!redirect" | "redirect" */
+// 	tishow?: string;
+// 	tilimit?: limit;
+// 	ticontinue?: string;
+// }
 
 export interface ApiParamsTranscodeStatus extends ApiParamsQuery {}
 
