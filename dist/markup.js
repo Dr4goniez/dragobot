@@ -36,7 +36,9 @@ const Diffids = {
     list: {},
     unprocessable: []
 };
-const ANI = 'Wikipedia:管理者伝言板/投稿ブロック', ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット', AN3RR = 'Wikipedia:管理者伝言板/3RR';
+const ANI = 'Wikipedia:管理者伝言板/投稿ブロック';
+const ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット';
+const AN3RR = 'Wikipedia:管理者伝言板/3RR';
 async function markupANs(checkGlobal) {
     for (const page of [ANI, ANS, AN3RR]) {
         (0, server_1.log)(`Checking ${page}...`);
@@ -421,8 +423,8 @@ async function markup(pagetitle, checkGlobal) {
             const username = usersArr[i].replace(/^利用者:/, '');
             // Shrink the resLgev array to two elements
             // [
-            //      {...}, => Latest block/reblock log
-            //      {...}  => Initial block log or an older reblock log generated at least 30 minutes before the latest reblock
+            //	  {...}, => Latest block/reblock log
+            //	  {...}  => Initial block log or an older reblock log generated at least 30 minutes before the latest reblock
             // ]
             let latestBlockTs = '';
             let initialBlockFetched = false;

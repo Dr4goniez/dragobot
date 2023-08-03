@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.arrayDiff = exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseLinks = exports.parseSections = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.searchText = exports.filterOutProtectedPages = exports.getTranscludingPages = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
+exports.arrayDiff = exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseLinks = exports.parseSections = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.searchText = exports.filterOutProtectedPages = exports.getEmbeddedIn = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
 const net_1 = __importDefault(require("net"));
 const is_cidr_1 = __importStar(require("is-cidr"));
 const cheerio = __importStar(require("cheerio"));
@@ -34,6 +34,7 @@ const axios_1 = __importDefault(require("axios"));
 const server_1 = require("./server");
 const mw_1 = require("./mw");
 const siteinfo = __importStar(require("./siteinfo"));
+const string_1 = require("./string");
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
 /**
  * Get the latest revision of a given page.
@@ -230,37 +231,62 @@ async function getCatMembers(cattitle, nsExclude) {
     return result;
 }
 exports.getCatMembers = getCatMembers;
-/** Get a list of pages that transclude a given page. */
-async function getTranscludingPages(pagetitle) {
+/**
+ * Find all pages that embed (transclude) the given title.
+ *
+ * Default query parameters:
+ * ```
+ * {
+ * 	action: 'query',
+ * 	list: 'embeddedin',
+ * 	eititle: pagetitle,
+ * 	eilimit: 'max',
+ * 	formatversion: '2'
+ * }
+ * ```
+ * @param pagetitle
+ * @param options Additional query parameters.
+ * @returns Null when any (continued) request fails.
+ */
+async function getEmbeddedIn(pagetitle, options) {
     let pages = [];
+    let failed = false;
     const mw = (0, mw_1.getMw)();
-    const query = function (eicontinue) {
-        return new Promise(resolve => {
-            mw.request({
-                action: 'query',
-                list: 'embeddedin',
-                eititle: pagetitle,
-                eifilterredir: 'nonredirects',
-                eilimit: 'max',
-                eicontinue: eicontinue,
-                formatversion: '2'
-            }).then(async (res) => {
-                let resEi, resCont;
-                if (!res || !res.query || !(resEi = res.query.embeddedin))
-                    return resolve();
-                const titles = resEi.map(obj => obj.title);
-                pages = pages.concat(titles);
-                if (res && res.continue && (resCont = res.continue.eicontinue)) {
-                    await query(resCont);
-                }
-                resolve();
-            }).catch((err) => resolve((0, server_1.log)(err.info)));
+    const params = {
+        action: 'query',
+        list: 'embeddedin',
+        eititle: pagetitle,
+        eilimit: 'max',
+        formatversion: '2'
+    };
+    if (options) {
+        Object.assign(params, options);
+    }
+    const req = (eicontinue) => {
+        if (eicontinue) {
+            Object.assign(params, { eicontinue });
+        }
+        return mw.request(params)
+            .then((res) => {
+            let resEi, resCont;
+            if (!res || !res.query || !(resEi = res.query.embeddedin)) {
+                failed = true;
+                return;
+            }
+            pages = pages.concat(resEi.map(obj => obj.title));
+            if (res && res.continue && (resCont = res.continue.eicontinue)) {
+                return req(resCont);
+            }
+        })
+            .catch((err) => {
+            (0, server_1.log)(err.info);
+            failed = true;
         });
     };
-    await query();
-    return pages;
+    await req();
+    return failed ? null : pages.filter((el, i, arr) => arr.indexOf(el) === i);
 }
-exports.getTranscludingPages = getTranscludingPages;
+exports.getEmbeddedIn = getEmbeddedIn;
 /** Filter protected pages out of a list of pagetitles. Returns undefined if any internal query fails. */
 async function filterOutProtectedPages(pagetitles) {
     const mw = (0, mw_1.getMw)();
@@ -503,7 +529,7 @@ function parseTemplates(wikitext, config, nestlevel = 0) {
                     const templateText = wikitext.slice(startIdx, endIdx); // Pipes could have been replaced with a control character if they're part of nested templates
                     const templateTextPipesBack = replacePipesBack(templateText);
                     let templateName = templateTextPipesBack.replace(/\u200e|^\{\{\s*(:?\s*template\s*:|:?\s*テンプレート\s*:)?\s*|\s*[|}][\s\S]*$/gi, '').replace(/ /g, '_');
-                    templateName = ucFirst(templateName);
+                    templateName = (0, string_1.ucFirst)(templateName);
                     if (!cfg.namePredicate || cfg.namePredicate(templateName)) {
                         parsed.push({
                             text: templateTextPipesBack,
@@ -616,9 +642,6 @@ function parseTemplateArguments(template) {
         };
     });
     return parsedArgs;
-}
-function ucFirst(string) {
-    return string.charAt(0).toUpperCase() + string.slice(1);
 }
 function strReplaceAt(string, index, char) {
     return string.slice(0, index) + char + string.slice(index + 1);
@@ -785,7 +808,7 @@ function getCommentTags(wikitext) {
 }
 exports.getCommentTags = getCommentTags;
 /**
- * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlight, source).
+ * Replace strings by given strings in a wikitext, ignoring replacees in tags that prevent transclusions (i.e. \<!-- -->, nowiki, pre, syntaxhighlight, source, math).
  * The replacees array and the replacers array must have the same number of elements in them. This restriction does not apply only if the replacees are to be
  * replaced with one unique replacer, and the 'replacers' argument is a string or an array containing only one element.
  */

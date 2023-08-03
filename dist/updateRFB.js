@@ -42,7 +42,8 @@ async function updateRFB() {
     // Get years and months
     const dt = new Date();
     dt.setHours(dt.getHours() + 9); // e.g. 2022-07-31T23:35:00Z
-    const curYear = dt.getFullYear(), curMonth = dt.getMonth() + 1;
+    const curYear = dt.getFullYear();
+    const curMonth = dt.getMonth() + 1;
     const d = {
         last: {
             year: curMonth === 1 ? curYear - 1 : curYear,
@@ -173,7 +174,8 @@ async function updateRFB() {
             return (0, server_1.log)('Failed to get the lastest revision of ' + pagetitle);
         let content = lr.content;
         const getAnnualLink = (y) => `[[Wikipedia:投稿ブロック依頼 ${y}年|${y}年]]`;
-        const linkOldYear = getAnnualLink(d.current.year), linkNewYear = getAnnualLink(d.next.year);
+        const linkOldYear = getAnnualLink(d.current.year);
+        const linkNewYear = getAnnualLink(d.next.year);
         if (content.includes(linkNewYear))
             return (0, server_1.log)('Cancelled: Links have already been updated.');
         content = content.replace(linkOldYear, linkOldYear + ' - ' + linkNewYear);

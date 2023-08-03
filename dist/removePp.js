@@ -71,27 +71,33 @@ async function removePp(botRunTs) {
     // Get the titles of all pages that transclude protection templates
     const queries = [];
     for (const tl of pp.map(el => 'Template:' + el)) {
-        queries.push(lib.getTranscludingPages(tl));
+        queries.push(lib.getEmbeddedIn(tl));
     }
     const result = await Promise.all(queries);
     const transcludingPp = result.reduce((acc, arr) => {
-        arr.forEach((pagetitle) => {
-            if (!acc.includes(pagetitle))
-                acc.push(pagetitle);
-        });
+        if (arr) {
+            arr.forEach((pagetitle) => {
+                if (!acc.includes(pagetitle))
+                    acc.push(pagetitle);
+            });
+        }
         return acc;
     }, []);
     // Filter out unprotected pages 
-    const protectedPages = await lib.filterOutProtectedPages(transcludingPp);
-    if (!protectedPages)
-        return (0, server_1.log)('Failed to filter out protected pages.');
-    let notProtected = transcludingPp.filter(el => !protectedPages.includes(el) && !ignore.includes(el));
-    notProtected = notProtected.filter(el => {
-        // Remove subpages of pp templates
-        return pp.map(tl => 'Template:' + tl + '/').every(pfx => !el.includes(pfx));
-    });
+    let notProtected = [];
+    if (transcludingPp.length) {
+        const protectedPages = await lib.filterOutProtectedPages(transcludingPp);
+        if (!protectedPages)
+            return (0, server_1.log)('Failed to filter out protected pages.');
+        const ppSubpagePrefixes = pp.map(tl => 'Template:' + tl + '/');
+        notProtected = transcludingPp.filter((pagetitle) => {
+            return !protectedPages.includes(pagetitle) && !ignore.includes(pagetitle) &&
+                // Remove subpages of pp templates
+                !ppSubpagePrefixes.some(pfx => pagetitle.indexOf(pfx) === 0);
+        });
+    }
     (0, server_1.log)(`${notProtected.length} page(s) found.`);
-    if (notProtected.length === 0)
+    if (!notProtected.length)
         return;
     // Edit all the unprotected pages with protection templates
     for (const page of notProtected) {
