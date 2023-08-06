@@ -35,7 +35,7 @@ const string_1 = require("./string");
 // 	'利用者:DragoTest/test/delnote3',
 // ];
 const debugTitles = undefined;
-const testrun = true;
+const testrun = false;
 (0, server_1.createServer)(testrun);
 (0, mw_1.init)(debugTitles ? 3 : 2).then((mw) => {
     if (!mw)
