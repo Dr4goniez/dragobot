@@ -22,8 +22,8 @@ const testrun = false;
 createServer(testrun);
 init(debugTitles ? 3 : 2).then((mw) => {
 	if (!mw) return;
-	log(isIntervalNeeded());
-	// runBot(debugTitles);
+	// log(isIntervalNeeded());
+	runBot(debugTitles);
 });
 
 
@@ -595,16 +595,16 @@ async function pagesExist(pagetitles: string[]): Promise<ExistObject> {
 function isIntervalNeeded(): boolean {
 	const d = new Date();
 	d.setHours(d.getHours() + 9); // JST: Needed only on Toolforge server
-	log(`JST: ${d}`);
-	log(`Day: ${d.getDay()}`);
-	log(`Date: ${d.getDate()}`);
-	log(`Hour: ${d.getHours()}`);
+	// log(`JST: ${d}`);
+	// log(`Day: ${d.getDay()}`);
+	// log(`Date: ${d.getDate()}`);
+	// log(`Hour: ${d.getHours()}`);
 	const isWeekday = ![0, 6].includes(d.getDay());
 	const isHoliday = d.getDate() === 11;
 	const hour = d.getHours();
 	if (isWeekday && !isHoliday) { // weekday 19-23
-		return hour <= 19 && 23 <= hour;
+		return 19 <= hour && hour <= 23;
 	} else { // weekend or holiday 9-23
-		return hour <= 9 && 23 <= hour;
+		return 9 <= hour && hour <= 23;
 	}
 }
