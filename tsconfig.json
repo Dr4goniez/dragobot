@@ -100,6 +100,6 @@
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
     // "skipLibCheck": true                              /* Skip type checking all .d.ts files. */
   },
-  "include": ["src/*", "./node_modules/types-mediawiki"],
+  "include": ["src/*", "./node_modules/types-mediawiki", "src/botreq/botreq.ts"],
   "exclude": ["node_modules", "src/botreq", "src/relink.ts"]
 }

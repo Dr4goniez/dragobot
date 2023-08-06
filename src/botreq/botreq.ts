@@ -12,12 +12,12 @@ import { Title, getNsIdsByType } from '../title';
 import { ucFirst } from '../string';
 
 
-const debugTitles = [
-	'利用者:DragoTest/test/delnote1',
-	'利用者:DragoTest/test/delnote2',
-	'利用者:DragoTest/test/delnote3',
-];
-// const debugTitles = undefined;
+// const debugTitles = [
+// 	'利用者:DragoTest/test/delnote1',
+// 	'利用者:DragoTest/test/delnote2',
+// 	'利用者:DragoTest/test/delnote3',
+// ];
+const debugTitles = undefined;
 const testrun = true;
 createServer(testrun);
 init(debugTitles ? 3 : 2).then((mw) => {
@@ -32,7 +32,7 @@ const talkNsNum: number[] = getNsIdsByType('talk');
 async function runBot(testTitles?: string[]) {
 
 	// Get pages to edit
-	const limit = 10;
+	const limit = 500;
 	const pages = testTitles || await collectPages(limit);
 	if (!pages) {
 		return;
@@ -62,7 +62,7 @@ async function runBot(testTitles?: string[]) {
 				appendtext: '\n' + errors.join('\n'),
 				summary: 'log',
 				bot: true
-			});
+			}, isIntervalNeeded());
 			if (!res) {
 				await lib.sleep(1000*10);
 			}
@@ -70,10 +70,7 @@ async function runBot(testTitles?: string[]) {
 	}
 
 	// Next
-	return;
-	if (!testTitles) {
-		runBot();
-	}
+	runBot();
 
 }
 
@@ -193,6 +190,8 @@ type ErrorCodes = (
 	|'existenceundefined'
 	/** createTemplate() returned empty arrays. */
 	|'emptytemplate'
+	/** Detected a modified line of the old Template:削除済みノート. */
+	|'noncanonical'
 	/** The page content is the same before and after running the bot. */
 	|'samecontent'
 	/** Failed to edit the page. */
@@ -245,6 +244,11 @@ class AFDNote {
 		}
 		this.content = lib.replaceWikitext(this.content, parsed.map(({input}) => input), '');
 
+		const regexNoncanonicalNote = /この(ノート)?ページは(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/;
+		if (regexNoncanonicalNote.test(this.content)) {
+			this.addCode('noncanonical');
+		}
+
 		const tmpl = await this.createTemplate(parsed);
 		if (!tmpl.length) {
 			this.addCode('emptytemplate');
@@ -262,11 +266,11 @@ class AFDNote {
 		const res = await lib.edit({
 			title: prefixedTitle,
 			text: this.content,
-			summary: '',
+			summary: '[[Special:PermaLink/96298914#削除済みノートをテンプレートへ置換|WP:BOTREQ#削除済みノートをテンプレートへ置換]]',
 			bot: true,
 			basetimestamp: lr.basetimestamp,
 			starttimestamp: lr.curtimestamp,
-		});
+		}, isIntervalNeeded());
 		if (!res) {
 			this.addCode('editfailed');
 		}
@@ -275,16 +279,18 @@ class AFDNote {
 
 	private parseDeletionNotes(): ParsedDeletionNote[] {
 
-		/** 1: Whether the note is for a talk page; 2: Result of AfD */
-		const regex = /(?:\{\{NOINDEX\}\}\s*)?[^\S\n\r]*'*[^\S\n\r]*この(ノート)?ページ(?:は一度|には)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?をご覧ください。\s*'*\s*/g;
+		/** 1: Whether the note is for a talk page; 2: Result of AfD; 3: Redundant comments */
+		const regex = /(?:\{\{NOINDEX\}\}\s*)?[^\S\n\r]*'*[^\S\n\r]*この(ノート)?ページ(?:は一度|には)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?をご覧ください。([^\n]*)\n?/g;
 
 		// Get all subst-ed 削除済みノート
 		const ret: ParsedDeletionNote[] = [];
 		let m: RegExpExecArray|null;
 		while ((m = regex.exec(this.content))) {
 
+			const logline = m[3] ? m[0].replace(new RegExp(lib.escapeRegExp(m[3]) + '\\n?$'), '') : m[0];
+
 			// Parse all links to an AfD subpage and get subpage titles
-			const links = this.parseLinks(m[0]);
+			const links = this.parseLinks(logline);
 			if (!links.hasDelPage && !links.titles.length) {
 				this.addCode('logline');
 				continue;
@@ -318,17 +324,17 @@ class AFDNote {
 			case '特定版削除':
 				return '特定版指定削除';
 			case '版指定削除':
-				return '版指定削除';
 			case '特定版版指定削除':
-				return '版指定削除';
 			case '削除された版':
-				return '特定版指定削除';
+				return '版指定削除';
 			case '削除が検討':
 				return '存続';
 			default:
 				return '';
 		}
 	}
+
+	private static illegalTitleChars = new RegExp('[^ %!"$&\'()*,\\-./0-9:;=?@A-Z\\\\\\^_`a-z~+\\u0080-\\uFFFF]');
 
 	/**
 	 * Parse wikilinks in a string, looking only at AfD subpages (and the talk page for AfD discussions).
@@ -343,7 +349,7 @@ class AFDNote {
 		while ((m = regex.exec(str))) {
 			let p: RegExpMatchArray|null;
 			m[1] = m[1].replace(/\{\{NAMESPACE\}\}:\{\{PAGENAME\}\}/g, this.Title.getPrefixedText());
-			if ((p = m[1].match(/^\s*:?\s*(?:wikipedia|wp|project)\s*:\s*削除依頼\/(.+?)\s*$/i))) {
+			if ((p = m[1].match(/^\s*:?\s*(?:wikipedia|wp|project)\s*:\s*削除依頼\/(.+?)\s*$/i)) && !AFDNote.illegalTitleChars.test(p[1])) {
 				const page = ucFirst(p[1]).replace(/_/g, ' ');
 				subpages.push(page);
 			} else if (!hasDelPage && this.delTitle.equals(m[1])) {
@@ -533,7 +539,7 @@ class AFDNote {
 			// @ts-ignore
 			const params = tmpl[key].params;
 			if (params.length) {
-				params.unshift('{{削除依頼ログ/sandbox', `|talk=${key === 'talk'}`);
+				params.unshift('{{削除依頼ログ', `|talk=${key === 'talk'}`);
 				params.push('}}');
 				acc.push(params.join('\n'));
 			}
@@ -582,4 +588,18 @@ async function pagesExist(pagetitles: string[]): Promise<ExistObject> {
 		return acc;
 	}, Object.create(null));
 
+}
+
+/** August 2023 */
+function isIntervalNeeded(): boolean {
+	const d = new Date();
+	d.setHours(d.getHours() + 9); // JST: Needed only on Toolforge server
+	const isWeekday = ![0, 6].includes(d.getDay());
+	const isHoliday = d.getDate() === 11;
+	const hour = d.getHours();
+	if (isWeekday && !isHoliday) { // weekday 19-23
+		return hour <= 19 && 23 <= hour;
+	} else { // weekend or holiday 9-23
+		return hour <= 9 && 23 <= hour;
+	}
 }
