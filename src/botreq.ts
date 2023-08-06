@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-import { createServer, log } from '../server';
-import { init, getMw } from '../mw';
-import * as lib from '../lib';
+import { createServer, log } from './server';
+import { init, getMw } from './mw';
+import * as lib from './lib';
 import {
 	ApiResponse,
 	ApiResponseError,
 	ApiResponseQueryListSearch,
 	ApiResponseQueryPages
-} from '..';
-import { Title, getNsIdsByType } from '../title';
-import { ucFirst } from '../string';
+} from '.';
+import { Title, getNsIdsByType } from './title';
+import { ucFirst } from './string';
 
 
 // const debugTitles = [

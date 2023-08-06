@@ -4,14 +4,14 @@
 	"description": "A Wikipedia bot.",
 	"main": "dist/bot.js",
 	"scripts": {
-		"start": "node dist/botreq/botreq.js > log.text 2>&1",
+		"start": "node dist/botreq.js > log.text 2>&1",
 		"start-dev": "node dist/bot.js",
 		"start-ts": "ts-node src/bot.ts",
 		"test": "ts-node src/test.js",
 		"test-ts": "ts-node src/test-ts.ts",
 		"relink": "ts-node src/relink.ts",
 		"p-block": "ts-node personal/searchBlockLog.ts",
-		"botreq": "ts-node src/botreq/botreq.ts",
+		"botreq": "ts-node src/botreq.ts",
 		"build": "tsc -p ."
 	},
 	"author": "Dr4goniez",
