@@ -14,7 +14,8 @@ import { Title, getNsIdsByType } from './title';
 const testrun = false; // Must be configured
 createServer(testrun);
 const useTestAccount = false; // Must be configured
-init(useTestAccount ? 3 : 2).then((mw) => {
+let processed: string[] = [];
+init(useTestAccount ? 3 : 2).then(async (mw) => {
 	if (!mw) return;
 	const debugTitles: string[] = [
 		// '利用者:DragoTest/test/delnote1',
@@ -23,6 +24,17 @@ init(useTestAccount ? 3 : 2).then((mw) => {
 	];
 	// const limit = 10;
 	const limit = 500; // Default
+	const lr = await lib.getLatestRevision('利用者:DrakoBot/botreq_削除依頼ログ');
+	if (!lr) return;
+	const pages = lib.parseTemplates(lr.content, {namePredicate: (name) => name === 'Page'})
+		.reduce((acc: string[], obj) => {
+			let index: number;
+			if ((index = obj.arguments.findIndex(obj => obj.name === '1')) !== -1 && obj.arguments[index].value) {
+				acc.push(obj.arguments[index].value);
+			}
+			return acc;
+		}, []);
+	processed = processed.concat(pages);
 	runBot(debugTitles.length ? debugTitles : null, limit);
 });
 
@@ -77,13 +89,13 @@ async function runBot(testTitles: string[]|null, limit: number) {
 }
 
 let searchDone = false;
-let processed: string[] = [];
+let runCnt = 0;
 /**
  * Collect pages to run the bot on. First search for pages that have subst-ed AfD notes, and when all these pages have been processed
  * search for pages that transclude Template:削除依頼過去ログ.
  * @returns Null if search failed, or else an array of pages.
  */
-async function collectPages(limit?: number): Promise<string[]|null> {
+async function collectPages(limit: number): Promise<string[]|null> {
 
 	if (searchDone) {
 		return [];
@@ -99,6 +111,7 @@ async function collectPages(limit?: number): Promise<string[]|null> {
 			srnamespace: talkNsNum.join('|'),
 			srprop: '',
 			srlimit: limit ? limit.toString() : 'max',
+			sroffset: limit * (runCnt++),
 			formatversion: '2'
 		}).then((res: ApiResponse) => {
 			let resSrch: ApiResponseQueryListSearch[]|undefined;
@@ -147,7 +160,7 @@ async function collectPages(limit?: number): Promise<string[]|null> {
 		}
 	}
 	log('Fetching pages that transclude Template:削除依頼過去ログ...');
-	titles = await lib.getEmbeddedIn('Template:削除依頼過去ログ', {einamespace: talkNsNum.join('|')});
+	titles = [] || await lib.getEmbeddedIn('Template:削除依頼過去ログ', {einamespace: talkNsNum.join('|')});
 	if (!titles) {
 		log('getEmbeddedIn returned null.');
 		return [];

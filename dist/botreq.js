@@ -31,7 +31,8 @@ const title_1 = require("./title");
 const testrun = false; // Must be configured
 (0, server_1.createServer)(testrun);
 const useTestAccount = false; // Must be configured
-(0, mw_1.init)(useTestAccount ? 3 : 2).then((mw) => {
+let processed = [];
+(0, mw_1.init)(useTestAccount ? 3 : 2).then(async (mw) => {
     if (!mw)
         return;
     const debugTitles = [
@@ -41,6 +42,18 @@ const useTestAccount = false; // Must be configured
     ];
     // const limit = 10;
     const limit = 500; // Default
+    const lr = await lib.getLatestRevision('利用者:DrakoBot/botreq_削除依頼ログ');
+    if (!lr)
+        return;
+    const pages = lib.parseTemplates(lr.content, { namePredicate: (name) => name === 'Page' })
+        .reduce((acc, obj) => {
+        let index;
+        if ((index = obj.arguments.findIndex(obj => obj.name === '1')) !== -1 && obj.arguments[index].value) {
+            acc.push(obj.arguments[index].value);
+        }
+        return acc;
+    }, []);
+    processed = processed.concat(pages);
     runBot(debugTitles.length ? debugTitles : null, limit);
 });
 const talkNsNum = (0, title_1.getNsIdsByType)('talk');
@@ -87,7 +100,7 @@ async function runBot(testTitles, limit) {
     }
 }
 let searchDone = false;
-let processed = [];
+let runCnt = 0;
 /**
  * Collect pages to run the bot on. First search for pages that have subst-ed AfD notes, and when all these pages have been processed
  * search for pages that transclude Template:削除依頼過去ログ.
@@ -106,6 +119,7 @@ async function collectPages(limit) {
             srnamespace: talkNsNum.join('|'),
             srprop: '',
             srlimit: limit ? limit.toString() : 'max',
+            sroffset: limit * (runCnt++),
             formatversion: '2'
         }).then((res) => {
             let resSrch;
@@ -157,7 +171,7 @@ async function collectPages(limit) {
         }
     }
     (0, server_1.log)('Fetching pages that transclude Template:削除依頼過去ログ...');
-    titles = await lib.getEmbeddedIn('Template:削除依頼過去ログ', { einamespace: talkNsNum.join('|') });
+    titles = [] || await lib.getEmbeddedIn('Template:削除依頼過去ログ', { einamespace: talkNsNum.join('|') });
     if (!titles) {
         (0, server_1.log)('getEmbeddedIn returned null.');
         return [];
