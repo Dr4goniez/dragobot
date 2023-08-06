@@ -9,31 +9,30 @@ import {
 	ApiResponseQueryPages
 } from '.';
 import { Title, getNsIdsByType } from './title';
-import { ucFirst } from './string';
 
 
-// const debugTitles = [
-// 	'利用者:DragoTest/test/delnote1',
-// 	'利用者:DragoTest/test/delnote2',
-// 	'利用者:DragoTest/test/delnote3',
-// ];
-const debugTitles = undefined;
-const testrun = false;
+const testrun = false; // Must be configured
 createServer(testrun);
-init(debugTitles ? 3 : 2).then((mw) => {
+const useTestAccount = false; // Must be configured
+init(useTestAccount ? 3 : 2).then((mw) => {
 	if (!mw) return;
-	// log(isIntervalNeeded());
-	runBot(debugTitles);
+	const debugTitles: string[] = [
+		// '利用者:DragoTest/test/delnote1',
+		// '利用者:DragoTest/test/delnote2',
+		// '利用者:DragoTest/test/delnote3',
+	];
+	// const limit = 10;
+	const limit = 500; // Default
+	runBot(debugTitles.length ? debugTitles : null, limit);
 });
 
 
 const talkNsNum: number[] = getNsIdsByType('talk');
 
 /** Run the bot. */
-async function runBot(testTitles?: string[]) {
+async function runBot(testTitles: string[]|null, limit: number) {
 
 	// Get pages to edit
-	const limit = 500;
 	const pages = testTitles || await collectPages(limit);
 	if (!pages) {
 		return;
@@ -71,8 +70,8 @@ async function runBot(testTitles?: string[]) {
 	}
 
 	// Next
-	if (!testTitles) {
-		runBot();
+	if (!testTitles && limit === 500) {
+		runBot(null, limit);
 	}
 
 }
@@ -96,7 +95,7 @@ async function collectPages(limit?: number): Promise<string[]|null> {
 		return mw.request({
 			action: 'query',
 			list: 'search',
-			srsearch: 'insource:/この(ノート)?ページ(は一度|には)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
+			srsearch: 'insource:/この((ノート)?ページ(は.[度回]|には)|記事に?は(.[度回])?)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
 			srnamespace: talkNsNum.join('|'),
 			srprop: '',
 			srlimit: limit ? limit.toString() : 'max',
@@ -179,6 +178,8 @@ type ErrorCodes = (
 	|'unparsed'
 	/** Detected an unparsable $1 in [[$1|$2]]. */
 	|'unparsablelinks'
+	/** Detected an unparsable Template:削除依頼ログ. */
+	|'unparsableafdlog'
 	/** A log line returned no wikilinks after parseLinks(). */
 	|'logline'
 	/** Detected an occurrence of Template:削除依頼過去ログ that can't be processed because the page type (main, talk) is unknown. */
@@ -240,17 +241,17 @@ class AFDNote {
 		}
 		this.content = lr.content;
 
-		const parsed = this.parseDeletionNotes().concat(this.parseAfdOldLog());
+		const parsed = this.parseDeletionNotes().concat(this.parseAfdOldLog(), this.parseAfdLog());
 		if (!parsed.length) {
 			this.addCode('unparsed');
 			return;
 		}
 		this.content = lib.replaceWikitext(this.content, parsed.map(({input}) => input), '');
 
-		const regexNoncanonicalNote = /この(ノート)?ページは(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/;
-		if (regexNoncanonicalNote.test(this.content)) {
-			this.addCode('noncanonical');
-		}
+		// const regexNoncanonicalNote = /この(ページ|ノート|ノートページ)は(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/;
+		// if (regexNoncanonicalNote.test(this.content)) {
+		// 	this.addCode('noncanonical');
+		// }
 
 		const tmpl = await this.createTemplate(parsed);
 		if (!tmpl.length) {
@@ -283,7 +284,7 @@ class AFDNote {
 	private parseDeletionNotes(): ParsedDeletionNote[] {
 
 		/** 1: Whether the note is for a talk page; 2: Result of AfD; 3: Redundant comments */
-		const regex = /(?:\{\{NOINDEX\}\}\s*)?[^\S\n\r]*'*[^\S\n\r]*この(ノート)?ページ(?:は一度|には)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?をご覧ください。([^\n]*)\n*/g;
+		const regex = /(?:\{\{NOINDEX\}\}\s*)?\**[^\S\n\r]*[^\S\n\r]*'*[^\S\n\r]*この(ページ|記事|ノート|ノートページ)に?は(?:.[度回])?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?をご覧ください。([^\n]*)\n*/g;
 
 		// Get all subst-ed 削除済みノート
 		const ret: ParsedDeletionNote[] = [];
@@ -300,7 +301,7 @@ class AFDNote {
 			}
 
 			// Get an unified result of the AfDs
-			const talk = !!m[1];
+			const talk = m[1] === 'ノート' || m[1] === 'ノートページ';
 			const result = AFDNote.getResult(m[2]);
 			ret.push({
 				input: m[0],
@@ -353,7 +354,7 @@ class AFDNote {
 			let p: RegExpMatchArray|null;
 			m[1] = m[1].replace(/\{\{NAMESPACE\}\}:\{\{PAGENAME\}\}/g, this.Title.getPrefixedText());
 			if ((p = m[1].match(/^\s*:?\s*(?:wikipedia|wp|project)\s*:\s*削除依頼\/(.+?)\s*$/i)) && !AFDNote.illegalTitleChars.test(p[1])) {
-				const page = ucFirst(p[1]).replace(/_/g, ' ');
+				const page = p[1].replace(/_/g, ' ');
 				subpages.push(page);
 			} else if (!hasDelPage && this.delTitle.equals(m[1])) {
 				hasDelPage = true;
@@ -447,6 +448,66 @@ class AFDNote {
 			}
 			return acc;
 
+		}, []);
+
+	}
+
+	/** Parse existing Template:削除依頼ログ in the content. */
+	private parseAfdLog(): ParsedDeletionNote[] {
+
+		// Does the content have any 削除依頼ログ template in it?
+		const tmpl = lib.parseTemplates(this.content, {namePredicate: name => name === '削除依頼ログ'});
+		return tmpl.reduce((acc: ParsedDeletionNote[], obj) => {
+			if (obj.arguments.length) {
+
+				const forTalk = obj.arguments.some(({name, value}) => name === 'talk' && value === 'true');
+				const info: DeletionNoteInfo[] = [];
+				obj.arguments.some(({name, value}) => {
+					let m;
+					if ((m = /^(\D+)(\d+)$/.exec(name))) {
+						const key = m[1];
+						const num = parseInt(m[2]) - 1;
+						switch (key) {
+							case 'result':
+								if (info[num]) {
+									info[num].result = value;
+								} else {
+									info[num] = {
+										talk: forTalk,
+										result: value,
+										subpage: ''
+									};
+								}
+								return false;
+							case 'page':
+								if (info[num]) {
+									info[num].subpage = value;
+								} else {
+									info[num] = {
+										talk: forTalk,
+										result: '',
+										subpage: value
+									};
+								}
+								return false;
+							case 'date':
+								return false;
+							default:
+								return true;
+						}
+					}
+				});
+				const filteredInfo = info.filter(({result, subpage}) => result.trim() && subpage.trim());
+				if (filteredInfo.length && filteredInfo.length === info.length) {
+					acc.push({
+						input: new RegExp(lib.escapeRegExp(obj.text) + '\\n?'),
+						notes: filteredInfo
+					});
+				} else {
+					this.addCode('unparsableafdlog');
+				}
+			}
+			return acc;
 		}, []);
 
 	}
@@ -596,7 +657,9 @@ async function pagesExist(pagetitles: string[]): Promise<ExistObject> {
 /** August 2023 */
 function isIntervalNeeded(): boolean {
 	const d = new Date();
-	d.setHours(d.getHours() + 9); // JST: Needed only on Toolforge server
+	if (!testrun) {
+		d.setHours(d.getHours() + 9); // JST: Needed only on Toolforge server
+	}
 	// log(`JST: ${d}`);
 	// log(`Day: ${d.getDay()}`);
 	// log(`Date: ${d.getDate()}`);
@@ -605,8 +668,8 @@ function isIntervalNeeded(): boolean {
 	const isHoliday = d.getDate() === 11;
 	const hour = d.getHours();
 	if (isWeekday && !isHoliday) { // weekday 19-23
-		return 19 <= hour && hour <= 23;
+		return 19 <= hour && hour < 23;
 	} else { // weekend or holiday 9-23
-		return 9 <= hour && hour <= 23;
+		return 9 <= hour && hour < 23;
 	}
 }
