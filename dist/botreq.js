@@ -40,7 +40,8 @@ const testrun = false;
 (0, mw_1.init)(debugTitles ? 3 : 2).then((mw) => {
     if (!mw)
         return;
-    runBot(debugTitles);
+    (0, server_1.log)(isIntervalNeeded());
+    // runBot(debugTitles);
 });
 const talkNsNum = (0, title_1.getNsIdsByType)('talk');
 /** Run the bot. */
@@ -494,6 +495,10 @@ async function pagesExist(pagetitles) {
 function isIntervalNeeded() {
     const d = new Date();
     d.setHours(d.getHours() + 9); // JST: Needed only on Toolforge server
+    (0, server_1.log)(`JST: ${d}`);
+    (0, server_1.log)(`Day: ${d.getDay()}`);
+    (0, server_1.log)(`Date: ${d.getDate()}`);
+    (0, server_1.log)(`Hour: ${d.getHours()}`);
     const isWeekday = ![0, 6].includes(d.getDay());
     const isHoliday = d.getDate() === 11;
     const hour = d.getHours();
