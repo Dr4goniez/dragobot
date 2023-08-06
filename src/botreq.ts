@@ -71,7 +71,9 @@ async function runBot(testTitles?: string[]) {
 	}
 
 	// Next
-	runBot();
+	if (!testTitles) {
+		runBot();
+	}
 
 }
 
@@ -281,14 +283,14 @@ class AFDNote {
 	private parseDeletionNotes(): ParsedDeletionNote[] {
 
 		/** 1: Whether the note is for a talk page; 2: Result of AfD; 3: Redundant comments */
-		const regex = /(?:\{\{NOINDEX\}\}\s*)?[^\S\n\r]*'*[^\S\n\r]*この(ノート)?ページ(?:は一度|には)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?をご覧ください。([^\n]*)\n?/g;
+		const regex = /(?:\{\{NOINDEX\}\}\s*)?[^\S\n\r]*'*[^\S\n\r]*この(ノート)?ページ(?:は一度|には)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?をご覧ください。([^\n]*)\n*/g;
 
 		// Get all subst-ed 削除済みノート
 		const ret: ParsedDeletionNote[] = [];
 		let m: RegExpExecArray|null;
 		while ((m = regex.exec(this.content))) {
 
-			const logline = m[3] ? m[0].replace(new RegExp(lib.escapeRegExp(m[3]) + '\\n?$'), '') : m[0];
+			const logline = m[3] ? m[0].replace(new RegExp(lib.escapeRegExp(m[3]) + '\\n*$'), '') : m[0];
 
 			// Parse all links to an AfD subpage and get subpage titles
 			const links = this.parseLinks(logline);
