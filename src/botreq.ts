@@ -18,7 +18,7 @@ import { ucFirst } from './string';
 // 	'利用者:DragoTest/test/delnote3',
 // ];
 const debugTitles = undefined;
-const testrun = true;
+const testrun = false;
 createServer(testrun);
 init(debugTitles ? 3 : 2).then((mw) => {
 	if (!mw) return;
