@@ -41,19 +41,15 @@ let processed = [];
     // '利用者:DragoTest/test/delnote3',
     ];
     // const limit = 10;
-    const limit = 500; // Default
+    const limit = 600; // Default
     const lr = await lib.getLatestRevision('利用者:DrakoBot/botreq_削除依頼ログ');
     if (!lr)
         return;
-    const pages = lib.parseTemplates(lr.content, { namePredicate: (name) => name === 'Page' })
-        .reduce((acc, obj) => {
-        let index;
-        if ((index = obj.arguments.findIndex(obj => obj.name === '1')) !== -1 && obj.arguments[index].value) {
-            acc.push(obj.arguments[index].value);
-        }
-        return acc;
-    }, []);
-    processed = processed.concat(pages);
+    const regex = /\[\[(.+?)\]\]/g;
+    let m;
+    while ((m = regex.exec(lr.content))) {
+        processed.push(m[1]);
+    }
     runBot(debugTitles.length ? debugTitles : null, limit);
 });
 const talkNsNum = (0, title_1.getNsIdsByType)('talk');
@@ -74,7 +70,7 @@ async function runBot(testTitles, limit) {
         const afd = new AFDNote(p);
         await afd.init();
         if (afd.errCodes.length) {
-            errors.push(`* {{Page|${p}}} - ${afd.errCodes.join(', ')}`);
+            errors.push(`* [[${p}]] - ${afd.errCodes.join(', ')}`);
         }
     }
     // Leave error log
