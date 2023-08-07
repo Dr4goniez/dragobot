@@ -41,7 +41,7 @@ let processed = [];
     // '利用者:DragoTest/test/delnote3',
     ];
     // const limit = 10;
-    const limit = 600; // Default
+    const limit = 1000; // Default
     const lr = await lib.getLatestRevision('利用者:DrakoBot/botreq_削除依頼ログ');
     if (!lr)
         return;
