@@ -113,7 +113,7 @@ async function collectPages(limit) {
     const mw = (0, mw_1.getMw)();
     runCnt++;
     let offset = limit * (runCnt - 1);
-    if (offset > 10000) {
+    if (offset >= 10000) {
         runCnt = 1;
         offset = limit * (runCnt - 1);
     }

@@ -104,7 +104,7 @@ async function collectPages(limit: number): Promise<string[]|null> {
 	const mw = getMw();
 	runCnt++;
 	let offset = limit * (runCnt - 1);
-	if (offset > 10000) {
+	if (offset >= 10000) {
 		runCnt = 1;
 		offset = limit * (runCnt - 1);
 	}
