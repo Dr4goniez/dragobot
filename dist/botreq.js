@@ -91,7 +91,7 @@ async function runBot(testTitles, limit) {
         }
     }
     // Next
-    if (!testTitles && limit === 500) {
+    if (!testTitles && limit === 1000) {
         runBot(null, limit);
     }
 }
