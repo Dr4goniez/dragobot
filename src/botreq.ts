@@ -102,6 +102,12 @@ async function collectPages(limit: number): Promise<string[]|null> {
 	}
 
 	const mw = getMw();
+	runCnt++;
+	let offset = limit * (runCnt - 1);
+	if (offset > 10000) {
+		runCnt = 1;
+		offset = limit * (runCnt - 1);
+	}
 
 	const search = (): Promise<string[]|null> => {
 		return mw.request({
@@ -111,7 +117,7 @@ async function collectPages(limit: number): Promise<string[]|null> {
 			srnamespace: talkNsNum.join('|'),
 			srprop: '',
 			srlimit: limit ? limit.toString() : 'max',
-			sroffset: limit * (runCnt++),
+			sroffset: offset,
 			formatversion: '2'
 		}).then((res: ApiResponse) => {
 			let resSrch: ApiResponseQueryListSearch[]|undefined;

@@ -111,6 +111,12 @@ async function collectPages(limit) {
         return [];
     }
     const mw = (0, mw_1.getMw)();
+    runCnt++;
+    let offset = limit * (runCnt - 1);
+    if (offset > 10000) {
+        runCnt = 1;
+        offset = limit * (runCnt - 1);
+    }
     const search = () => {
         return mw.request({
             action: 'query',
@@ -119,7 +125,7 @@ async function collectPages(limit) {
             srnamespace: talkNsNum.join('|'),
             srprop: '',
             srlimit: limit ? limit.toString() : 'max',
-            sroffset: limit * (runCnt++),
+            sroffset: offset,
             formatversion: '2'
         }).then((res) => {
             let resSrch;
