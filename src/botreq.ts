@@ -23,7 +23,7 @@ init(useTestAccount ? 3 : 2).then(async (mw) => {
 		// '利用者:DragoTest/test/delnote3',
 	];
 	// const limit = 10;
-	const limit = 1000; // Default
+	const limit = 4999; // Default
 	const lr = await lib.getLatestRevision('利用者:DrakoBot/botreq_削除依頼ログ');
 	if (!lr) return;
 	const regex = /\[\[(.+?)\]\]/g
@@ -78,7 +78,7 @@ async function runBot(testTitles: string[]|null, limit: number) {
 	}
 
 	// Next
-	if (!testTitles && limit === 1000) {
+	if (!testTitles && limit === 4999) {
 		runBot(null, limit);
 	}
 
