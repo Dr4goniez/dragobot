@@ -28,7 +28,7 @@ const server_1 = require("./server");
 const mw_1 = require("./mw");
 const lib = __importStar(require("./lib"));
 const title_1 = require("./title");
-const testrun = false; // Must be configured
+const testrun = true; // Must be configured
 (0, server_1.createServer)(testrun);
 const useTestAccount = false; // Must be configured
 let processed = [];
@@ -117,7 +117,8 @@ async function collectPages(limit) {
         return mw.request({
             action: 'query',
             list: 'search',
-            srsearch: 'insource:/この((ノート)?ページ(は.[度回]|には)|記事に?は(.[度回])?)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
+            // srsearch: 'insource:/この((ノート)?ページ(は.[度回]|には)|記事に?は(.[度回])?)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
+            srsearch: 'insource:/この(ページ|記事|ノート|ノートページ)に?は(?:.[度回])?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
             srnamespace: talkNsNum.join('|'),
             srprop: '',
             srlimit: limit ? limit.toString() : 'max',
@@ -173,11 +174,12 @@ async function collectPages(limit) {
         }
     }
     (0, server_1.log)('Fetching pages that transclude Template:削除依頼過去ログ...');
-    titles = [] || await lib.getEmbeddedIn('Template:削除依頼過去ログ', { einamespace: talkNsNum.join('|') });
+    titles = await lib.getEmbeddedIn('Template:削除依頼過去ログ', { einamespace: talkNsNum.join('|') });
     if (!titles) {
         (0, server_1.log)('getEmbeddedIn returned null.');
         return [];
     }
+    titles = titles.filter(el => !processed.includes(el));
     (0, server_1.log)(`${titles.length} page(s) found.`);
     processed = processed.concat(titles);
     return titles;
