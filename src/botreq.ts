@@ -9,6 +9,7 @@ import {
 	ApiResponseQueryPages
 } from '.';
 import { Title, getNsIdsByType } from './title';
+import {decode} from 'html-entities';
 
 
 const testrun = true; // Must be configured
@@ -17,25 +18,111 @@ const useTestAccount = false; // Must be configured
 let processed: string[] = [];
 init(useTestAccount ? 3 : 2).then(async (mw) => {
 	if (!mw) return;
-	const debugTitles: string[] = [
-		// '利用者:DragoTest/test/delnote1',
-		// '利用者:DragoTest/test/delnote2',
-		// '利用者:DragoTest/test/delnote3',
-	];
-	// const limit = 10;
-	const limit = 4999; // Default
-	const lr = await lib.getLatestRevision('利用者:DrakoBot/botreq_削除依頼ログ');
-	if (!lr) return;
-	const regex = /\[\[(.+?)\]\]/g
-	let m;
-	while ((m = regex.exec(lr.content))) {
-		processed.push(m[1]);
-	}
-	runBot(debugTitles.length ? debugTitles : null, limit);
+	// const debugTitles: string[] = [
+	// 	// '利用者:DragoTest/test/delnote1',
+	// 	// '利用者:DragoTest/test/delnote2',
+	// 	// '利用者:DragoTest/test/delnote3',
+	// ];
+	// // const limit = 10;
+	// const limit = 4999; // Default
+	// const lr = await lib.getLatestRevision('利用者:DrakoBot/botreq_削除依頼ログ');
+	// if (!lr) return;
+	// const regex = /\[\[(.+?)\]\]/g
+	// let m;
+	// while ((m = regex.exec(lr.content))) {
+	// 	processed.push(m[1]);
+	// }
+	// runBot(debugTitles.length ? debugTitles : null, limit);
+
+	runBotMax();
+
 });
 
 
-const talkNsNum: number[] = getNsIdsByType('talk');
+const talkNsNum: number[] = getNsIdsByType('talk').filter(num => num !== 3);
+
+async function runBotMax() {
+
+	const lr = await lib.getLatestRevision('利用者:DrakoBot/botreq_削除依頼ログ');
+	if (!lr) return;
+	const oldLogContent = lr.content;
+
+	/** 1: {{レ}}, 2: pagetitle, 3: error code */
+	const regex = /\*[^\S\r\n]*(\{\{レ\}\})[^\S\r\n]*\[\[(.+?)\]\]([^\n]+)\n?/g;
+	type Lines = {[title: string]: string[];};
+	const lines: Lines = {};
+	let m;
+	while ((m = regex.exec(oldLogContent))) {
+		const row = m[0];
+		const ignore = !!m[1];
+		const title = m[2];
+		if (ignore && !processed.includes(title)) {
+			processed.push(title);
+		}
+		if (lines[title]) {
+			lines[title].push(row);
+		} else {
+			lines[title] = [row];
+		}
+	}
+
+	// Get pages to edit
+	const pages = await collectPages(5000);
+	if (!pages) {
+		return;
+	} else if (!pages.length) {
+		log('All pages have been processed.');
+		return;
+	}
+
+	// Process the collected pages
+	const getErrorLine = (title: string, codes: string[]) => {
+		return `* [[${title}]] - ${codes.join(', ')}`;
+	};
+	for (const p of pages) {
+		const afd = new AFDNote(p);
+		console.log(`Checking ${p}...`);
+		await afd.init();
+		if (afd.errCodes.length && lines[p]) { // Error on this run and on an older run
+			delete lines[p];
+			lines[p] = [getErrorLine(p, afd.errCodes)]; // Send the line to bottom
+		} else if (!afd.errCodes.length && lines[p]) { // No error on this run and one on an older run
+			delete lines[p];
+		} else if (afd.errCodes.length && !lines[p]) {
+			lines[p] = [getErrorLine(p, afd.errCodes)];
+		} else {
+			// Do nothing
+		}
+	}
+
+	// Leave error log
+	const errors = Object.keys(lines).reduce((acc: string[], title) => {
+		const arr = lines[title];
+		acc.push(arr[0].trim());
+		return acc;
+	}, []);
+	const newLogContent = errors.join('\n');
+	if (errors.length) {
+		let res: boolean|null = false;
+		let tried = 0;
+		while (!res && tried < 5) {
+			tried++;
+			res = await lib.edit({
+				title: '利用者:DrakoBot/botreq_削除依頼ログ',
+				text: newLogContent,
+				summary: 'log',
+				bot: true
+			}, isIntervalNeeded());
+			if (!res) {
+				await lib.sleep(1000*10);
+			}
+		}
+	}
+
+	// Update diff
+	await updateDiff(oldLogContent, newLogContent);
+
+}
 
 /** Run the bot. */
 async function runBot(testTitles: string[]|null, limit: number) {
@@ -109,8 +196,8 @@ async function collectPages(limit: number): Promise<string[]|null> {
 		return mw.request({
 			action: 'query',
 			list: 'search',
-			// srsearch: 'insource:/この((ノート)?ページ(は.[度回]|には)|記事に?は(.[度回])?)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
-			srsearch: 'insource:/この(ページ|記事|ノート|ノートページ)に?は(?:.[度回])?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
+			srsearch: 'insource:/この((ノート)?ページ(は.[度回]|には)|記事に?は(.[度回])?)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
+			// srsearch: 'insource:/この(ページ|記事|ノート|ノートページ)に?は(?:.[度回])?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
 			srnamespace: talkNsNum.join('|'),
 			srprop: '',
 			srlimit: limit ? limit.toString() : 'max',
@@ -162,15 +249,15 @@ async function collectPages(limit: number): Promise<string[]|null> {
 			searchDone = true;
 		}
 	}
-	log('Fetching pages that transclude Template:削除依頼過去ログ...');
-	titles = await lib.getEmbeddedIn('Template:削除依頼過去ログ', {einamespace: talkNsNum.join('|')});
-	if (!titles) {
-		log('getEmbeddedIn returned null.');
-		return [];
-	}
-	titles = titles.filter(el => !processed.includes(el));
-	log(`${titles.length} page(s) found.`);
-	processed = processed.concat(titles);
+	// log('Fetching pages that transclude Template:削除依頼過去ログ...');
+	// titles = await lib.getEmbeddedIn('Template:削除依頼過去ログ', {einamespace: talkNsNum.join('|')});
+	// if (!titles) {
+	// 	log('getEmbeddedIn returned null.');
+	// 	return [];
+	// }
+	// titles = titles.filter(el => !processed.includes(el));
+	// log(`${titles.length} page(s) found.`);
+	// processed = processed.concat(titles);
 	return titles;
 
 }
@@ -211,8 +298,6 @@ type ErrorCodes = (
 	|'existenceundefined'
 	/** createTemplate() returned empty arrays. */
 	|'emptytemplate'
-	/** Detected a modified line of the old Template:削除済みノート. */
-	|'noncanonical'
 	/** The page content is the same before and after running the bot. */
 	|'samecontent'
 	/** Failed to edit the page. */
@@ -264,11 +349,13 @@ class AFDNote {
 			return;
 		}
 		this.content = lib.replaceWikitext(this.content, parsed.map(({input}) => input), '');
-
-		// const regexNoncanonicalNote = /この(ページ|ノート|ノートページ)は(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/;
-		// if (regexNoncanonicalNote.test(this.content)) {
-		// 	this.addCode('noncanonical');
-		// }
+		parsed.forEach(({input}) => {
+			// lib.replaceWikitext first replaces all comment tags with a temporary string and get them back when the replacement is done.
+			// This means that when the replacee string itself has a comment tag in it, that won't be replaced.
+			if (typeof input === 'string' && input.includes('<!--')) {
+				this.content = this.content.replace(input, '');
+			}
+		});
 
 		const tmpl = await this.createTemplate(parsed);
 		if (!tmpl.length) {
@@ -301,7 +388,7 @@ class AFDNote {
 	private parseDeletionNotes(): ParsedDeletionNote[] {
 
 		/** 1: Whether the note is for a talk page; 2: Result of AfD; 3: Redundant comments */
-		const regex = /(?:\{\{NOINDEX\}\}\s*)?\**[^\S\n\r]*[^\S\n\r]*'*[^\S\n\r]*この(ページ|記事|ノート|ノートページ)に?は(?:.[度回])?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?をご覧ください。([^\n]*)\n*/g;
+		const regex = /(?:\{\{NOINDEX\}\}\s*)?\**[^\S\n\r]*[^\S\n\r]*'*[^\S\n\r]*この(ページ|記事|ノート|ノートページ)に?は(?:.[度回]|複数回)?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?をご(?:らん|覧)(?:下|くだ)さい。?([^\n]*)\n*/g;
 
 		// Get all subst-ed 削除済みノート
 		const ret: ParsedDeletionNote[] = [];
@@ -343,7 +430,7 @@ class AFDNote {
 			case '削除':
 				return '削除';
 			case '特定版削除':
-				return '特定版指定削除';
+				return '特定版削除';
 			case '版指定削除':
 			case '特定版版指定削除':
 			case '削除された版':
@@ -363,13 +450,17 @@ class AFDNote {
 	 * @returns An array of AfD subpage , duplicates not handled.
 	 */
 	private parseLinks(str: string): ParsedLinks {
-		const regex = /\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g; // [[(1)|(2)]]
+		const regex = /\[\[(.+?)(?:(?<!\{\{\{\d)\|([^\]]+))?\]\]/g; // [[(1)|(2)]] (ingore '|' in '{{{1|')
 		const subpages: string[] = [];
 		let m: RegExpExecArray|null;
 		let hasDelPage = false;
 		while ((m = regex.exec(str))) {
 			let p: RegExpMatchArray|null;
-			m[1] = m[1].replace(/\{\{NAMESPACE\}\}:\{\{PAGENAME\}\}/g, this.Title.getPrefixedText());
+			m[1] = decode(m[1])
+				.replace(/\{\{[^\S\r\n]*NAMESPACE[^\S\r\n]*\}\}/g, this.Title.getNamespacePrefix().replace(/:$/, ''))
+				.replace(/\{\{[^\S\r\n]*PAGENAME[^\S\r\n]*\}\}/g, this.Title.getMain())
+				.replace(/\{\{\{[^\S\r\n]*\d+[^\S\r\n]*\|[^\S\r\n]*(.+?)[^\S\r\n]*\}\}\}/g, '$1')
+				.replace(/_/g, ' ');
 			if ((p = m[1].match(/^\s*:?\s*(?:wikipedia|wp|project)\s*:\s*削除依頼\/(.+?)\s*$/i)) && !AFDNote.illegalTitleChars.test(p[1])) {
 				const page = p[1].replace(/_/g, ' ');
 				subpages.push(page);
@@ -480,6 +571,9 @@ class AFDNote {
 				const forTalk = obj.arguments.some(({name, value}) => name === 'talk' && value === 'true');
 				const info: DeletionNoteInfo[] = [];
 				obj.arguments.some(({name, value}) => {
+					if (value === '特定版指定削除') {
+						value = '特定版削除';
+					}
 					let m;
 					if ((m = /^(\D+)(\d+)$/.exec(name))) {
 						const key = m[1];
@@ -689,4 +783,57 @@ function isIntervalNeeded(): boolean {
 	} else { // weekend or holiday 9-23
 		return 9 <= hour && hour < 23;
 	}
+}
+
+/**
+ * Update 利用者:DrakoBot/botreq 削除依頼ログ.json.
+ * @param oldContent
+ * @param newContent
+ * @returns Whether the edit succeeded.
+ */
+async function updateDiff(oldContent: string, newContent: string): Promise<boolean> {
+
+	const links = {
+		old: parseWikilinks(oldContent),
+		new: parseWikilinks(newContent)
+	};
+	const ret: {added: {[index: number]: string}; removed: {[index: number]: string};} = {
+		added: {},
+		removed: {}
+	};
+	links.old.forEach((title) => {
+		if (!links.new.includes(title)) {
+			ret.removed[Object. keys(ret.removed).length] = title;
+		}
+	});
+	links.new.forEach((title) => {
+		if (!links.old.includes(title)) {
+			ret.added[Object. keys(ret.added).length] = title;
+		}
+	});
+	const res = await lib.edit({
+		title: '利用者:DrakoBot/botreq 削除依頼ログ.json',
+		text: JSON.stringify(ret, null, 4),
+		summary: 'diff',
+		bot: true
+	});
+	return res || false;
+
+}
+
+/**
+ * Simple wikilink parser.
+ * @param str Input string
+ * @returns An array of pagetitles without duplicates.
+ */
+function parseWikilinks(str: string) {
+	const regex = /\[\[(.+?)\]\]/g;
+	let m;
+	const ret: string[] = [];
+	while ((m = regex.exec(str))) {
+		if (!ret.includes(m[1])) {
+			ret.push(m[1]);
+		}
+	}
+	return ret;
 }
