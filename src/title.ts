@@ -167,7 +167,7 @@ const rWhitespace = /[_\u00A0\u1680\u180E\u2000-\u200A\u2028\u2029\u202F\u205F\u
 /**
  * RegExp (global flag) to remove unicode-bidirectional characters (from MediaWikiTitleCodec::splitTitleString() in PHP).
  */
-const rUnicodeBidi = /[\u200E\u200F\u202A-\u202E]+/g;
+export const rUnicodeBidi = /[\u200E\u200F\u202A-\u202E]+/g;
 
 type SanitationRule = {
 	pattern: RegExp;
