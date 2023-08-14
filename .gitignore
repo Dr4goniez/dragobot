@@ -16,8 +16,8 @@ src/test.js
 dist/test.js
 src/test-ts.ts
 dist/test-ts.js
-src/mwbot.d.ts
 src/relink.ts
+src/template.ts
 
 # Personal modules
 personal
