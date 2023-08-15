@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import { createServer, log } from './server';
-import { init, getMw } from './mw';
+import { init, getMw, isBot } from './mw';
 import * as lib from './lib';
 import {
 	ApiResponse,
@@ -9,7 +9,8 @@ import {
 	ApiResponseQueryPages
 } from '.';
 import { Title, getNsIdsByType } from './title';
-import {decode} from 'html-entities';
+import { decode } from 'html-entities';
+import { XOR } from 'ts-xor';
 
 
 const testrun = true; // Must be configured
@@ -35,6 +36,8 @@ init(useTestAccount ? 3 : 2).then(async (mw) => {
 	// runBot(debugTitles.length ? debugTitles : null, limit);
 
 	runBotMax();
+
+	// fixTypo();
 
 });
 
@@ -82,13 +85,13 @@ async function runBotMax() {
 	for (const p of pages) {
 		const afd = new AFDNote(p);
 		console.log(`Checking ${p}...`);
-		await afd.init();
+		const edited = await afd.init();
 		if (afd.errCodes.length && lines[p]) { // Error on this run and on an older run
 			delete lines[p];
 			lines[p] = [getErrorLine(p, afd.errCodes)]; // Send the line to bottom
-		} else if (!afd.errCodes.length && lines[p]) { // No error on this run and one on an older run
+		} else if (edited && !afd.errCodes.length && lines[p]) { // No error on this run and one on an older run
 			delete lines[p];
-		} else if (afd.errCodes.length && !lines[p]) {
+		} else if (afd.errCodes.length && !lines[p]) { // New error
 			lines[p] = [getErrorLine(p, afd.errCodes)];
 		} else {
 			// Do nothing
@@ -196,8 +199,10 @@ async function collectPages(limit: number): Promise<string[]|null> {
 		return mw.request({
 			action: 'query',
 			list: 'search',
-			srsearch: 'insource:/この((ノート)?ページ(は.[度回]|には)|記事に?は(.[度回])?)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
+			// srsearch: 'insource:/この((ノート)?ページ(は.[度回]|には)|記事に?は(.[度回])?)(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
 			// srsearch: 'insource:/この(ページ|記事|ノート|ノートページ)に?は(?:.[度回])?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
+			// srsearch: 'insource:/この(ページ|記事|ノート|ノートページ)に?は((.|複数)[度回])?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除)/',
+			srsearch: 'insource:"削除に関する議論は"',
 			srnamespace: talkNsNum.join('|'),
 			srprop: '',
 			srlimit: limit ? limit.toString() : 'max',
@@ -269,12 +274,16 @@ interface ParsedDeletionNote {
 interface DeletionNoteInfo {
 	talk: boolean;
 	result: string;
+	page: string;
+	fullpage?: string;
+	display?: string;
+	date?: string;
+}
+type ParsedLinks = XOR<{
 	subpage: string;
-}
-interface ParsedLinks {
-	titles: string[];
-	hasDelPage: boolean;
-}
+}, {
+	fullpage: string;
+}>[];
 type ErrorCodes = (
 	/** Failed to get the latest revision or the page doesn't exist. */
 	|'nolr'
@@ -292,6 +301,8 @@ type ErrorCodes = (
 	|'resultunknown'
 	/** Detected an occurrence of Template:削除依頼過去ログ that has a logline with no parsable links. */
 	|'noparsablelinks'
+	/** Detected a PermaLink. */
+	|'permalink'
 	/** Newly appended templates might have links to non-existing pages. */
 	|'existenceunknown'
 	/** Code error on page existence. */
@@ -307,21 +318,11 @@ type ErrorCodes = (
 class AFDNote {
 
 	Title: Title;
-	delTitle: Title;
-	hasDelPage: {
-		main: boolean;
-		talk: boolean;
-	};
 	content: string;
 	errCodes: ErrorCodes[];
 
 	constructor(pagetitle: string) {
 		this.Title = new Title(pagetitle);
-		this.delTitle = new Title(this.Title.toString().split('/')[0] + '/削除');
-		this.hasDelPage = {
-			main: false,
-			talk: false
-		};
 		this.content = '';
 		this.errCodes = [];
 	}
@@ -332,21 +333,24 @@ class AFDNote {
 		}
 	}
 
-	async init() {
+	/**
+	 * @returns True if edited, otherwise false
+	 */
+	async init(): Promise<boolean> {
 
 		// Get latest revision
 		const prefixedTitle = this.Title.toString();
 		const lr = await lib.getLatestRevision(prefixedTitle);
 		if (!lr) {
 			this.addCode('nolr');
-			return;
+			return false;
 		}
 		this.content = lr.content;
 
 		const parsed = this.parseDeletionNotes().concat(this.parseAfdOldLog(), this.parseAfdLog());
 		if (!parsed.length) {
 			this.addCode('unparsed');
-			return;
+			return false;
 		}
 		this.content = lib.replaceWikitext(this.content, parsed.map(({input}) => input), '');
 		parsed.forEach(({input}) => {
@@ -360,21 +364,21 @@ class AFDNote {
 		const tmpl = await this.createTemplate(parsed);
 		if (!tmpl.length) {
 			this.addCode('emptytemplate');
-			return;
+			return false;
 		} else {
 			this.content = tmpl.join('\n') + '\n' + this.content;
 		}
 
 		if (this.content === lr.content) {
 			this.addCode('samecontent');
-			return;
+			return false;
 		}
 
 		// Edit the page
 		const res = await lib.edit({
 			title: prefixedTitle,
 			text: this.content,
-			summary: '[[Special:PermaLink/96298914#削除済みノートをテンプレートへ置換|WP:BOTREQ#削除済みノートをテンプレートへ置換]]',
+			summary: '[[Special:PermaLink/96515545#削除済みノートをテンプレートへ置換|WP:BOTREQ#削除済みノートをテンプレートへ置換]]',
 			bot: true,
 			basetimestamp: lr.basetimestamp,
 			starttimestamp: lr.curtimestamp,
@@ -382,13 +386,16 @@ class AFDNote {
 		if (!res) {
 			this.addCode('editfailed');
 		}
+		return !!res;
 
 	}
 
 	private parseDeletionNotes(): ParsedDeletionNote[] {
 
 		/** 1: Whether the note is for a talk page; 2: Result of AfD; 3: Redundant comments */
-		const regex = /(?:\{\{NOINDEX\}\}\s*)?\**[^\S\n\r]*[^\S\n\r]*'*[^\S\n\r]*この(ページ|記事|ノート|ノートページ)に?は(?:.[度回]|複数回)?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?をご(?:らん|覧)(?:下|くだ)さい。?([^\n]*)\n*/g;
+		const regex = /(?:\{\{NOINDEX\}\}\s*)?\**[^\S\n\r]*[^\S\n\r]*'*[^\S\n\r]*この(ページ|記事|ノート|ノートページ|項目|カテゴリ|ファイル|画像|テンプレート)に?は.{0,5}?(?:.[度回]|複数回|過去に)?.{0,5}?(?:\{\{[^\S\n\r]*#if[^\S\n\r]*:(?:[^\S\n\r]*\{\{\{\d\|\}\}\}[^\S\n\r]*)?\|[^\S\n\r]*\{\{\{\d\}\}\}[^\S\n\r]*\}\}|\{\{\{\d\|?\}\}\})?(削除された版|削除が検討|特定版削除|版指定削除|特定版版指定削除|削除).+?を[ご御]?(?:らん|覧|参照(?:して)?)(?:下|くだ)さい。?([^\n]*)\n*/g;
+		// {{#if:{{{1|}}}|{{{1}}} }}
+		// /\{\{[^\S\n\r]*#if[^\S\n\r]*:[^\S\n\r]*\{\{\{1\|\}\}\}[^\S\n\r]*\|[^\S\n\r]*\{\{\{1\}\}\}[^\S\n\r]*\}\}/
 
 		// Get all subst-ed 削除済みノート
 		const ret: ParsedDeletionNote[] = [];
@@ -396,10 +403,13 @@ class AFDNote {
 		while ((m = regex.exec(this.content))) {
 
 			const logline = m[3] ? m[0].replace(new RegExp(lib.escapeRegExp(m[3]) + '\\n*$'), '') : m[0];
+			if (m[3] && new RegExp(regex.source).test(m[3])) {
+				this.addCode('logline');
+			}
 
 			// Parse all links to an AfD subpage and get subpage titles
 			const links = this.parseLinks(logline);
-			if (!links.hasDelPage && !links.titles.length) {
+			if (!links.length) {
 				this.addCode('logline');
 				continue;
 			}
@@ -410,22 +420,23 @@ class AFDNote {
 			ret.push({
 				input: m[0],
 				// If this is an empty array, the input string is just to be replaced with an empty string.
-				notes: links.titles.map((subpage) => ({talk, result, subpage}))
+				notes: links.reduce((acc: DeletionNoteInfo[], {subpage, fullpage}) => {
+					const len = acc.length;
+					acc[len] = {talk, result, page: subpage || ''};
+					if (fullpage) {
+						acc[len].fullpage = fullpage;
+					}
+					return acc;
+				}, [])
 			});
 
-			if (links.hasDelPage) {
-				const key = talk ? 'talk' : 'main';
-				this.hasDelPage[key] = true;
-			}
-
 		}
-
 		return ret;
 
 	}
 
 	/** Convert a matched string to an AfD result. */
-	private static getResult(matched: string) {
+	private static getResult(matched: string): string {
 		switch (matched) {
 			case '削除':
 				return '削除';
@@ -442,39 +453,39 @@ class AFDNote {
 		}
 	}
 
-	private static illegalTitleChars = new RegExp('[^ %!"$&\'()*,\\-./0-9:;=?@A-Z\\\\\\^_`a-z~+\\u0080-\\uFFFF]');
-
 	/**
-	 * Parse wikilinks in a string, looking only at AfD subpages (and the talk page for AfD discussions).
+	 * Parse wikilinks in a string and get pageN= or fullpageN= parameters for Template:削除依頼ログ.
 	 * @param str
-	 * @returns An array of AfD subpage , duplicates not handled.
+	 * @returns An array of title paremters; duplicates not handled.
 	 */
 	private parseLinks(str: string): ParsedLinks {
-		const regex = /\[\[(.+?)(?:(?<!\{\{\{\d)\|([^\]]+))?\]\]/g; // [[(1)|(2)]] (ingore '|' in '{{{1|')
-		const subpages: string[] = [];
+		const regex = /\[\[(.+?)(?:(?<!\{\{\{\d)\|([^\]]+))?\]\]/g; // [[(1)|(2)]] (ignore '|' in '{{{1|')
+		const ret: ParsedLinks = [];
 		let m: RegExpExecArray|null;
-		let hasDelPage = false;
 		while ((m = regex.exec(str))) {
-			let p: RegExpMatchArray|null;
 			m[1] = decode(m[1])
 				.replace(/\{\{[^\S\r\n]*NAMESPACE[^\S\r\n]*\}\}/g, this.Title.getNamespacePrefix().replace(/:$/, ''))
 				.replace(/\{\{[^\S\r\n]*PAGENAME[^\S\r\n]*\}\}/g, this.Title.getMain())
 				.replace(/\{\{\{[^\S\r\n]*\d+[^\S\r\n]*\|[^\S\r\n]*(.+?)[^\S\r\n]*\}\}\}/g, '$1')
 				.replace(/_/g, ' ');
-			if ((p = m[1].match(/^\s*:?\s*(?:wikipedia|wp|project)\s*:\s*削除依頼\/(.+?)\s*$/i)) && !AFDNote.illegalTitleChars.test(p[1])) {
-				const page = p[1].replace(/_/g, ' ');
-				subpages.push(page);
-			} else if (!hasDelPage && this.delTitle.equals(m[1])) {
-				hasDelPage = true;
+			let subj: Title|null;
+			if (/\{\{[^\S\r\n]*SUBJECTPAGENAME[^\S\r\n]*\}\}/.test(m[1]) && (subj = this.Title.getSubjectPage())) {
+				m[1] = m[1].replace(/\{\{[^\S\r\n]*SUBJECTPAGENAME[^\S\r\n]*\}\}/g, subj.getPrefixedText());
+			}
+			const title = Title.newFromText(m[1]);
+			if (!title) continue;
+			let t: string;
+			if ((t = title.getPrefixedText(true)).indexOf('Wikipedia:削除依頼/') === 0 && (t = t.slice(15).replace(/^[^\S\r\n]+/, '_'))) {
+				ret.push({subpage: t});
+			} else if (title.isTalkPage() && /\/削除\d?$/.test(title.getMain()) ||
+				title.getNamespaceId() === -1  && /^(固定|パーマ)リンク$|^Perma(nent)?Link$/i.test(title.getMainText().split('/')[0])
+			) {
+				ret.push({fullpage: title.getPrefixedText(true)});
 			} else {
 				this.addCode('unparsablelinks');
-				continue;
 			}
 		}
-		return {
-			titles: subpages,
-			hasDelPage
-		};
+		return ret;
 	}
 
 	/** Parse Template:削除依頼過去ログ in the content. */
@@ -517,26 +528,17 @@ class AFDNote {
 							}
 							const result = rm[1].trim();
 							const links = this.parseLinks(logline);
-							if (links.titles.length) {
-								if (links.hasDelPage) {
-									const key = forTalk ? 'talk' : 'main';
-									this.hasDelPage[key] = true;
-								}
-								links.titles.forEach((p) => {
-									info.push({
-										talk: forTalk,
-										result,
-										subpage: p
-									});
+							if (links.length) {
+								links.forEach(({subpage, fullpage}) => {
+									const len = info.length;
+									info[len] = {talk: forTalk, result, page: subpage || ''};
+									if (fullpage) {
+										info[len].fullpage = fullpage;
+									}
 								});
 							} else {
-								if (links.hasDelPage) {
-									const key = forTalk ? 'talk' : 'main';
-									this.hasDelPage[key] = true;
-								} else {
-									this.addCode('noparsablelinks');
-									return acc; // No parsable links, unprocessable
-								}
+								this.addCode('noparsablelinks');
+								return acc; // No parsable links, unprocessable
 							}
 
 						}
@@ -578,37 +580,27 @@ class AFDNote {
 					if ((m = /^(\D+)(\d+)$/.exec(name))) {
 						const key = m[1];
 						const num = parseInt(m[2]) - 1;
-						switch (key) {
-							case 'result':
-								if (info[num]) {
-									info[num].result = value;
-								} else {
-									info[num] = {
-										talk: forTalk,
-										result: value,
-										subpage: ''
-									};
-								}
-								return false;
-							case 'page':
-								if (info[num]) {
-									info[num].subpage = value;
-								} else {
-									info[num] = {
-										talk: forTalk,
-										result: '',
-										subpage: value
-									};
-								}
-								return false;
-							case 'date':
-								return false;
-							default:
-								return true;
+						if (key === 'result' || 
+							key === 'page' ||
+							key === 'fullpage' ||
+							key === 'display' ||
+							key === 'date'
+						) {
+							if (!info[num]) {
+								info[num] = {
+									talk: forTalk,
+									result: '',
+									page: ''
+								};
+							}
+							info[num][key] = value;
+							return false;
+						} else {
+							return true;
 						}
 					}
 				});
-				const filteredInfo = info.filter(({result, subpage}) => result.trim() && subpage.trim());
+				const filteredInfo = info.filter(({result, page, fullpage}) => result.trim() && (page.trim() || fullpage && fullpage.trim()));
 				if (filteredInfo.length && filteredInfo.length === info.length) {
 					acc.push({
 						input: new RegExp(lib.escapeRegExp(obj.text) + '\\n?'),
@@ -625,28 +617,56 @@ class AFDNote {
 
 	private async createTemplate(parsed: ParsedDeletionNote[]): Promise<string[]> {
 
+		const getFormattedPermalink = (title?: string): string|null => {
+			if (!title) return null;
+			let m;
+			if ((m = /^特別:(?:(?:固定|パーマ)リンク|Perma(?:nent)?Link)\/(\d+)/i.exec(title))) {
+				return `特別:固定リンク/${m[1]}`;
+			} else {
+				return null;
+			}
+		};
+		const rmFragment = (title: string): string => {
+			return title.replace(/#.+$/, '');
+		};
+
 		// Flatten the 'parsed' array of objects to an array of 'notes' object array without duplicates
 		const pages: string[] = [];
+		const permalinks: string[] = [];
 		const notes = parsed.reduce((acc: DeletionNoteInfo[], obj) => {
 			obj.notes.forEach((nObj) => {
-				const subpage = `Wikipedia:削除依頼/${nObj.subpage}`;
-				if (!pages.includes(subpage)) {
-					pages.push(subpage);
+				const p = rmFragment(nObj.fullpage || `Wikipedia:削除依頼/${nObj.page}`);
+				let perma;
+				if ((perma = getFormattedPermalink(p))) {
+					if (!permalinks.includes(perma)) {
+						permalinks.push(perma);
+					}
+				} else if (!pages.includes(p)) {
+					pages.push(p);
 				}
 				acc.push(nObj);
 			});
 			return acc;
 		}, []);
+		if (permalinks.length) {
+			this.addCode('permalink');
+		}
 
 		// Check page existence
-		const delPrefixedTitle = this.delTitle.getPrefixedText();
-		if (this.hasDelPage.main || this.hasDelPage.talk) {
-			pages.push(delPrefixedTitle);
-		}
-		const e = await pagesExist(pages);
+		const e = {...await pagesExist(pages), ...await convertPermalinksToTimestamps(permalinks)};
+		const dateParamToUTC = (formattedDate?: string): string|null => {
+			const m = (formattedDate || '').match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+			if (m) {
+				return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}T00:00:00Z`;
+			} else {
+				return null;
+			}
+		};
 		notes.sort((obj1, obj2) => {
-			const ts1 = e[`Wikipedia:削除依頼/${obj1.subpage}`].create;
-			const ts2 = e[`Wikipedia:削除依頼/${obj2.subpage}`].create;
+			const title1 = rmFragment(getFormattedPermalink(obj1.fullpage) || obj1.fullpage || `Wikipedia:削除依頼/${obj1.page}`);
+			const title2 = rmFragment(getFormattedPermalink(obj2.fullpage) || obj2.fullpage || `Wikipedia:削除依頼/${obj2.page}`);
+			const ts1 = dateParamToUTC(obj1.date) || e[title1].create;
+			const ts2 = dateParamToUTC(obj2.date) || e[title2].create;
 			if (!ts1 || !ts2) {
 				return ts1 > ts2 ? 1 : -1;
 			} else {
@@ -666,45 +686,45 @@ class AFDNote {
 			talk: TemplateInfo;
 		}
 		let tmpl: Template = {main: {params: [], added: []}, talk: {params: [], added: []}};
-		if (this.hasDelPage.main && e[delPrefixedTitle].exist) {
-			tmpl.main.params.push(`|result1=ノート議論|fullpage1=${delPrefixedTitle}`);
-		}
-		if (this.hasDelPage.talk && e[delPrefixedTitle].exist) {
-			tmpl.talk.params.push(`|result1=ノート議論|fullpage1=${delPrefixedTitle}`);
-		}
-		tmpl = notes.reduce((acc: Template, {talk, result, subpage}) => {
+		tmpl = notes.reduce((acc: Template, {talk, result, page, fullpage, display, date}) => {
 
-			const page = `Wikipedia:削除依頼/${subpage}`;
+			const p = getFormattedPermalink(fullpage) || fullpage || `Wikipedia:削除依頼/${page}`;
+			const pClean = rmFragment(p);
 			const typ = talk ? 'talk' : 'main';
 			const params = tmpl[typ].params;
 			const added = tmpl[typ].added;
-			if (added.includes(page)) {
+			if (added.includes(pClean)) {
 				return acc;
 			} else {
-				added.push(page);
+				added.push(pClean);
 			}
-			switch (e[page].exist) {
+			switch (e[pClean].exist) {
 				case true: // Page exists
 					break;
 				case false: // Page doesn't exist
 					return acc;
 				case null: // Existence unknown
-					log(`Existence unknown for ${page}`);
+					log(`Existence unknown for ${pClean}`);
 					this.addCode('existenceunknown');
 					break;
 				case undefined:
-					log(`Existence undefined for ${page}`);
+					log(`Existence undefined for ${pClean}`);
 					this.addCode('existenceundefined');
 					return acc;
 			}
 
 			const i = params.length + 1;
-			const dm = e[page].create.match(/^(\d{4})-(\d{2})-(\d{2})/);
-			let d = '';
-			if (dm) {
+			const dm = e[pClean].create.match(/^(\d{4})-(\d{2})-(\d{2})/);
+			let d = date || '';
+			if (!d && dm) {
 				d = `${dm[1]}年${dm[2].replace(/^0/, '')}月${dm[3].replace(/^0/, '')}日`;
 			}
-			params.push(`|result${i}=${result}|page${i}=${subpage}|date${i}=${d}`);
+			const arr = [`|result${i}=${!/^特別:固定リンク/.test(pClean) ? result : '復帰'}`];
+			if (page) arr.push(`|page${i}=${page}`);
+			if (fullpage) arr.push(`|fullpage${i}=${fullpage}`);
+			if (display) arr.push(`|display${i}=${display}`);
+			arr.push(`|date${i}=${d}`);
+			params.push(arr.join(''));
 
 			return acc;
 
@@ -736,6 +756,8 @@ interface ExistObject {
 
 async function pagesExist(pagetitles: string[]): Promise<ExistObject> {
 
+	if (!pagetitles.length) return {};
+
 	const params = {
 		action: 'query',
 		titles: pagetitles,
@@ -762,6 +784,57 @@ async function pagesExist(pagetitles: string[]): Promise<ExistObject> {
 		}
 		return acc;
 	}, Object.create(null));
+
+}
+
+/**
+ * @param pagetitles An array of `特別:固定リンク/REVID`
+ */
+async function convertPermalinksToTimestamps(pagetitles: string[]): Promise<ExistObject> {
+
+	if (!pagetitles.length) return {};
+	const ret: ExistObject = {};
+
+	const mw = getMw();
+	const req = (ids: string[]): Promise<void> => {
+		return mw.request({
+			action: 'query',
+			revids: ids.join('|'),
+			prop: 'revisions',
+			rvprop: 'ids|timestamp',
+			formatversion: '2'
+		}).then((res: ApiResponse) => {
+			let resPg: ApiResponseQueryPages[]|undefined;
+			if (!res || !res.query || !(resPg = res.query.pages)) return;
+			resPg.forEach(({title, revisions}) => {
+				if (title && revisions) {
+					revisions.forEach(({revid, timestamp}) => {
+						ret[`特別:固定リンク/${revid}`] = {
+							exist: true,
+							create: timestamp
+						};
+					});
+				}
+			});
+		}).catch((err: ApiResponseError) => {
+			log(err.info);
+		});
+	};
+
+	const revids = pagetitles.reduce((acc: string[], title) => {
+		const m = title.match(/^特別:固定リンク\/(\d+)$/);
+		if (m && !acc.includes(m[1])) {
+			acc.push(m[1]);
+		}
+		return acc;
+	}, []);
+
+	const deferreds = [];
+	while (revids.length) {
+		deferreds.push(req(revids.splice(0, isBot() ? 500 : 50)));
+	}
+	await Promise.all(deferreds);
+	return ret;
 
 }
 
@@ -816,8 +889,8 @@ async function updateDiff(oldContent: string, newContent: string): Promise<boole
 		text: JSON.stringify(ret, null, 4),
 		summary: 'diff',
 		bot: true
-	});
-	return res || false;
+	}, isIntervalNeeded());
+	return !!res;
 
 }
 
@@ -836,4 +909,69 @@ function parseWikilinks(str: string) {
 		}
 	}
 	return ret;
+}
+
+async function fixTypo(): Promise<void> {
+
+	const mw = getMw();
+	const pages: string[]|null = await mw.request({
+		action: 'query',
+		list: 'search',
+		srsearch: 'hastemplate:"削除依頼ログ" insource:"特定版指定削除"',
+		srnamespace: talkNsNum.join('|'),
+		srprop: '',
+		srlimit: 'max',
+		formatversion: '2'
+	}).then((res: ApiResponse) => {
+		let resSrch: ApiResponseQueryListSearch[]|undefined;
+		if (!res || !res.query || !(resSrch = res.query.search)) {
+			log('Query failed.');
+			return null;
+		}
+		return resSrch.map(({title}) => title);
+	}).catch((err: ApiResponseError) => {
+		log(err.info);
+		return null;
+	});
+	if (!pages) return;
+	log(`${pages.length} pages found.`);
+
+	const processPage = async (title: string) => {
+
+		log(`Checking ${title}...`);
+		const lr = await lib.getLatestRevision(title);
+		if (!lr) {
+			log('Failed to get the latest revision.');
+			return;
+		}
+
+		const tmpl = lib.parseTemplates(lr.content, {namePredicate: (name) => name === '削除依頼ログ'});
+		if (!tmpl.length) {
+			log('Template not found.');
+			return;
+		}
+		let newContent = lr.content;
+		tmpl.forEach(({text}) => {
+			const newText = text.replace(/特定版指定削除/g, '特定版削除');
+			newContent = newContent.replace(text, newText);
+		});
+		if (newContent === lr.content) {
+			log('No replacement took place.');
+			return;
+		}
+
+		await lib.edit({
+			title: title,
+			text: newContent,
+			summary: '[[Special:PermaLink/96515545#削除済みノートをテンプレートへ置換|BOTREQ]]: 特定版指定削除 → 特定版削除 (削除依頼ログ)',
+			bot: true,
+			minor: true
+		}, isIntervalNeeded());
+
+	};
+
+	for (const p of pages) {
+		await processPage(p);
+	}
+
 }
