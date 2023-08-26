@@ -4,7 +4,7 @@
  * @link https://doc.wikimedia.org/mediawiki-core/master/js/source/Title.html
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getNamespacePrefix = exports.isKnownNamespace = exports.getNsIdsByType = exports.getNsIdByName = exports.Title = void 0;
+exports.getNamespacePrefix = exports.isKnownNamespace = exports.getNsIdsByType = exports.getNsIdByName = exports.Title = exports.rUnicodeBidi = void 0;
 const string_1 = require("./string");
 const phpCharToUpper_1 = require("./phpCharToUpper");
 /**
@@ -154,7 +154,7 @@ const rWhitespace = /[_\u00A0\u1680\u180E\u2000-\u200A\u2028\u2029\u202F\u205F\u
 /**
  * RegExp (global flag) to remove unicode-bidirectional characters (from MediaWikiTitleCodec::splitTitleString() in PHP).
  */
-const rUnicodeBidi = /[\u200E\u200F\u202A-\u202E]+/g;
+exports.rUnicodeBidi = /[\u200E\u200F\u202A-\u202E]+/g;
 const sanitationRules = [
     // "signature"
     {
@@ -249,7 +249,7 @@ class Title {
         let namespace = ns === undefined ? nsMain : ns;
         title = title
             // Strip Unicode bidi override characters
-            .replace(rUnicodeBidi, '')
+            .replace(exports.rUnicodeBidi, '')
             // Normalise whitespace to underscores and remove duplicates
             .replace(rWhitespace, '_')
             // Trim underscores
@@ -596,40 +596,46 @@ class Title {
      * Get the main page name
      *
      * Example: "Example_image.svg" for "File:Example_image.svg".
+     *
+     * @param withFragment Include the fragment, if any
      */
-    getMain() {
+    getMain(withFragment = false) {
         if (wgCaseSensitiveNamespaces.includes(this.namespace) || !this.title.length) {
-            return this.title;
+            return this.title + this.getConcatableFragment(!withFragment);
         }
         const firstChar = (0, string_1.charAt)(this.title, 0);
-        return Title.phpCharToUpper(firstChar) + this.title.slice(firstChar.length);
+        return Title.phpCharToUpper(firstChar) + this.title.slice(firstChar.length) + this.getConcatableFragment(!withFragment);
     }
     /**
      * Get the main page name (transformed by #text)
      *
      * Example: "Example image.svg" for "File:Example_image.svg".
+     *
+     * @param withFragment Include the fragment, if any
      */
-    getMainText() {
-        return text(this.getMain());
+    getMainText(withFragment = false) {
+        return text(this.getMain() + this.getConcatableFragment(!withFragment));
     }
     /**
      * Get the full page name
      *
      * Example: "File:Example_image.svg".
      * Most useful for API calls, anything that must identify the "title".
+     *
+     * @param withFragment Include the fragment, if any
      */
-    getPrefixedDb() {
-        return this.getNamespacePrefix() + this.getMain();
+    getPrefixedDb(withFragment = false) {
+        return this.getNamespacePrefix() + this.getMain() + this.getConcatableFragment(!withFragment);
     }
     /**
      * Get the full page name (transformed by #text)
      *
      * Example: "File:Example image.svg" for "File:Example_image.svg".
      *
-     * @return {string}
+     * @param withFragment Include the fragment, if any
      */
-    getPrefixedText() {
-        return text(this.getPrefixedDb());
+    getPrefixedText(withFragment = false) {
+        return text(this.getPrefixedDb() + this.getConcatableFragment(!withFragment));
     }
     /**
     * Get the page name relative to a namespace
@@ -641,16 +647,17 @@ class Title {
     * - "Foo:Bar" relative to any namespace other than Foo stays "Foo:Bar".
     *
     * @param namespace The namespace to be relative to
+    * @param withFragment Include the fragment, if any
     */
-    getRelativeText(namespace) {
+    getRelativeText(namespace, withFragment = false) {
         if (this.getNamespaceId() === namespace) {
-            return this.getMainText();
+            return this.getMainText() + this.getConcatableFragment(!withFragment);
         }
         else if (this.getNamespaceId() === nsMain) {
-            return ':' + this.getPrefixedText();
+            return ':' + this.getPrefixedText() + this.getConcatableFragment(!withFragment);
         }
         else {
-            return this.getPrefixedText();
+            return this.getPrefixedText() + this.getConcatableFragment(!withFragment);
         }
     }
     /**
@@ -661,6 +668,15 @@ class Title {
     */
     getFragment() {
         return this.fragment;
+    }
+    /**
+     * Get the fragment, prefixed by '#'. If 'getFragment' is null, returns an empty string.
+     *
+     * @param noreturn Forcibly returns an empty string if true.
+     * @original
+     */
+    getConcatableFragment(noreturn = false) {
+        return this.fragment && !noreturn ? '#' + this.fragment : '';
     }
     // /**
     //  * Get the URL to this title

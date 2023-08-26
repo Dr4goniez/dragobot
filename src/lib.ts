@@ -6,6 +6,7 @@ import { log } from './server';
 import { getMw, init, isBot } from './mw';
 import { DynamicObject, ApiResponse, ApiResponseError, ApiResponseQueryPagesProtection, ApiResponseQueryListSearch, ApiParamsEditPage, ApiParamsQueryEmbeddedIn } from '.';
 import * as siteinfo from './siteinfo';
+import { rUnicodeBidi } from './title';
 import { ucFirst } from './string';
 
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
@@ -502,6 +503,17 @@ export function massRequest(params: DynamicObject, batchParam: string|string[], 
 }
 
 // ****************************** SYNCHRONOUS FUNCTIONS ******************************
+
+/**
+ * Remove unicode bidirectional characters and leading/trailing `\s`s from a string.
+ * 
+ * @param str Input string.
+ * @param trim Whether to trim `str`, defaulted to `true`.
+ */
+export function clean(str: string, trim = true) {
+   str = str.replace(rUnicodeBidi, '');
+   return trim ? str.trim() : str;
+}
 
 // interfaces for parseTemplates()
 export interface Template {

@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.arrayDiff = exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseLinks = exports.parseSections = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.searchText = exports.filterOutProtectedPages = exports.getEmbeddedIn = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
+exports.arrayDiff = exports.arraysEqual = exports.split2 = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getDuration = exports.getCurTimestamp = exports.compareTimestamps = exports.parseLinks = exports.parseSections = exports.replaceWikitext = exports.getCommentTags = exports.parseHtml = exports.parseTemplates = exports.clean = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.searchText = exports.filterOutProtectedPages = exports.getEmbeddedIn = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = exports.getLatestRevision = void 0;
 const net_1 = __importDefault(require("net"));
 const is_cidr_1 = __importStar(require("is-cidr"));
 const cheerio = __importStar(require("cheerio"));
@@ -34,6 +34,7 @@ const axios_1 = __importDefault(require("axios"));
 const server_1 = require("./server");
 const mw_1 = require("./mw");
 const siteinfo = __importStar(require("./siteinfo"));
+const title_1 = require("./title");
 const string_1 = require("./string");
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
 /**
@@ -480,6 +481,18 @@ function massRequest(params, batchParam, limit = (0, mw_1.isBot)() ? 500 : 50) {
     return Promise.all(result);
 }
 exports.massRequest = massRequest;
+// ****************************** SYNCHRONOUS FUNCTIONS ******************************
+/**
+ * Remove unicode bidirectional characters and leading/trailing `\s`s from a string.
+ *
+ * @param str Input string.
+ * @param trim Whether to trim `str`, defaulted to `true`.
+ */
+function clean(str, trim = true) {
+    str = str.replace(title_1.rUnicodeBidi, '');
+    return trim ? str.trim() : str;
+}
+exports.clean = clean;
 /**
  * Parse templates in wikitext. Templates within \<!-- -->, nowiki, pre, syntaxhighlight, source, and math are ignored.
  * (Those in comment tags can be parsed if TemplateConfig.parseComments is true.)
