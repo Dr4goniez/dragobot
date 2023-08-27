@@ -100,11 +100,27 @@ type NewArgsArray = {
 	value: string;
 }[];
 
+interface ArgumentSearchOptions {
+	/**
+	 * If true, look for the first match, instead of the last.
+	 */
+	findFirst?: boolean;
+	/**
+	 * If provided, also check whether the argument with the matched name meets this condition predicate.
+	 * @param arg 
+	 */
+	conditionPredicate?: (arg: TemplateArgument) => boolean;
+}
+
 interface TemplateRenderOptions {
 	/**
 	 * Use the template name of this format. See #Template.getName for details.
 	 */
 	nameprop?: 'full'|'clean'|'fullclean';
+	/**
+	 * Whether to add `subst:` before the template name.
+	 */
+	subst?: boolean;
 	/**
 	 * Use `uftext` instead of `text` for `args`.
 	 */
@@ -334,15 +350,17 @@ export class Template {
 					Template.#registerArgFragment(args, '{{');
 				} else if (/^\}\}/.test(wkt)) { // Found the end of the template
 					const name = args[0] ? args[0].name : '';
+					const endIdx = i + 2;
+					const text = wikitext.slice(startIdx, endIdx);
 					if (!cfg.namePredicate || cfg.namePredicate(name)) {
 						const fullname = args[0] ? args[0].text : '';
-						const t = Template.#newFromParsed(name, fullname, args.slice(1));
+						const t = Template.#newFromParsed(name, fullname, args.slice(1), text, startIdx, endIdx);
 						if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
 							ret.push(t);
 						}
 					}
 					if (cfg.recursive) {
-						const inner = wikitext.slice(startIdx + 2, i);
+						const inner = text.slice(2, -2);
 						if (/\{\{/.test(inner) && /\}\}/.test(inner)) {
 							ret = ret.concat(this.parseWikitext(inner));
 						}
@@ -440,6 +458,17 @@ export class Template {
 	 * Stores overridden template arguments.
 	 */
 	readonly overriddenArgs: TemplateArgument[];
+	/**
+	 * Original text fetched by `parseWikitext`.
+	 */
+	#originalText: string|null;
+	/**
+	 * Start and end indexes fetched by `parseWikitext`.
+	 */
+	#index: {
+		start: number|null;
+		end: number|null;
+	};
 
 	/**
 	 * Initialize a new `Template` instance.
@@ -459,6 +488,11 @@ export class Template {
 		if (!this.fullName.includes(this.name)) {
 			throw new Error(`fullname ("${this.fullName}") does not contain name ("${this.name}") as a substring.`);
 		}
+		this.#originalText = null;
+		this.#index = {
+			start: null,
+			end: null
+		};
 
 		// Truncate the leading colon, if any
 		let colon = '';
@@ -485,9 +519,14 @@ export class Template {
 	/**
 	 * Initialize a new `Template` instance from the result of `parseWikitext`.
 	 */
-	static #newFromParsed(name: string, fullname: string, args: ParsedArgument[]): Template {
+	static #newFromParsed(name: string, fullname: string, args: ParsedArgument[], text: string, startIndex: number, endIndex: number): Template {
 		const t = new Template(name, fullname);
 		t.addArgs(args.map((obj) => ({'name': obj.name.replace(/^\|/, ''), value: obj.value})));
+		t.#originalText = text;
+		t.#index = {
+			start: startIndex,
+			end: endIndex
+		};
 		return t;
 	}
 
@@ -643,19 +682,55 @@ export class Template {
 	/**
 	 * Get an argument value as an object, from an argument name. 
 	 * @param name Argument name.
-	 * @param aliases An array of the argument name's aliases. Should not contain `name`.
+	 * @param options Optional search options.
 	 * @returns `null` if no argument is found with the specified name.
 	 */
-	getArg(name: string|RegExp): TemplateArgument|null {
-		if (typeof name === 'string') {
-			name = new RegExp('^' + escapeRegExp(name) + '$');
-		}
-		for (const k of this.args.keys()) {
-			if (name.test(k) && this.args.has(k)) {
-				return this.args.get(k)!;
+	getArg(name: string|RegExp, options?: ArgumentSearchOptions): TemplateArgument|null {
+
+		options = options || {};
+
+		const nameRegex = typeof name === 'string' ? new RegExp(`^${escapeRegExp(name)}$`) : name;
+		let firstMatch: TemplateArgument|null = null;
+		let lastMatch: TemplateArgument|null = null;
+		for (const [key, arg] of this.args.entries()) {
+			if (nameRegex.test(key) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
+				if (!firstMatch) {
+					firstMatch = arg;
+				}
+				lastMatch = arg;
 			}
 		}
-		return null;
+
+		let ret = options.findFirst ? firstMatch : lastMatch;
+		if (ret) ret = Object.assign({}, ret);
+		return ret;
+
+	}
+
+	/**
+	 * Check whether the `Template` instance has an argument with a certain name.
+	 * @param name Name of the argument to search.
+	 * @param options Optional search options.
+	 * @returns If there is a match, the **last** matched argument name, or else `null`.
+	 */
+	hasArg(name: string|RegExp, options?: ArgumentSearchOptions): string|null {
+
+		options = options || {};
+
+		const nameRegex = typeof name === 'string' ? new RegExp(`^${escapeRegExp(name)}$`) : name;
+		let firstMatch: string|null = null;
+		let lastMatch: string|null = null;
+		for (const [key, arg] of this.args.entries()) {
+			if (nameRegex.test(key) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
+				if (!firstMatch) {
+					firstMatch = key;
+				}
+				lastMatch = key;
+			}
+		}
+
+		return options.findFirst ? firstMatch : lastMatch;
+
 	}
 
 	/**
@@ -690,7 +765,9 @@ export class Template {
 	/**
 	 * Render the `Template` instance as wikitext.
 	 * 
-	 * If you need the raw wikitext found by #parseWikitext, use `toString` or `render({nameprop: 'full', unformatted: true})`.
+	 * If you need the raw wikitext found by `parseWikitext`, use `renderOriginal`. Note that `toString` or
+	 * `render({nameprop: 'full', unformatted: true})` returns a similar result, except that these two methods
+	 * do not render duplicate arguments, unlike `renderOriginal`.
 	 * 
 	 * @param options Optional object of rendering specifications
 	 */
@@ -701,18 +778,19 @@ export class Template {
 
 		// Render name
 		let n;
+		const subst = options.subst ? 'subst:' : '';
 		switch (options.nameprop) {
 			case 'full':
-				n = this.fullName;
+				n = this.fullName.replace(this.name, subst + this.name);
 				break;
 			case 'clean':
-				n = this.cleanName;
+				n = subst + this.cleanName;
 				break;
 			case 'fullclean':
-				n = this.fullCleanName;
+				n = this.fullCleanName.replace(this.cleanName, subst + this.cleanName);
 				break;
 			default:
-				n = this.name;
+				n = subst + this.name;
 		}
 		if (options.linebreakPredicate) {
 			ret += n + (options.linebreakPredicate.name(n) ? '\n' : '');
@@ -740,6 +818,59 @@ export class Template {
 		ret += '}}';
 
 		return ret;
+
+	}
+
+	/**
+	 * Render the original template text.
+	 * @returns `string` only when the instance is created by `parseWikitext`, or else `null`.
+	 */
+	renderOriginal(): string|null {
+		return this.#originalText;
+	}
+
+	/**
+	 * Find the original template in a wikitext and replace it with the (updated) template. This method works only when
+	 * the instance was created by `parseWikitext`.
+	 * @param wikitext Wikitext in which to search for the original template.
+	 * @param options Optional template rendering options.
+	 * @returns New wikitext with the original template replaced.
+	 */
+	replace(wikitext: string, options?: TemplateRenderOptions & {
+		/**
+		 * If `true`, use the start and end indexes of the original template in the wikitext passed to `parseWikitext`,
+		 * and replacement takes place only if the replacee template has the same indexes in `wikitext`. This prevents
+		 * an unparsed template in a transclusion-preventing expression from being wrongly replaced. Note that when `replace`
+		 * is called recursively with this option specified as `true`, the looped array needs to be reversed because the
+		 * indexes change after the replacement.
+		 */
+		useIndex?: boolean;
+		/**
+		 * Replace the original template with this string, instead of the rendering result of the `Template` instance.
+		 */
+		replacer?: string;
+	}): string {
+
+		options = options || {};
+		const useIndex = !!options.useIndex;
+		const replacer = typeof options.replacer === 'string' ? options.replacer : this.render(options);
+
+		if (typeof this.#originalText === 'string') {
+			if (!useIndex) {
+				return wikitext.replace(this.#originalText, replacer);
+			} else if (wikitext.slice(this.#index.start!, this.#index.end!) === this.#originalText) {
+				let chunk1 = wikitext.slice(0, this.#index.start!);
+				const chunk2 = replacer;
+				let chunk3 = wikitext.slice(this.#index.end!);
+				const hasLineBreak = /\n[^\S\n\r]*$/.test(chunk1) || /^[^\S\n\r]*\n[^\S\n\r]*/.test(chunk3);
+				if (replacer === '' && hasLineBreak) {
+					chunk1 = chunk1.trim();
+					chunk3 = '\n' + chunk3.trim();
+				}
+				return chunk1 + chunk2 + chunk3;
+			}
+		}
+		return wikitext;
 
 	}
 

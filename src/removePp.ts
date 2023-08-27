@@ -1,5 +1,6 @@
 import * as lib from './lib';
 import { log } from './server';
+import { Template } from './template';
 
 const pp = [
 	'Pp',
@@ -108,24 +109,25 @@ export async function editPageWithPp(pagetitle: string): Promise<void|null> {
 
 	const lr = await lib.getLatestRevision(pagetitle);
 	if (!lr) return log(`${pagetitle}: Failed to parse the page.`);
+	lr.content = lib.clean(lr.content);
 	let content = lr.content;
 
-	const templates = lib.parseTemplates(content, {
-		templatePredicate: (template) => {
-			return pp.includes(template.name) && !template.arguments.some((obj: lib.TemplateArgument) => /demolevel/i.test(obj.name));
+	const templates = Template.parseWikitext(content, {
+		templatePredicate: (Temp) => {
+			return pp.includes(Temp.getName('clean')) && !Temp.hasArg('demolevel', {
+				conditionPredicate: (arg) => !!arg.value
+			})
 		}
-	})
-	.map((template) => {
-		// Filter out the template texts and convert them into RegExps
-		return new RegExp(lib.escapeRegExp(template.text) + '[^\\S\\n\\r]*\\n?');
 	});
-	if (templates.length === 0) {
+	if (!templates.length) {
 		log(`${pagetitle}: No protection templates found.`);
 		return null;
 	}
 
-	// Replace "{{TEMPLATE}}\n" with an empty string
-	content = lib.replaceWikitext(content, templates, '');
+	// Remove {{pp}}
+	templates.slice().reverse().forEach((Temp) => {
+		content = Temp.replace(content, {useIndex: true, replacer: ''});
+	});
 
 	// Remove empty <noinclude> tags and the like if there's any
 	content = content.replace(/<noinclude>\s*?<\/noinclude>[^\S\n\r]*\n?/gm, '').replace(/\/\*\s*?\*\/[^\S\n\r]*\n?/gm, '');

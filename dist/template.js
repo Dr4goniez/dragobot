@@ -4,7 +4,13 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 };
-var _Template_instances, _a, _Template_createTagRegex, _Template_registerArgFragment, _Template_newFromParsed, _Template_registerArgs;
+var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
+    if (kind === "m") throw new TypeError("Private method is not writable");
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+};
+var _Template_instances, _a, _Template_createTagRegex, _Template_registerArgFragment, _Template_originalText, _Template_index, _Template_newFromParsed, _Template_registerArgs;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Template = void 0;
 const lib_1 = require("./lib");
@@ -149,15 +155,17 @@ class Template {
                 }
                 else if (/^\}\}/.test(wkt)) { // Found the end of the template
                     const name = args[0] ? args[0].name : '';
+                    const endIdx = i + 2;
+                    const text = wikitext.slice(startIdx, endIdx);
                     if (!cfg.namePredicate || cfg.namePredicate(name)) {
                         const fullname = args[0] ? args[0].text : '';
-                        const t = __classPrivateFieldGet(Template, _a, "m", _Template_newFromParsed).call(Template, name, fullname, args.slice(1));
+                        const t = __classPrivateFieldGet(Template, _a, "m", _Template_newFromParsed).call(Template, name, fullname, args.slice(1), text, startIdx, endIdx);
                         if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
                             ret.push(t);
                         }
                     }
                     if (cfg.recursive) {
-                        const inner = wikitext.slice(startIdx + 2, i);
+                        const inner = text.slice(2, -2);
                         if (/\{\{/.test(inner) && /\}\}/.test(inner)) {
                             ret = ret.concat(this.parseWikitext(inner));
                         }
@@ -200,6 +208,14 @@ class Template {
      */
     constructor(name, fullname) {
         _Template_instances.add(this);
+        /**
+         * Original text fetched by `parseWikitext`.
+         */
+        _Template_originalText.set(this, void 0);
+        /**
+         * Start and end indexes fetched by `parseWikitext`.
+         */
+        _Template_index.set(this, void 0);
         this.name = name;
         this.fullName = fullname || name;
         this.args = new Map();
@@ -207,6 +223,11 @@ class Template {
         if (!this.fullName.includes(this.name)) {
             throw new Error(`fullname ("${this.fullName}") does not contain name ("${this.name}") as a substring.`);
         }
+        __classPrivateFieldSet(this, _Template_originalText, null, "f");
+        __classPrivateFieldSet(this, _Template_index, {
+            start: null,
+            end: null
+        }, "f");
         // Truncate the leading colon, if any
         let colon = '';
         name = name.replace(/^[^\S\r\n]*:[^\S\r\n]*/, (m) => {
@@ -340,19 +361,47 @@ class Template {
     /**
      * Get an argument value as an object, from an argument name.
      * @param name Argument name.
-     * @param aliases An array of the argument name's aliases. Should not contain `name`.
+     * @param options Optional search options.
      * @returns `null` if no argument is found with the specified name.
      */
-    getArg(name) {
-        if (typeof name === 'string') {
-            name = new RegExp('^' + (0, lib_1.escapeRegExp)(name) + '$');
-        }
-        for (const k of this.args.keys()) {
-            if (name.test(k) && this.args.has(k)) {
-                return this.args.get(k);
+    getArg(name, options) {
+        options = options || {};
+        const nameRegex = typeof name === 'string' ? new RegExp(`^${(0, lib_1.escapeRegExp)(name)}$`) : name;
+        let firstMatch = null;
+        let lastMatch = null;
+        for (const [key, arg] of this.args.entries()) {
+            if (nameRegex.test(key) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
+                if (!firstMatch) {
+                    firstMatch = arg;
+                }
+                lastMatch = arg;
             }
         }
-        return null;
+        let ret = options.findFirst ? firstMatch : lastMatch;
+        if (ret)
+            ret = Object.assign({}, ret);
+        return ret;
+    }
+    /**
+     * Check whether the `Template` instance has an argument with a certain name.
+     * @param name Name of the argument to search.
+     * @param options Optional search options.
+     * @returns If there is a match, the **last** matched argument name, or else `null`.
+     */
+    hasArg(name, options) {
+        options = options || {};
+        const nameRegex = typeof name === 'string' ? new RegExp(`^${(0, lib_1.escapeRegExp)(name)}$`) : name;
+        let firstMatch = null;
+        let lastMatch = null;
+        for (const [key, arg] of this.args.entries()) {
+            if (nameRegex.test(key) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
+                if (!firstMatch) {
+                    firstMatch = key;
+                }
+                lastMatch = key;
+            }
+        }
+        return options.findFirst ? firstMatch : lastMatch;
     }
     /**
      * Delete template arguments.
@@ -383,7 +432,9 @@ class Template {
     /**
      * Render the `Template` instance as wikitext.
      *
-     * If you need the raw wikitext found by #parseWikitext, use `toString` or `render({nameprop: 'full', unformatted: true})`.
+     * If you need the raw wikitext found by `parseWikitext`, use `renderOriginal`. Note that `toString` or
+     * `render({nameprop: 'full', unformatted: true})` returns a similar result, except that these two methods
+     * do not render duplicate arguments, unlike `renderOriginal`.
      *
      * @param options Optional object of rendering specifications
      */
@@ -392,18 +443,19 @@ class Template {
         let ret = '{{';
         // Render name
         let n;
+        const subst = options.subst ? 'subst:' : '';
         switch (options.nameprop) {
             case 'full':
-                n = this.fullName;
+                n = this.fullName.replace(this.name, subst + this.name);
                 break;
             case 'clean':
-                n = this.cleanName;
+                n = subst + this.cleanName;
                 break;
             case 'fullclean':
-                n = this.fullCleanName;
+                n = this.fullCleanName.replace(this.cleanName, subst + this.cleanName);
                 break;
             default:
-                n = this.name;
+                n = subst + this.name;
         }
         if (options.linebreakPredicate) {
             ret += n + (options.linebreakPredicate.name(n) ? '\n' : '');
@@ -435,6 +487,42 @@ class Template {
         return ret;
     }
     /**
+     * Render the original template text.
+     * @returns `string` only when the instance is created by `parseWikitext`, or else `null`.
+     */
+    renderOriginal() {
+        return __classPrivateFieldGet(this, _Template_originalText, "f");
+    }
+    /**
+     * Find the original template in a wikitext and replace it with the (updated) template. This method works only when
+     * the instance was created by `parseWikitext`.
+     * @param wikitext Wikitext in which to search for the original template.
+     * @param options Optional template rendering options.
+     * @returns New wikitext with the original template replaced.
+     */
+    replace(wikitext, options) {
+        options = options || {};
+        const useIndex = !!options.useIndex;
+        const replacer = typeof options.replacer === 'string' ? options.replacer : this.render(options);
+        if (typeof __classPrivateFieldGet(this, _Template_originalText, "f") === 'string') {
+            if (!useIndex) {
+                return wikitext.replace(__classPrivateFieldGet(this, _Template_originalText, "f"), replacer);
+            }
+            else if (wikitext.slice(__classPrivateFieldGet(this, _Template_index, "f").start, __classPrivateFieldGet(this, _Template_index, "f").end) === __classPrivateFieldGet(this, _Template_originalText, "f")) {
+                let chunk1 = wikitext.slice(0, __classPrivateFieldGet(this, _Template_index, "f").start);
+                const chunk2 = replacer;
+                let chunk3 = wikitext.slice(__classPrivateFieldGet(this, _Template_index, "f").end);
+                const hasLineBreak = /\n[^\S\n\r]*$/.test(chunk1) || /^[^\S\n\r]*\n[^\S\n\r]*/.test(chunk3);
+                if (replacer === '' && hasLineBreak) {
+                    chunk1 = chunk1.trim();
+                    chunk3 = '\n' + chunk3.trim();
+                }
+                return chunk1 + chunk2 + chunk3;
+            }
+        }
+        return wikitext;
+    }
+    /**
      * Stringify the `Template` instance. Same as `render({nameprop: 'full', unformatted: true})`.
      */
     toString() {
@@ -455,7 +543,7 @@ class Template {
     }
 }
 exports.Template = Template;
-_a = Template, _Template_instances = new WeakSet(), _Template_createTagRegex = function _Template_createTagRegex(config) {
+_a = Template, _Template_originalText = new WeakMap(), _Template_index = new WeakMap(), _Template_instances = new WeakSet(), _Template_createTagRegex = function _Template_createTagRegex(config) {
     const cfg = {
         includeTags: [],
         excludeTags: []
@@ -512,9 +600,14 @@ _a = Template, _Template_instances = new WeakSet(), _Template_createTagRegex = f
         args[len].text += fragment;
         args[len].value += fragment;
     }
-}, _Template_newFromParsed = function _Template_newFromParsed(name, fullname, args) {
+}, _Template_newFromParsed = function _Template_newFromParsed(name, fullname, args, text, startIndex, endIndex) {
     const t = new Template(name, fullname);
     t.addArgs(args.map((obj) => ({ 'name': obj.name.replace(/^\|/, ''), value: obj.value })));
+    __classPrivateFieldSet(t, _Template_originalText, text, "f");
+    __classPrivateFieldSet(t, _Template_index, {
+        start: startIndex,
+        end: endIndex
+    }, "f");
     return t;
 }, _Template_registerArgs = function _Template_registerArgs(newArgs, logOverride) {
     newArgs.forEach(({ name, value }) => {

@@ -17,6 +17,7 @@ dist/test.js
 src/test-ts.ts
 dist/test-ts.js
 src/relink.ts
+src/markup2.ts
 
 # Personal modules
 personal
