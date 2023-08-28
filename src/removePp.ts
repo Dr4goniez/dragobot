@@ -116,7 +116,7 @@ export async function editPageWithPp(pagetitle: string): Promise<void|null> {
 		templatePredicate: (Temp) => {
 			return pp.includes(Temp.getName('clean')) && !Temp.hasArg('demolevel', {
 				conditionPredicate: (arg) => !!arg.value
-			})
+			});
 		}
 	});
 	if (!templates.length) {

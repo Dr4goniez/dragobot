@@ -740,7 +740,7 @@ export class Template {
 	 */
 	deleteArgs(names: string[]): {[name: string]: boolean;} {
 		return names.reduce((acc: {[name: string]: boolean;}, name) => {
-			acc[name] = this.args.delete(name)
+			acc[name] = this.args.delete(name);
 			return acc;
 		}, Object.create(null));
 	}
@@ -863,7 +863,7 @@ export class Template {
 				const chunk2 = replacer;
 				let chunk3 = wikitext.slice(this.#index.end!);
 				const hasLineBreak = /\n[^\S\n\r]*$/.test(chunk1) || /^[^\S\n\r]*\n[^\S\n\r]*/.test(chunk3);
-				if (replacer === '' && hasLineBreak) {
+				if (chunk1 !== '' && replacer === '' && hasLineBreak) {
 					chunk1 = chunk1.trim();
 					chunk3 = '\n' + chunk3.trim();
 				}

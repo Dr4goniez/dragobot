@@ -52,7 +52,7 @@ export function getLatestRevision(pagename: string) {
 			});
 
 		}).catch((err: ApiResponseError) => {
-			log(err.info)
+			log(err.info);
 			resolve(undefined);
 		});
 	});
@@ -641,7 +641,7 @@ export function parseTemplates(wikitext: string, config?: TemplateConfig, nestle
 		const subtemplates = parsed.reduce((acc, obj) => {
 			const tempInner = obj.text.slice(2, -2);
 			if (/\{\{.*\}\}/s.test(tempInner)) {
-				acc = acc.concat(parseTemplates(tempInner, cfg, nestlevel + 1))
+				acc = acc.concat(parseTemplates(tempInner, cfg, nestlevel + 1));
 			}
 			return acc;
 		}, accumulator);
@@ -708,7 +708,7 @@ function parseTemplateArguments(template: string): TemplateArgument[] {
 			text: replacePipesBack(arg),
 			name: replacePipesBack(argName),
 			value: replacePipesBack(argValue)
-		}
+		};
 
 	});
 
