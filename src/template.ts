@@ -863,9 +863,9 @@ export class Template {
 				const chunk2 = replacer;
 				let chunk3 = wikitext.slice(this.#index.end!);
 				const hasLineBreak = /\n[^\S\n\r]*$/.test(chunk1) || /^[^\S\n\r]*\n[^\S\n\r]*/.test(chunk3);
-				if (chunk1 !== '' && replacer === '' && hasLineBreak) {
+				if (replacer === '' && hasLineBreak) {
 					chunk1 = chunk1.trim();
-					chunk3 = '\n' + chunk3.trim();
+					chunk3 = (chunk1 !== '' ? '\n' : '') + chunk3.trim();
 				}
 				return chunk1 + chunk2 + chunk3;
 			}
