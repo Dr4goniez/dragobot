@@ -24,10 +24,10 @@ export const createServer = (debugMode?: boolean) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function log(str: any) {
+export function log(str: any) {
 	console.log(str);
 	if (typeof str !== 'string') {
-		if (typeof str === 'object') {
+		if (typeof str === 'object' && str !== null) {
 			str = JSON.stringify(str, Object.getOwnPropertyNames(str));
 		} else {
 			str = JSON.stringify(str);
@@ -38,4 +38,3 @@ function log(str: any) {
 		res.update('index', {logline: logline});
 	});
 }
-export { log };

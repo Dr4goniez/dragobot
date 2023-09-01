@@ -25,7 +25,7 @@ exports.createServer = createServer;
 function log(str) {
     console.log(str);
     if (typeof str !== 'string') {
-        if (typeof str === 'object') {
+        if (typeof str === 'object' && str !== null) {
             str = JSON.stringify(str, Object.getOwnPropertyNames(str));
         }
         else {

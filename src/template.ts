@@ -1,3 +1,4 @@
+import { log } from './server';
 import { clean, escapeRegExp } from './lib';
 import { Title } from './title';
 import { ucFirst } from './string';
@@ -36,12 +37,6 @@ interface TagConfig {
 }
 
 interface TemplateConfig extends TagConfig {
-	/** 
-	 * Also parse nested templates.
-	 * 
-	 * Default: `true`
-	 */
-	recursive?: boolean;
 	/**
 	 * Only parse templates whose names match this predicate.
 	 * @param name The parsed name of the template. This is not formatted, and might have a lowercase first letter and/or
@@ -54,6 +49,12 @@ interface TemplateConfig extends TagConfig {
 	 * @param Template
 	 */
 	templatePredicate?: (Template: Template) => boolean;
+	/** 
+	 * Parse nested templates in accordance with this predicate.
+	 * 
+	 * Default: Always parse nested templates
+	 */
+	recursivePredicate?: (Template: Template) => boolean;
 }
 
 interface FragmentOptions {
@@ -101,10 +102,6 @@ type NewArgsArray = {
 }[];
 
 interface ArgumentSearchOptions {
-	/**
-	 * If true, look for the first match, instead of the last.
-	 */
-	findFirst?: boolean;
 	/**
 	 * If provided, also check whether the argument with the matched name meets this condition predicate.
 	 * @param arg 
@@ -264,7 +261,7 @@ export class Template {
 			if (grammatical) {
 				params.push(para);
 			} else {
-				console.log(`Unparsable parameter: ${para}`);
+				log(`Unparsable parameter: ${para}`);
 			}
 			
 		}
@@ -297,8 +294,7 @@ export class Template {
 
 		const cfg: TemplateConfig = {
 			includeTags: [],
-			excludeTags: [],
-			recursive: true
+			excludeTags: []
 		};
 		Object.assign(cfg, config || {});
 
@@ -350,16 +346,16 @@ export class Template {
 					Template.#registerArgFragment(args, '{{');
 				} else if (/^\}\}/.test(wkt)) { // Found the end of the template
 					const name = args[0] ? args[0].name : '';
+					const fullname = args[0] ? args[0].text : '';
 					const endIdx = i + 2;
 					const text = wikitext.slice(startIdx, endIdx);
+					const t = Template.#newFromParsed(name, fullname, args.slice(1), text, startIdx, endIdx);
 					if (!cfg.namePredicate || cfg.namePredicate(name)) {
-						const fullname = args[0] ? args[0].text : '';
-						const t = Template.#newFromParsed(name, fullname, args.slice(1), text, startIdx, endIdx);
 						if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
 							ret.push(t);
 						}
 					}
-					if (cfg.recursive) {
+					if (!cfg.recursivePredicate || cfg.recursivePredicate(t)) {
 						const inner = text.slice(2, -2);
 						if (/\{\{/.test(inner) && /\}\}/.test(inner)) {
 							ret = ret.concat(this.parseWikitext(inner));
@@ -453,7 +449,11 @@ export class Template {
 	/**
 	 * Stores template arguments.
 	 */
-	readonly args: Map<string, TemplateArgument>;
+	readonly args: TemplateArgument[];
+	/**
+	 * Stores template argument keys.
+	 */
+	readonly keys: string[]; 
 	/**
 	 * Stores overridden template arguments.
 	 */
@@ -483,7 +483,8 @@ export class Template {
 
 		this.name = name;
 		this.fullName = fullname || name;
-		this.args = new Map();
+		this.args = [];
+		this.keys = [];
 		this.overriddenArgs = [];
 		if (!this.fullName.includes(this.name)) {
 			throw new Error(`fullname ("${this.fullName}") does not contain name ("${this.name}") as a substring.`);
@@ -592,20 +593,32 @@ export class Template {
 			const text = '|' + (unnamed ? '' : name + '=') + value.replace(/^\|/, '');
 			const uftext = '|' + (unnamed ? '' : ufname + '=') + ufvalue.replace(/^\|/, '');
 
-			if (unnamed) {
-				for (let i = 1; i < Infinity; i++) {
-					if (!this.args.has(i.toString())) {
-						name = i.toString();
-						break;
-					}
-				}
-			} else if (logOverride && this.args.has(name)) {
-				this.overriddenArgs.push(Object.assign({}, this.args.get(name)!));
-			}
-
-			this.args.set(name, {name, value, text, ufname, ufvalue, uftext, unnamed});
+			const arg: TemplateArgument = {name, value, text, ufname, ufvalue, uftext, unnamed};
+			this.#registerArg(arg, logOverride);
 
 		});
+	}
+
+	/**
+	 * @param arg New argument object to register.
+	 * @param logOverride Whether to leave a log when overriding argument values.
+	 */
+	#registerArg(arg: TemplateArgument, logOverride: boolean) {
+		const idx = this.keys.indexOf(arg.name);
+		if (arg.unnamed) {
+			for (let i = 1; i < Infinity; i++) {
+				if (!this.keys.includes(i.toString())) {
+					arg.name = i.toString();
+					break;
+				}
+			}
+		} else if (logOverride && idx !== -1) {
+			this.overriddenArgs.push(this.args[idx]);
+			this.keys.splice(idx, 1);
+			this.args.splice(idx, 1);
+		}
+		this.keys.push(arg.name);
+		this.args.push(arg);
 	}
 
 	/**
@@ -642,12 +655,13 @@ export class Template {
 		if (argText[0] !== '|') {
 			throw new Error(`String passed to addArgsFromText must start with a pipe character (input: "${argText}")`);
 		}
-		const tmpl = Template.parseWikitext('{{' + argText + '}}', {recursive: false});
-		for (const [key, obj] of tmpl[0].args.entries()) {
-			if (this.args.has(key)) {
-				this.overriddenArgs.push(Object.assign({}, this.args.get(key)!));
-			}
-			this.args.set(key, obj);
+		const tmpl = Template.parseWikitext('{{' + argText + '}}', {recursivePredicate: () => false})[0];
+		for (let i = 0; i < tmpl.overriddenArgs.length; i++) {
+			const oArg = tmpl.overriddenArgs[i];
+			this.overriddenArgs.push(oArg);
+		}
+		for (let i = 0; i < tmpl.args.length; i++) {
+			this.#registerArg(tmpl.args[i], true);
 		}
 	}
 
@@ -673,10 +687,11 @@ export class Template {
 	}
 
 	/**
-	 * Get a copy of the template argument object.
+	 * Get template arguments as an array of objects. The array is passed by reference, meaning that modifying it will change the
+	 * original array stored in the `Template` instance. To prevent this, make a deep copy using `Array.prototype.slice`.
 	 */
-	getArgs(): {[k: string]: TemplateArgument;} {
-		return Object.fromEntries(this.args);
+	getArgs(): TemplateArgument[] {
+		return this.args;
 	}
 
 	/**
@@ -685,15 +700,21 @@ export class Template {
 	 * @param options Optional search options.
 	 * @returns `null` if no argument is found with the specified name.
 	 */
-	getArg(name: string|RegExp, options?: ArgumentSearchOptions): TemplateArgument|null {
+	getArg(name: string|RegExp, options?: ArgumentSearchOptions & {
+		/**
+		 * If true, look for the first match, instead of the last.
+		 */
+		findFirst?: boolean;
+	}): TemplateArgument|null {
 
 		options = options || {};
 
 		const nameRegex = typeof name === 'string' ? new RegExp(`^${escapeRegExp(name)}$`) : name;
 		let firstMatch: TemplateArgument|null = null;
 		let lastMatch: TemplateArgument|null = null;
-		for (const [key, arg] of this.args.entries()) {
-			if (nameRegex.test(key) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
+		for (let i = 0; i < this.args.length; i++) {
+			const arg = this.args[i];
+			if (nameRegex.test(arg.name) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
 				if (!firstMatch) {
 					firstMatch = arg;
 				}
@@ -711,38 +732,35 @@ export class Template {
 	 * Check whether the `Template` instance has an argument with a certain name.
 	 * @param name Name of the argument to search.
 	 * @param options Optional search options.
-	 * @returns If there is a match, the **last** matched argument name, or else `null`.
+	 * @returns A boolean value in accordance with whether there is a match.
 	 */
-	hasArg(name: string|RegExp, options?: ArgumentSearchOptions): string|null {
-
+	hasArg(name: string|RegExp, options?: ArgumentSearchOptions): boolean {
 		options = options || {};
-
 		const nameRegex = typeof name === 'string' ? new RegExp(`^${escapeRegExp(name)}$`) : name;
-		let firstMatch: string|null = null;
-		let lastMatch: string|null = null;
-		for (const [key, arg] of this.args.entries()) {
-			if (nameRegex.test(key) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
-				if (!firstMatch) {
-					firstMatch = key;
-				}
-				lastMatch = key;
+		for (let i = 0; i < this.args.length; i++) {
+			const arg = this.args[i];
+			if (nameRegex.test(arg.name) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
+				return true;
 			}
 		}
-
-		return options.findFirst ? firstMatch : lastMatch;
-
+		return false;
 	}
 
 	/**
 	 * Delete template arguments.
 	 * @param names 
-	 * @returns Result of deletion, keyed by passed names and valued by booleans.
+	 * @returns Deleted arguments.
 	 */
-	deleteArgs(names: string[]): {[name: string]: boolean;} {
-		return names.reduce((acc: {[name: string]: boolean;}, name) => {
-			acc[name] = this.args.delete(name);
+	deleteArgs(names: string[]): TemplateArgument[] {
+		return names.reduce((acc: TemplateArgument[], name) => {
+			const idx = this.keys.indexOf(name);
+			if (idx !== -1) {
+				acc.push(this.args[idx]);
+				this.keys.splice(idx, 1);
+				this.args.splice(idx, 1);
+			}
 			return acc;
-		}, Object.create(null));
+		}, []);
 	}
 
 	/**
@@ -751,7 +769,14 @@ export class Template {
 	 * @returns true if an element in the `args` existed and has been removed, or false if the element does not exist.
 	 */
 	deleteArg(name: string): boolean {
-		return this.args.delete(name);
+		let deleted = false;
+		const idx = this.keys.indexOf(name);
+		if (idx !== -1) {
+			this.keys.splice(idx, 1);
+			this.args.splice(idx, 1);
+			deleted = true;
+		}
+		return deleted;
 	}
 
 	/**
@@ -801,7 +826,7 @@ export class Template {
 		}
 
 		// Render args
-		const [...args] = this.args.values();
+		const args = this.args.slice();
 		if (options.sortPredicate) {
 			args.sort(options.sortPredicate);
 		}
@@ -889,7 +914,7 @@ export class Template {
 		fullName: string;
 		cleanName: string;
 		fullCleanName: string;
-		args: {[name: string]: TemplateArgument;};
+		args: TemplateArgument[];
 		overriddenArgs: TemplateArgument[];
 	} {
 		return {
@@ -897,7 +922,7 @@ export class Template {
 			fullName: this.fullName,
 			cleanName: this.cleanName,
 			fullCleanName: this.fullCleanName,
-			args: Object.fromEntries(this.args),
+			args: this.args.slice(),
 			overriddenArgs: this.overriddenArgs.slice()
 		};
 	}

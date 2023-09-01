@@ -10,9 +10,10 @@ var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
     return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
 };
-var _Template_instances, _a, _Template_createTagRegex, _Template_registerArgFragment, _Template_originalText, _Template_index, _Template_newFromParsed, _Template_registerArgs;
+var _Template_instances, _a, _Template_createTagRegex, _Template_registerArgFragment, _Template_originalText, _Template_index, _Template_newFromParsed, _Template_registerArgs, _Template_registerArg;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Template = void 0;
+const server_1 = require("./server");
 const lib_1 = require("./lib");
 const title_1 = require("./title");
 const string_1 = require("./string");
@@ -75,7 +76,7 @@ class Template {
                 params.push(para);
             }
             else {
-                console.log(`Unparsable parameter: ${para}`);
+                (0, server_1.log)(`Unparsable parameter: ${para}`);
             }
         }
         // Get tags back
@@ -101,8 +102,7 @@ class Template {
         }
         const cfg = {
             includeTags: [],
-            excludeTags: [],
-            recursive: true
+            excludeTags: []
         };
         Object.assign(cfg, config || {});
         // Create tag regex
@@ -155,16 +155,16 @@ class Template {
                 }
                 else if (/^\}\}/.test(wkt)) { // Found the end of the template
                     const name = args[0] ? args[0].name : '';
+                    const fullname = args[0] ? args[0].text : '';
                     const endIdx = i + 2;
                     const text = wikitext.slice(startIdx, endIdx);
+                    const t = __classPrivateFieldGet(Template, _a, "m", _Template_newFromParsed).call(Template, name, fullname, args.slice(1), text, startIdx, endIdx);
                     if (!cfg.namePredicate || cfg.namePredicate(name)) {
-                        const fullname = args[0] ? args[0].text : '';
-                        const t = __classPrivateFieldGet(Template, _a, "m", _Template_newFromParsed).call(Template, name, fullname, args.slice(1), text, startIdx, endIdx);
                         if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
                             ret.push(t);
                         }
                     }
-                    if (cfg.recursive) {
+                    if (!cfg.recursivePredicate || cfg.recursivePredicate(t)) {
                         const inner = text.slice(2, -2);
                         if (/\{\{/.test(inner) && /\}\}/.test(inner)) {
                             ret = ret.concat(this.parseWikitext(inner));
@@ -218,7 +218,8 @@ class Template {
         _Template_index.set(this, void 0);
         this.name = name;
         this.fullName = fullname || name;
-        this.args = new Map();
+        this.args = [];
+        this.keys = [];
         this.overriddenArgs = [];
         if (!this.fullName.includes(this.name)) {
             throw new Error(`fullname ("${this.fullName}") does not contain name ("${this.name}") as a substring.`);
@@ -325,12 +326,13 @@ class Template {
         if (argText[0] !== '|') {
             throw new Error(`String passed to addArgsFromText must start with a pipe character (input: "${argText}")`);
         }
-        const tmpl = Template.parseWikitext('{{' + argText + '}}', { recursive: false });
-        for (const [key, obj] of tmpl[0].args.entries()) {
-            if (this.args.has(key)) {
-                this.overriddenArgs.push(Object.assign({}, this.args.get(key)));
-            }
-            this.args.set(key, obj);
+        const tmpl = Template.parseWikitext('{{' + argText + '}}', { recursivePredicate: () => false })[0];
+        for (let i = 0; i < tmpl.overriddenArgs.length; i++) {
+            const oArg = tmpl.overriddenArgs[i];
+            this.overriddenArgs.push(oArg);
+        }
+        for (let i = 0; i < tmpl.args.length; i++) {
+            __classPrivateFieldGet(this, _Template_instances, "m", _Template_registerArg).call(this, tmpl.args[i], true);
         }
     }
     /**
@@ -353,10 +355,11 @@ class Template {
         __classPrivateFieldGet(this, _Template_instances, "m", _Template_registerArgs).call(this, [{ name, value }], false);
     }
     /**
-     * Get a copy of the template argument object.
+     * Get template arguments as an array of objects. The array is passed by reference, meaning that modifying it will change the
+     * original array stored in the `Template` instance. To prevent this, make a deep copy using `Array.prototype.slice`.
      */
     getArgs() {
-        return Object.fromEntries(this.args);
+        return this.args;
     }
     /**
      * Get an argument value as an object, from an argument name.
@@ -369,8 +372,9 @@ class Template {
         const nameRegex = typeof name === 'string' ? new RegExp(`^${(0, lib_1.escapeRegExp)(name)}$`) : name;
         let firstMatch = null;
         let lastMatch = null;
-        for (const [key, arg] of this.args.entries()) {
-            if (nameRegex.test(key) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
+        for (let i = 0; i < this.args.length; i++) {
+            const arg = this.args[i];
+            if (nameRegex.test(arg.name) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
                 if (!firstMatch) {
                     firstMatch = arg;
                 }
@@ -386,33 +390,34 @@ class Template {
      * Check whether the `Template` instance has an argument with a certain name.
      * @param name Name of the argument to search.
      * @param options Optional search options.
-     * @returns If there is a match, the **last** matched argument name, or else `null`.
+     * @returns A boolean value in accordance with whether there is a match.
      */
     hasArg(name, options) {
         options = options || {};
         const nameRegex = typeof name === 'string' ? new RegExp(`^${(0, lib_1.escapeRegExp)(name)}$`) : name;
-        let firstMatch = null;
-        let lastMatch = null;
-        for (const [key, arg] of this.args.entries()) {
-            if (nameRegex.test(key) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
-                if (!firstMatch) {
-                    firstMatch = key;
-                }
-                lastMatch = key;
+        for (let i = 0; i < this.args.length; i++) {
+            const arg = this.args[i];
+            if (nameRegex.test(arg.name) && (!options.conditionPredicate || options.conditionPredicate(arg))) {
+                return true;
             }
         }
-        return options.findFirst ? firstMatch : lastMatch;
+        return false;
     }
     /**
      * Delete template arguments.
      * @param names
-     * @returns Result of deletion, keyed by passed names and valued by booleans.
+     * @returns Deleted arguments.
      */
     deleteArgs(names) {
         return names.reduce((acc, name) => {
-            acc[name] = this.args.delete(name);
+            const idx = this.keys.indexOf(name);
+            if (idx !== -1) {
+                acc.push(this.args[idx]);
+                this.keys.splice(idx, 1);
+                this.args.splice(idx, 1);
+            }
             return acc;
-        }, Object.create(null));
+        }, []);
     }
     /**
      * Delete a template argument.
@@ -420,7 +425,14 @@ class Template {
      * @returns true if an element in the `args` existed and has been removed, or false if the element does not exist.
      */
     deleteArg(name) {
-        return this.args.delete(name);
+        let deleted = false;
+        const idx = this.keys.indexOf(name);
+        if (idx !== -1) {
+            this.keys.splice(idx, 1);
+            this.args.splice(idx, 1);
+            deleted = true;
+        }
+        return deleted;
     }
     /**
      * Get a list of overridden template arguments as an array of objects. This method returns a deep copy,
@@ -467,7 +479,7 @@ class Template {
             ret += n;
         }
         // Render args
-        const [...args] = this.args.values();
+        const args = this.args.slice();
         if (options.sortPredicate) {
             args.sort(options.sortPredicate);
         }
@@ -537,7 +549,7 @@ class Template {
             fullName: this.fullName,
             cleanName: this.cleanName,
             fullCleanName: this.fullCleanName,
-            args: Object.fromEntries(this.args),
+            args: this.args.slice(),
             overriddenArgs: this.overriddenArgs.slice()
         };
     }
@@ -623,17 +635,24 @@ _a = Template, _Template_originalText = new WeakMap(), _Template_index = new Wea
         }
         const text = '|' + (unnamed ? '' : name + '=') + value.replace(/^\|/, '');
         const uftext = '|' + (unnamed ? '' : ufname + '=') + ufvalue.replace(/^\|/, '');
-        if (unnamed) {
-            for (let i = 1; i < Infinity; i++) {
-                if (!this.args.has(i.toString())) {
-                    name = i.toString();
-                    break;
-                }
+        const arg = { name, value, text, ufname, ufvalue, uftext, unnamed };
+        __classPrivateFieldGet(this, _Template_instances, "m", _Template_registerArg).call(this, arg, logOverride);
+    });
+}, _Template_registerArg = function _Template_registerArg(arg, logOverride) {
+    const idx = this.keys.indexOf(arg.name);
+    if (arg.unnamed) {
+        for (let i = 1; i < Infinity; i++) {
+            if (!this.keys.includes(i.toString())) {
+                arg.name = i.toString();
+                break;
             }
         }
-        else if (logOverride && this.args.has(name)) {
-            this.overriddenArgs.push(Object.assign({}, this.args.get(name)));
-        }
-        this.args.set(name, { name, value, text, ufname, ufvalue, uftext, unnamed });
-    });
+    }
+    else if (logOverride && idx !== -1) {
+        this.overriddenArgs.push(this.args[idx]);
+        this.keys.splice(idx, 1);
+        this.args.splice(idx, 1);
+    }
+    this.keys.push(arg.name);
+    this.args.push(arg);
 };
