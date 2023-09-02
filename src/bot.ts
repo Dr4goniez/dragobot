@@ -6,7 +6,8 @@ import { removePp } from './removePp';
 import { getMw, init } from './mw';
 import { ApiResponse, ApiResponseError, ApiResponseQueryListBlocks } from '.';
 
-createServer();
+const testrun = false;
+createServer(testrun);
 init().then((mw) => {
 
 	if (!mw) return;
@@ -62,7 +63,9 @@ init().then((mw) => {
  */
 function monthTransitioning(): boolean {
 	const d = new Date();
-	d.setHours(d.getHours() + 9); // JST
+	if (!testrun) {
+		d.setHours(d.getHours() + 9); // JST: Needed only on Toolforge server
+	}
 	const year = d.getFullYear(),
 			month = d.getMonth() + 1,
 			lastDay = lib.lastDay(year, month),

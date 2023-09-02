@@ -160,9 +160,11 @@ class Template {
                     const text = wikitext.slice(startIdx, endIdx);
                     const parsed = { name, fullname, args: args.slice(1), text, startIndex: startIdx, endIndex: endIdx, hierarchy: cfg.hierarchy };
                     const t = __classPrivateFieldGet(Template, _a, "m", _Template_newFromParsed).call(Template, parsed);
-                    if (!cfg.namePredicate || cfg.namePredicate(t.getName('clean'))) {
-                        if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
-                            ret.push(t);
+                    if (t) {
+                        if (!cfg.namePredicate || cfg.namePredicate(t.getName('clean'))) {
+                            if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
+                                ret.push(t);
+                            }
                         }
                     }
                     if (!cfg.recursivePredicate || cfg.recursivePredicate(t)) {
@@ -220,8 +222,11 @@ class Template {
          */
         _Template_hierarchy.set(this, void 0);
         options = options || {};
-        this.name = name;
-        this.fullName = options.fullname || name;
+        this.name = (0, lib_1.clean)(name);
+        if (this.name.includes('\n')) {
+            throw new Error(`name ("${name}") is not allowed to contain inline "\\n" characters.`);
+        }
+        this.fullName = (0, lib_1.clean)(options.fullname || name, false);
         this.args = [];
         this.keys = [];
         this.overriddenArgs = [];
@@ -619,7 +624,13 @@ _a = Template, _Template_originalText = new WeakMap(), _Template_index = new Wea
     }
 }, _Template_newFromParsed = function _Template_newFromParsed(parsed) {
     const { name, fullname, args, text, startIndex, endIndex, hierarchy } = parsed;
-    const t = new Template(name, { fullname, hierarchy });
+    let t = null;
+    try {
+        t = new Template(name, { fullname, hierarchy });
+    }
+    catch {
+        return t;
+    }
     t.addArgs(args.map((obj) => ({ 'name': obj.name.replace(/^\|/, ''), value: obj.value })));
     __classPrivateFieldSet(t, _Template_originalText, text, "f");
     __classPrivateFieldSet(t, _Template_index, {
@@ -656,6 +667,7 @@ _a = Template, _Template_originalText = new WeakMap(), _Template_index = new Wea
     }
     // Check duplicates
     const hier = __classPrivateFieldGet(this, _Template_instances, "m", _Template_getHier).call(this, arg.name);
+    let oldArg;
     if (hier !== null) {
         const foundArg = this.args[hier.index];
         if (hier.priority === 1 && arg.value || // There's an argument of a lower priority and this argument has a non-empty value
@@ -676,6 +688,12 @@ _a = Template, _Template_originalText = new WeakMap(), _Template_index = new Wea
             }
             return; // Don't register this argument
         }
+    }
+    else if ((oldArg = this.getArg(arg.name))) {
+        if (logOverride) {
+            this.overriddenArgs.push(oldArg);
+        }
+        this.deleteArg(arg.name);
     }
     // Register the new argument
     this.keys.push(arg.name);

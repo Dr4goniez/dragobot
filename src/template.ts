@@ -52,8 +52,9 @@ interface TemplateConfig extends TagConfig {
 	 * Parse nested templates in accordance with this predicate.
 	 * 
 	 * Default: Always parse nested templates
+	 * @param Template Can be `null` if #constructor has thrown an error.
 	 */
-	recursivePredicate?: (Template: Template) => boolean;
+	recursivePredicate?: (Template: Template|null) => boolean;
 }
 
 interface FragmentOptions {
@@ -396,9 +397,11 @@ export class Template {
 					const text = wikitext.slice(startIdx, endIdx);
 					const parsed: NewFromParsed = {name, fullname, args: args.slice(1), text, startIndex: startIdx, endIndex: endIdx, hierarchy: cfg.hierarchy};
 					const t = Template.#newFromParsed(parsed);
-					if (!cfg.namePredicate || cfg.namePredicate(t.getName('clean'))) {
-						if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
-							ret.push(t);
+					if (t) {
+						if (!cfg.namePredicate || cfg.namePredicate(t.getName('clean'))) {
+							if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
+								ret.push(t);
+							}
 						}
 					}
 					if (!cfg.recursivePredicate || cfg.recursivePredicate(t)) {
@@ -537,8 +540,11 @@ export class Template {
 	}) {
 
 		options = options || {};
-		this.name = name;
-		this.fullName = options.fullname || name;
+		this.name = clean(name);
+		if (this.name.includes('\n')) {
+			throw new Error(`name ("${name}") is not allowed to contain inline "\\n" characters.`);
+		}
+		this.fullName = clean(options.fullname || name, false);
 		this.args = [];
 		this.keys = [];
 		this.overriddenArgs = [];
@@ -577,9 +583,15 @@ export class Template {
 	/**
 	 * Initialize a new `Template` instance from the result of `parseWikitext`.
 	 */
-	static #newFromParsed(parsed: NewFromParsed): Template {
+	static #newFromParsed(parsed: NewFromParsed): Template|null {
 		const {name, fullname, args, text, startIndex, endIndex, hierarchy} = parsed;
-		const t = new Template(name, {fullname, hierarchy});
+		let t: Template|null = null;
+		try {
+			t = new Template(name, {fullname, hierarchy});
+		}
+		catch {
+			return t;
+		}
 		t.addArgs(args.map((obj) => ({'name': obj.name.replace(/^\|/, ''), value: obj.value})));
 		t.#originalText = text;
 		t.#index = {
@@ -675,6 +687,7 @@ export class Template {
 
 		// Check duplicates
 		const hier = this.#getHier(arg.name);
+		let oldArg: TemplateArgument|null;
 		if (hier !== null) {
 			const foundArg = this.args[hier.index];
 			if (hier.priority === 1 && arg.value || // There's an argument of a lower priority and this argument has a non-empty value
@@ -694,6 +707,11 @@ export class Template {
 				}
 				return; // Don't register this argument
 			}
+		} else if ((oldArg = this.getArg(arg.name))){
+			if (logOverride) {
+				this.overriddenArgs.push(oldArg);
+			}
+			this.deleteArg(arg.name);
 		}
 
 		// Register the new argument

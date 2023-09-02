@@ -138,7 +138,7 @@ async function editPageWithPp(pagetitle) {
                 conditionPredicate: (arg) => !!arg.value
             });
         },
-        recursivePredicate: (Temp) => !pp.includes(Temp.getName('clean'))
+        recursivePredicate: (Temp) => !Temp || !pp.includes(Temp.getName('clean'))
     });
     if (!templates.length) {
         (0, server_1.log)(`${pagetitle}: No protection templates found.`);

@@ -29,7 +29,8 @@ const markup_1 = require("./markup");
 const updateRFB_1 = require("./updateRFB");
 const removePp_1 = require("./removePp");
 const mw_1 = require("./mw");
-(0, server_1.createServer)();
+const testrun = false;
+(0, server_1.createServer)(testrun);
 (0, mw_1.init)().then((mw) => {
     if (!mw)
         return;
@@ -76,7 +77,9 @@ const mw_1 = require("./mw");
  */
 function monthTransitioning() {
     const d = new Date();
-    d.setHours(d.getHours() + 9); // JST
+    if (!testrun) {
+        d.setHours(d.getHours() + 9); // JST: Needed only on Toolforge server
+    }
     const year = d.getFullYear(), month = d.getMonth() + 1, lastDay = lib.lastDay(year, month), anchorTs40 = `${year}-${month.toString().padStart(2, '0')}-${lastDay}T23:40:00Z`, anchorTs30 = anchorTs40.replace(/40:00Z$/, '30:00Z');
     return new Date(anchorTs40) >= d && d > new Date(anchorTs30);
 }
