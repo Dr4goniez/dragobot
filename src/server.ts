@@ -24,7 +24,7 @@ export const createServer = (debugMode?: boolean) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function log(str: any) {
+export const log = (str: any) => {
 	console.log(str);
 	if (typeof str !== 'string') {
 		if (typeof str === 'object' && str !== null) {
@@ -37,4 +37,4 @@ export function log(str: any) {
 	app.get('/', (req, res: DynamicObject) => {
 		res.update('index', {logline: logline});
 	});
-}
+};

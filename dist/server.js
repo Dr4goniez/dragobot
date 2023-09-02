@@ -18,11 +18,11 @@ const createServer = (debugMode) => {
         res.render('index', { logline: logline });
     });
     app.listen(port);
-    log('The server has started running.');
+    (0, exports.log)('The server has started running.');
 };
 exports.createServer = createServer;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function log(str) {
+const log = (str) => {
     console.log(str);
     if (typeof str !== 'string') {
         if (typeof str === 'object' && str !== null) {
@@ -36,5 +36,5 @@ function log(str) {
     app.get('/', (req, res) => {
         res.update('index', { logline: logline });
     });
-}
+};
 exports.log = log;
