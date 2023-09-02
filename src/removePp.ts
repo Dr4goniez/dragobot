@@ -114,7 +114,7 @@ export async function editPageWithPp(pagetitle: string): Promise<void|null> {
 
 	const templates = Template.parseWikitext(content, {
 		templatePredicate: (Temp) => {
-			return pp.includes(Temp.getName('clean')) && Temp.hasArg('demolevel', {
+			return pp.includes(Temp.getName('clean')) && !Temp.hasArg('demolevel', {
 				conditionPredicate: (arg) => !!arg.value
 			});
 		},

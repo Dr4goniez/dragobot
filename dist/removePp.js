@@ -134,7 +134,7 @@ async function editPageWithPp(pagetitle) {
     let content = lr.content;
     const templates = template_1.Template.parseWikitext(content, {
         templatePredicate: (Temp) => {
-            return pp.includes(Temp.getName('clean')) && Temp.hasArg('demolevel', {
+            return pp.includes(Temp.getName('clean')) && !Temp.hasArg('demolevel', {
                 conditionPredicate: (arg) => !!arg.value
             });
         },

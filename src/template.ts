@@ -39,8 +39,7 @@ interface TagConfig {
 interface TemplateConfig extends TagConfig {
 	/**
 	 * Only parse templates whose names match this predicate.
-	 * @param name The parsed name of the template. This is not formatted, and might have a lowercase first letter and/or
-	 * a `Template:` namespace prefix.
+	 * @param name The name of the parsed template, which is the same as `Template.getName('clean')`.
 	 */
 	namePredicate?: (name: string) => boolean;
 	/**
@@ -78,14 +77,60 @@ interface ParsedArgument {
 	 */
 	value: string;
 }
+interface ArgumentHierarchy {
+	/**
+	 * Argument hierarchies.
+	 * 
+	 * When the template has `|user={{{1|{{{user|}}}}}}` for instance, the value of `{{{1}}}` should be overridden by
+	 * `{{{user}}}`. In this case, pass `[['1', 'user'], [...]]`.
+	 */
+	hierarchy?: string[][];
+}
+interface NewFromParsed extends ArgumentHierarchy {
+	name: string;
+	fullname: string;
+	args: ParsedArgument[];
+	text: string;
+	startIndex: number;
+	endIndex: number;
+}
 
 interface TemplateArgument {
+	/** 
+	 * The argument name, from which unicode bidirectional characters and leading/trailing spaces are removed.
+	 * 
+	 * Note that this property is never an empty string even for unnamed arguments.
+	 */
 	name: string;
+	/** 
+	 * The argument value, from which unicode bidirectional characters are removed. As for leading/trailing spaces,
+	 * whether they are removed depends on whether the argument is named: Unnamed arguments ignore them, while named
+	 * ones don't. Note, however, that trailing linebreak characters are always removed.
+	 */
 	value: string;
+	/**
+	 * The argument's text created out of `name` and `value`, starting with a pipe character.
+	 * 
+	 * Note that the name is not rendered for unnamed arguments.
+	 */
 	text: string;
+	/**
+	 * The unformatted argument name.
+	 */
 	ufname: string;
+	/**
+	 * The unformatted argument value.
+	 */
 	ufvalue: string;
+	/**
+	 * The argument's text created out of `ufname` and `ufvalue`, starting with a pipe character.
+	 * 
+	 * Note that the name is not rendered for unnamed arguments.
+	 */
 	uftext: string;
+	/**
+	 * Whether the argument is named.
+	 */
 	unnamed: boolean;
 }
 /**
@@ -285,14 +330,14 @@ export class Template {
 	 * @param wikitext Input wikitext.
 	 * @param config Optional object to specify parsing rules.
 	 */
-	static parseWikitext(wikitext: string, config?: TemplateConfig) {
+	static parseWikitext(wikitext: string, config?: TemplateConfig & ArgumentHierarchy) {
 
 		let ret: Template[] = [];
 		if (!/\{\{|\}\}/.test(wikitext)) {
 			return ret;
 		}
 
-		const cfg: TemplateConfig = {
+		const cfg: TemplateConfig & ArgumentHierarchy = {
 			includeTags: [],
 			excludeTags: []
 		};
@@ -349,8 +394,9 @@ export class Template {
 					const fullname = args[0] ? args[0].text : '';
 					const endIdx = i + 2;
 					const text = wikitext.slice(startIdx, endIdx);
-					const t = Template.#newFromParsed(name, fullname, args.slice(1), text, startIdx, endIdx);
-					if (!cfg.namePredicate || cfg.namePredicate(name)) {
+					const parsed: NewFromParsed = {name, fullname, args: args.slice(1), text, startIndex: startIdx, endIndex: endIdx, hierarchy: cfg.hierarchy};
+					const t = Template.#newFromParsed(parsed);
+					if (!cfg.namePredicate || cfg.namePredicate(t.getName('clean'))) {
 						if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
 							ret.push(t);
 						}
@@ -469,20 +515,30 @@ export class Template {
 		start: number|null;
 		end: number|null;
 	};
+	/**
+	 * Argument hierarchies.
+	 */
+	#hierarchy: string[][];
 
 	/**
 	 * Initialize a new `Template` instance.
 	 * 
 	 * @param name Name of the page that is to be transcluded. Should not contain anything but a page title.
-	 * @param fullname Full string that should fit into the first slot of the template (`{{fullname}}`), **excluding** 
-	 * double braces. May contain whitespace characters (`{{ fullname }}`) and/or expressions that are not part of the
-	 * template name (`{{ <!--name-->fullname }}`, `{{ {{{|safesubst:}}}fullname }}`, `{{ fullname \n}}`).
-	 * @throws When `fullname` does not contain `name` as a substring.
+	 * @param options Optional initializer object.
+	 * @throws When `options.fullname` does not contain `name` as a substring.
 	 */
-	constructor(name: string, fullname?: string) {
+	constructor(name: string, options?: ArgumentHierarchy & {
+		/**
+		 * Full string that should fit into the first slot of the template (`{{fullname}}`), **excluding** double braces.
+		 * May contain whitespace characters (`{{ fullname }}`) and/or expressions that are not part of the template name
+		 * (`{{ <!--name-->fullname }}`, `{{ {{{|safesubst:}}}fullname }}`, `{{ fullname \n}}`).
+		 */
+		fullname?: string;
+	}) {
 
+		options = options || {};
 		this.name = name;
-		this.fullName = fullname || name;
+		this.fullName = options.fullname || name;
 		this.args = [];
 		this.keys = [];
 		this.overriddenArgs = [];
@@ -494,6 +550,7 @@ export class Template {
 			start: null,
 			end: null
 		};
+		this.#hierarchy = options.hierarchy || [];
 
 		// Truncate the leading colon, if any
 		let colon = '';
@@ -520,8 +577,9 @@ export class Template {
 	/**
 	 * Initialize a new `Template` instance from the result of `parseWikitext`.
 	 */
-	static #newFromParsed(name: string, fullname: string, args: ParsedArgument[], text: string, startIndex: number, endIndex: number): Template {
-		const t = new Template(name, fullname);
+	static #newFromParsed(parsed: NewFromParsed): Template {
+		const {name, fullname, args, text, startIndex, endIndex, hierarchy} = parsed;
+		const t = new Template(name, {fullname, hierarchy});
 		t.addArgs(args.map((obj) => ({'name': obj.name.replace(/^\|/, ''), value: obj.value})));
 		t.#originalText = text;
 		t.#index = {
@@ -604,7 +662,8 @@ export class Template {
 	 * @param logOverride Whether to leave a log when overriding argument values.
 	 */
 	#registerArg(arg: TemplateArgument, logOverride: boolean) {
-		const idx = this.keys.indexOf(arg.name);
+
+		// Name if unnamed
 		if (arg.unnamed) {
 			for (let i = 1; i < Infinity; i++) {
 				if (!this.keys.includes(i.toString())) {
@@ -612,13 +671,71 @@ export class Template {
 					break;
 				}
 			}
-		} else if (logOverride && idx !== -1) {
-			this.overriddenArgs.push(this.args[idx]);
-			this.keys.splice(idx, 1);
-			this.args.splice(idx, 1);
 		}
+
+		// Check duplicates
+		const hier = this.#getHier(arg.name);
+		if (hier !== null) {
+			const foundArg = this.args[hier.index];
+			if (hier.priority === 1 && arg.value || // There's an argument of a lower priority and this argument has a non-empty value
+				hier.priority === -1 && !foundArg.value || // There's an argument of a higher priority and that argument's value is empty
+				hier.priority === 0 && arg.value // This argument is a duplicate and has a non-empty value
+			) {
+				if (logOverride) {
+					this.overriddenArgs.push(foundArg); // Leave a log of the argument to be overidden
+				}
+				// Delete the formerly-registered argument and proceed to registering this argument
+				this.keys.splice(hier.index, 1);
+				this.args.splice(hier.index, 1);
+			} else {
+				// The current argument is to be overridden by a formerly-registered argument
+				if (logOverride) {
+					this.overriddenArgs.push(arg); // Leave a log of this argument
+				}
+				return; // Don't register this argument
+			}
+		}
+
+		// Register the new argument
 		this.keys.push(arg.name);
 		this.args.push(arg);
+
+	}
+
+	/**
+	 * Check whether a certain argument is to be overridden.
+	 * @param name
+	 */
+	#getHier(name: string): {
+		/** The index number of `name` or its alias in `this.keys`. */
+		index: number;
+		/** `1` if `name` is on a higher position than `key` is in the hierarchy, `-1` if lower, `0` if the same.  */
+		priority: number;
+	}|null {
+		let ret = null;
+		if (!this.#hierarchy.length || !this.keys.length) {
+			return ret;
+		}
+		this.#hierarchy.some((arr) => {
+
+			// Does this hierarchy array contain the designated argument name?
+			const prIdx = arr.indexOf(name);
+			if (prIdx === -1) return false;
+
+			// Does the Template already have an argument of the designated name or its alias?
+			const prIdx2 = arr.findIndex((key) => this.keys.includes(key));
+			const keyIdx = this.keys.findIndex((key) => arr.includes(key));
+			if (prIdx2 === -1 || keyIdx === -1) return false;
+
+			// The argument of either the designated name or its alias is to be overridden
+			ret = {
+				index: keyIdx,
+				priority: prIdx2 > prIdx ? -1 : prIdx2 < prIdx ? 1 : 0
+			};
+			return true;
+
+		});
+		return ret;
 	}
 
 	/**

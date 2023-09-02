@@ -10,7 +10,7 @@ var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
     return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
 };
-var _Template_instances, _a, _Template_createTagRegex, _Template_registerArgFragment, _Template_originalText, _Template_index, _Template_newFromParsed, _Template_registerArgs, _Template_registerArg;
+var _Template_instances, _a, _Template_createTagRegex, _Template_registerArgFragment, _Template_originalText, _Template_index, _Template_hierarchy, _Template_newFromParsed, _Template_registerArgs, _Template_registerArg, _Template_getHier;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Template = void 0;
 const server_1 = require("./server");
@@ -158,8 +158,9 @@ class Template {
                     const fullname = args[0] ? args[0].text : '';
                     const endIdx = i + 2;
                     const text = wikitext.slice(startIdx, endIdx);
-                    const t = __classPrivateFieldGet(Template, _a, "m", _Template_newFromParsed).call(Template, name, fullname, args.slice(1), text, startIdx, endIdx);
-                    if (!cfg.namePredicate || cfg.namePredicate(name)) {
+                    const parsed = { name, fullname, args: args.slice(1), text, startIndex: startIdx, endIndex: endIdx, hierarchy: cfg.hierarchy };
+                    const t = __classPrivateFieldGet(Template, _a, "m", _Template_newFromParsed).call(Template, parsed);
+                    if (!cfg.namePredicate || cfg.namePredicate(t.getName('clean'))) {
                         if (!cfg.templatePredicate || cfg.templatePredicate(t)) {
                             ret.push(t);
                         }
@@ -201,12 +202,10 @@ class Template {
      * Initialize a new `Template` instance.
      *
      * @param name Name of the page that is to be transcluded. Should not contain anything but a page title.
-     * @param fullname Full string that should fit into the first slot of the template (`{{fullname}}`), **excluding**
-     * double braces. May contain whitespace characters (`{{ fullname }}`) and/or expressions that are not part of the
-     * template name (`{{ <!--name-->fullname }}`, `{{ {{{|safesubst:}}}fullname }}`, `{{ fullname \n}}`).
-     * @throws When `fullname` does not contain `name` as a substring.
+     * @param options Optional initializer object.
+     * @throws When `options.fullname` does not contain `name` as a substring.
      */
-    constructor(name, fullname) {
+    constructor(name, options) {
         _Template_instances.add(this);
         /**
          * Original text fetched by `parseWikitext`.
@@ -216,8 +215,13 @@ class Template {
          * Start and end indexes fetched by `parseWikitext`.
          */
         _Template_index.set(this, void 0);
+        /**
+         * Argument hierarchies.
+         */
+        _Template_hierarchy.set(this, void 0);
+        options = options || {};
         this.name = name;
-        this.fullName = fullname || name;
+        this.fullName = options.fullname || name;
         this.args = [];
         this.keys = [];
         this.overriddenArgs = [];
@@ -229,6 +233,7 @@ class Template {
             start: null,
             end: null
         }, "f");
+        __classPrivateFieldSet(this, _Template_hierarchy, options.hierarchy || [], "f");
         // Truncate the leading colon, if any
         let colon = '';
         name = name.replace(/^[^\S\r\n]*:[^\S\r\n]*/, (m) => {
@@ -555,7 +560,7 @@ class Template {
     }
 }
 exports.Template = Template;
-_a = Template, _Template_originalText = new WeakMap(), _Template_index = new WeakMap(), _Template_instances = new WeakSet(), _Template_createTagRegex = function _Template_createTagRegex(config) {
+_a = Template, _Template_originalText = new WeakMap(), _Template_index = new WeakMap(), _Template_hierarchy = new WeakMap(), _Template_instances = new WeakSet(), _Template_createTagRegex = function _Template_createTagRegex(config) {
     const cfg = {
         includeTags: [],
         excludeTags: []
@@ -612,8 +617,9 @@ _a = Template, _Template_originalText = new WeakMap(), _Template_index = new Wea
         args[len].text += fragment;
         args[len].value += fragment;
     }
-}, _Template_newFromParsed = function _Template_newFromParsed(name, fullname, args, text, startIndex, endIndex) {
-    const t = new Template(name, fullname);
+}, _Template_newFromParsed = function _Template_newFromParsed(parsed) {
+    const { name, fullname, args, text, startIndex, endIndex, hierarchy } = parsed;
+    const t = new Template(name, { fullname, hierarchy });
     t.addArgs(args.map((obj) => ({ 'name': obj.name.replace(/^\|/, ''), value: obj.value })));
     __classPrivateFieldSet(t, _Template_originalText, text, "f");
     __classPrivateFieldSet(t, _Template_index, {
@@ -639,7 +645,7 @@ _a = Template, _Template_originalText = new WeakMap(), _Template_index = new Wea
         __classPrivateFieldGet(this, _Template_instances, "m", _Template_registerArg).call(this, arg, logOverride);
     });
 }, _Template_registerArg = function _Template_registerArg(arg, logOverride) {
-    const idx = this.keys.indexOf(arg.name);
+    // Name if unnamed
     if (arg.unnamed) {
         for (let i = 1; i < Infinity; i++) {
             if (!this.keys.includes(i.toString())) {
@@ -648,11 +654,53 @@ _a = Template, _Template_originalText = new WeakMap(), _Template_index = new Wea
             }
         }
     }
-    else if (logOverride && idx !== -1) {
-        this.overriddenArgs.push(this.args[idx]);
-        this.keys.splice(idx, 1);
-        this.args.splice(idx, 1);
+    // Check duplicates
+    const hier = __classPrivateFieldGet(this, _Template_instances, "m", _Template_getHier).call(this, arg.name);
+    if (hier !== null) {
+        const foundArg = this.args[hier.index];
+        if (hier.priority === 1 && arg.value || // There's an argument of a lower priority and this argument has a non-empty value
+            hier.priority === -1 && !foundArg.value || // There's an argument of a higher priority and that argument's value is empty
+            hier.priority === 0 && arg.value // This argument is a duplicate and has a non-empty value
+        ) {
+            if (logOverride) {
+                this.overriddenArgs.push(foundArg); // Leave a log of the argument to be overidden
+            }
+            // Delete the formerly-registered argument and proceed to registering this argument
+            this.keys.splice(hier.index, 1);
+            this.args.splice(hier.index, 1);
+        }
+        else {
+            // The current argument is to be overridden by a formerly-registered argument
+            if (logOverride) {
+                this.overriddenArgs.push(arg); // Leave a log of this argument
+            }
+            return; // Don't register this argument
+        }
     }
+    // Register the new argument
     this.keys.push(arg.name);
     this.args.push(arg);
+}, _Template_getHier = function _Template_getHier(name) {
+    let ret = null;
+    if (!__classPrivateFieldGet(this, _Template_hierarchy, "f").length || !this.keys.length) {
+        return ret;
+    }
+    __classPrivateFieldGet(this, _Template_hierarchy, "f").some((arr) => {
+        // Does this hierarchy array contain the designated argument name?
+        const prIdx = arr.indexOf(name);
+        if (prIdx === -1)
+            return false;
+        // Does the Template already have an argument of the designated name or its alias?
+        const prIdx2 = arr.findIndex((key) => this.keys.includes(key));
+        const keyIdx = this.keys.findIndex((key) => arr.includes(key));
+        if (prIdx2 === -1 || keyIdx === -1)
+            return false;
+        // The argument of either the designated name or its alias is to be overridden
+        ret = {
+            index: keyIdx,
+            priority: prIdx2 > prIdx ? -1 : prIdx2 < prIdx ? 1 : 0
+        };
+        return true;
+    });
+    return ret;
 };
