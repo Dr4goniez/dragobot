@@ -1209,18 +1209,18 @@ function getWeekDayJa(timestamp) {
 }
 exports.getWeekDayJa = getWeekDayJa;
 /** Check whether a given string is an IP address. */
-function isIPAddress(ip) {
-    return net_1.default.isIP(ip) || (0, is_cidr_1.default)(ip);
+function isIPAddress(ip, allowBlock = false) {
+    return net_1.default.isIP(ip) || allowBlock && (0, is_cidr_1.default)(ip);
 }
 exports.isIPAddress = isIPAddress;
 /** Check whether a given string is an IPv4 address. */
-function isIPv4Address(ip) {
-    return net_1.default.isIPv4(ip) || (0, is_cidr_1.v4)(ip);
+function isIPv4Address(ip, allowBlock = false) {
+    return net_1.default.isIPv4(ip) || allowBlock && (0, is_cidr_1.v4)(ip);
 }
 exports.isIPv4Address = isIPv4Address;
 /** Check whether a given string is an IPv6 address. */
-function isIPv6Address(ip) {
-    return net_1.default.isIPv6(ip) || (0, is_cidr_1.v6)(ip);
+function isIPv6Address(ip, allowBlock = false) {
+    return net_1.default.isIPv6(ip) || allowBlock && (0, is_cidr_1.v6)(ip);
 }
 exports.isIPv6Address = isIPv6Address;
 /** Split a string into two at the first (or last if bottomup === true) occurrence of a delimiter. If the passed string doesn't contain the delimiter, either the first (bottomup) or the second (!bottomup) element will be an empty string. The delimiter between the two segments won't be included in them. */

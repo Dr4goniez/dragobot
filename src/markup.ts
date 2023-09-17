@@ -157,7 +157,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 		// Ensure that the UserAN has a 1= param, otherwise unprocessable
 		if (!param1) return acc;
-		const u = lib.isIPv6Address(param1.value) ? param1.value.toUpperCase() : param1.value;
+		const u = lib.isIPv6Address(param1.value, true) ? param1.value.toUpperCase() : param1.value;
 
 		// Get the type param
 		const t = paramType ? paramType.value.toLowerCase() : 'user2';
@@ -188,7 +188,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 			case 'unl':
 			case 'usernolink':
 				info.user = u;
-				if (lib.isIPAddress(u)) {
+				if (lib.isIPAddress(u, true)) {
 					info.modified = `{{UserAN|t=IP2|${u}}}`;
 					info.type = 'ip2';
 				}
@@ -196,7 +196,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 			case 'ip2':
 			case 'ipuser2':
 				info.user = u;
-				if (!lib.isIPAddress(u)) {
+				if (!lib.isIPAddress(u, true)) {
 					info.modified = `{{UserAN|${u}}}`;
 					info.type = 'user2';
 				}
@@ -210,7 +210,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 				if (/^\d+$/.test(u)) info.diffid = u;
 				break;
 			case 'none': // UserANs with this type param have a random string in the username param (the block status can't be checked)
-				if (lib.isIPAddress(u)) {
+				if (lib.isIPAddress(u, true)) {
 					info.user = u;
 					info.type = 'ip2';
 					info.modified = `{{UserAN|t=IP2|${u}}}`;
@@ -219,7 +219,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 				}
 				break;
 			default: // Invalid type
-				if (lib.isIPAddress(u)) {
+				if (lib.isIPAddress(u, true)) {
 					info.user = u;
 					info.type = 'ip2';
 					info.modified = `{{UserAN|t=IP2|${u}}}`;
@@ -306,7 +306,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 	UserAN.forEach(({user}) => {
 		if (!user) {
 			return;
-		} else if (lib.isIPAddress(user)) {
+		} else if (lib.isIPAddress(user, true)) {
 			if (!ips.includes(user)) ips.push(user);
 		} else {
 			if (!users.includes(user)) users.push(user);
@@ -445,7 +445,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 			if ((elementIdx = obj.params.flags.indexOf('noautoblock')) !== -1) obj.params.flags.splice(elementIdx, 1);
 
 			// If the user is an IP, change 'anononly' to 'hardblock'
-			if (lib.isIPAddress(username)) {
+			if (lib.isIPAddress(username, true)) {
 				if ((elementIdx = obj.params.flags.indexOf('anononly')) !== -1) {
 					obj.params.flags.splice(elementIdx, 1);
 				} else {
@@ -571,7 +571,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		UserAN.forEach(({user, date}) => {
 			if (!user || date) { // Updated UserANs have a nonempty 'date' property
 				return;
-			} else if (lib.isIPAddress(user)) {
+			} else if (lib.isIPAddress(user, true)) {
 				if (!gIps.includes(user)) gIps.push(user);
 			} else {
 				if (!gUsers.includes(user)) gUsers.push(user);

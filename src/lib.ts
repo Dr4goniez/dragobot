@@ -1432,18 +1432,18 @@ export function getWeekDayJa(timestamp: string) {
 }
 
 /** Check whether a given string is an IP address. */
-export function isIPAddress(ip: string) {
-	return net.isIP(ip) || isCidr(ip);
+export function isIPAddress(ip: string, allowBlock = false) {
+	return net.isIP(ip) || allowBlock && isCidr(ip);
 }
 
 /** Check whether a given string is an IPv4 address. */
-export function isIPv4Address(ip: string) {
-	return net.isIPv4(ip) || v4(ip);
+export function isIPv4Address(ip: string, allowBlock = false) {
+	return net.isIPv4(ip) || allowBlock && v4(ip);
 }
 
 /** Check whether a given string is an IPv6 address. */
-export function isIPv6Address(ip: string) {
-	return net.isIPv6(ip) || v6(ip);
+export function isIPv6Address(ip: string, allowBlock = false) {
+	return net.isIPv6(ip) || allowBlock && v6(ip);
 }
 
 /** Split a string into two at the first (or last if bottomup === true) occurrence of a delimiter. If the passed string doesn't contain the delimiter, either the first (bottomup) or the second (!bottomup) element will be an empty string. The delimiter between the two segments won't be included in them. */
