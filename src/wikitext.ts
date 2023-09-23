@@ -166,11 +166,38 @@ interface ParseTemplatesConfig extends ArgumentHierarchy {
  */
 export class Wikitext {
 
+	/**
+	 * The wikitext from which the `Wikitext` instance was initialized.
+	 */
 	readonly wikitext: string;
-	revision: Revision|null;
-	tags: Tag[]|null;
-	sections: Section[]|null;
-	parameters: Parameter[]|null;
+	/**
+	 * Stores the return value of `Wikitext.fetch` when a `Wikitext` instance is created by `Wikitext.newFromTitle`.
+	 * 
+	 * A deep copy can be retrieved by `Wikitext.getRevision`.
+	 * @private
+	 */
+	#revision: Revision|null;
+	/**
+	 * Stores the return value of `Wikitext.parseTags`.
+	 * 
+	 * A deep copy can be retrieved by `Wikitext.getTags`.
+	 * @private
+	 */
+	#tags: Tag[]|null;
+	/**
+	 * Stores the return value of `Wikitext.parseSections`.
+	 * 
+	 * A deep copy can be retrieved by `Wikitext.getSections`.
+	 * @private
+	 */
+	#sections: Section[]|null;
+	/**
+	 * Stores the return value of `Wikitext.parseParameters`.
+	 * 
+	 * A deep copy can be retrieved by `Wikitext.getParameters`.
+	 * @private
+	 */
+	#parameters: Parameter[]|null;
 
 	/**
 	 * Initialize a `Wikitext` instance.
@@ -178,10 +205,10 @@ export class Wikitext {
 	 */
 	constructor(wikitext: string) {
 		this.wikitext = wikitext;
-		this.revision = null;
-		this.tags = null;
-		this.sections = null;
-		this.parameters = null;
+		this.#revision = null;
+		this.#tags = null;
+		this.#sections = null;
+		this.#parameters = null;
 	}
 
 	/**
@@ -256,10 +283,19 @@ export class Wikitext {
 		if (!revision) {
 			return revision;
 		} else {
-			const wkt = new Wikitext(revision.content);
-			wkt.revision = revision;
-			return wkt;
+			const Wkt = new Wikitext(revision.content);
+			Wkt.#revision = revision;
+			return Wkt;
 		}
+	}
+
+	/**
+	 * Get a deep copy of `Wikitext.#revision`, which is a private property available only when the `Wikitext`
+	 * instance was initialized by `Wikitext.newFromTitle`.
+	 * @returns
+	 */
+	getRevision(): Revision|null {
+		return this.#revision && {...this.#revision};
 	}
 
 	/**
@@ -270,8 +306,8 @@ export class Wikitext {
 	parseTags(config?: ParseTagsConfig): Tag[] {
 
 		const cfg = config || {};
-		if (this.tags) {
-			return this.tags.reduce((acc: Tag[], obj) => {
+		if (this.#tags) {
+			return this.#tags.reduce((acc: Tag[], obj) => {
 				if (!cfg.conditionPredicate || cfg.conditionPredicate(obj)) {
 					acc.push({...obj}); // Deep copy
 				}
@@ -407,7 +443,7 @@ export class Wikitext {
 		});
 
 		// Save the tags
-		this.tags = tags.map(obj => ({...obj})); // Deep copy
+		this.#tags = tags.map(obj => ({...obj})); // Deep copy
 
 		// Filter the result in accordance with the config
 		if (cfg.conditionPredicate) {
@@ -416,6 +452,16 @@ export class Wikitext {
 		
 		return tags;
 
+	}
+
+	/**
+	 * Get a deep copy of `Wikitext.#tags`, which is a private property available only when `Wikitext.parseTags` has
+	 * been called at least once. Note that `Wikitext.parseTags` returns a (filtered) deep copy of `Wikitext.#tags`
+	 * on a non-first call, so simply call the relevant method if there is no need for a `null` return.
+	 * @returns
+	 */
+	getTags(): Tag[]|null {
+		return this.#tags && this.#tags.map(obj => ({...obj}));
 	}
 
 	/**
@@ -435,8 +481,8 @@ export class Wikitext {
 	 */
 	parseSections(): Section[] {
 
-		if (this.sections) {
-			return this.sections.map(obj => ({...obj})); // Deep copy
+		if (this.#sections) {
+			return this.#sections.map(obj => ({...obj})); // Deep copy
 		}
 
 		// Get transclusion-preventing tags
@@ -559,10 +605,20 @@ export class Wikitext {
 		});
 
 		// Save the sections
-		this.sections = sections.map(obj => ({...obj})); // Deep copy
+		this.#sections = sections.map(obj => ({...obj})); // Deep copy
 
 		return sections;
 	
+	}
+
+	/**
+	 * Get a deep copy of `Wikitext.#sections`, which is a private property available only when `Wikitext.parseSections` has
+	 * been called at least once. Note that `Wikitext.parseSections` returns a (filtered) deep copy of `Wikitext.#sections`
+	 * on a non-first call, so simply call the relevant method if there is no need for a `null` return.
+	 * @returns
+	 */
+	getSections(): Section[]|null {
+		return this.#sections && this.#sections.map(obj => ({...obj}));
 	}
 
 	/**
@@ -573,8 +629,8 @@ export class Wikitext {
 	parseParameters(config?: ParseParametersConfig): Parameter[] {
 
 		const cfg: ParseParametersConfig = Object.assign({recursive: true}, config || {});
-		if (this.parameters) {
-			return this.parameters.reduce((acc: Parameter[], obj) => {
+		if (this.#parameters) {
+			return this.#parameters.reduce((acc: Parameter[], obj) => {
 				if (obj.nestLevel > 0 && !cfg.recursive) {
 					return acc;
 				}
@@ -649,7 +705,7 @@ export class Wikitext {
 		}
 
 		// Save the parameters
-		this.parameters = params.map(obj => ({...obj})); // Deep copy
+		this.#parameters = params.map(obj => ({...obj})); // Deep copy
 
 		return params.reduce((acc: Parameter[], obj) => {
 			if (obj.nestLevel > 0 && !cfg.recursive) {
@@ -662,6 +718,16 @@ export class Wikitext {
 			return acc;
 		}, []);
 
+	}
+
+	/**
+	 * Get a deep copy of `Wikitext.#parameters`, which is a private property available only when `Wikitext.parseParameters` has
+	 * been called at least once. Note that `Wikitext.parseParameters` returns a (filtered) deep copy of `Wikitext.#parameters`
+	 * on a non-first call, so simply call the relevant method if there is no need for a `null` return.
+	 * @returns
+	 */
+	getParameters(): Parameter[]|null {
+		return this.#parameters && this.#parameters.map(obj => ({...obj}));
 	}
 
 	/**
