@@ -401,26 +401,6 @@ export class Template {
 	}
 
 	/**
-	 * Add template arguments from a raw text (e.g. `|1=v1|2=v2`).
-	 *
-	 * @param argText String starting with a pipe character ("|").
-	 * @throws When `argText` does not start with a pipe character.
-	 */
-	// addArgsFromText(argText: string) {
-	// 	if (argText[0] !== '|') {
-	// 		throw new Error(`String passed to addArgsFromText must start with a pipe character (input: "${argText}")`);
-	// 	}
-	// 	const tmpl = Wikitext.parseTemplates('{{' + argText + '}}', {recursivePredicate: () => false})[0];
-	// 	for (let i = 0; i < tmpl.overriddenArgs.length; i++) {
-	// 		const oArg = tmpl.overriddenArgs[i];
-	// 		this.overriddenArgs.push(oArg);
-	// 	}
-	// 	for (let i = 0; i < tmpl.args.length; i++) {
-	// 		this.#registerArg(tmpl.args[i], true);
-	// 	}
-	// }
-
-	/**
 	 * Set (or update) arguments in(to) the `Template` instance. This method does not leave a log when argument override takes place.
 	 *
 	 * Note: New arguments are simply newly added, just as when `addArgs` is used.

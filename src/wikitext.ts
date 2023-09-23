@@ -143,7 +143,7 @@ interface ParseParametersConfig {
 interface ParseTemplatesConfig extends ArgumentHierarchy {
 	/**
 	 * Only parse templates whose names match this predicate.
-	 * @param name The name of the parsed template, which is the same as `Template.getName('clean')`.
+	 * @param name The name of the parsed template, which is the same as `ParsedTemplate.getName('clean')`.
 	 */
 	namePredicate?: (name: string) => boolean;
 	/**
@@ -159,6 +159,10 @@ interface ParseTemplatesConfig extends ArgumentHierarchy {
 	 * @param Template Can be `null` if #constructor has thrown an error.
 	 */
 	recursivePredicate?: (Template: Template|null) => boolean;
+	/**
+	 * Private parameter.
+	 */
+	_nestLevel?: number;
 }
 
 /**
@@ -737,8 +741,8 @@ export class Wikitext {
 	 */
 	parseTemplates(config?: ParseTemplatesConfig): ParsedTemplate[] {
 
-		const cfg = config || {};
-		let tpTags = this.parseTags({
+		const cfg = Object.assign({_nestLevel: 0}, config || {});
+		const tpTags = this.parseTags({
 			conditionPredicate: (tag) => ['comment', 'nowiki', 'pre', 'syntaxhighlight', 'source', 'math'].includes(tag.name)
 		});
 		const params = this.parseParameters({recursive: false});
@@ -749,25 +753,27 @@ export class Wikitext {
 
 		// Character-by-character loop
 		const wikitext = this.wikitext;
-		const ret: ParsedTemplate[] = [];
+		let ret: ParsedTemplate[] = [];
 		for (let i = 0; i < wikitext.length; i++) {
 
 			const wkt = wikitext.slice(i);
 
 			// Skip certain expressions
+			let idx: number;
 			let m: RegExpMatchArray|null;
-			if (params[0] && params[0].startIndex === i) { // Parameter
-				i = params[0].endIndex - 1;
-				if (numUnclosed !== 0) processArgFragment(args, params[0].text, {nonname: true});
-				params.shift();
+			if ((idx = tpTags.findIndex(obj => obj.startIndex === i)) !== -1) { // Transclusion-preventing tag
+				const {text} = tpTags[idx];
+				if (numUnclosed !== 0) processArgFragment(args, text, {nonname: true});
+				tpTags.splice(0, idx + 1);
+				i += text.length - 1;
 				continue;
-			} else if (tpTags[0] && tpTags[0].startIndex === i) { // Transclusion-preventing tag
-				const endIndex = tpTags[0].endIndex;
-				i += endIndex - 1;
-				if (numUnclosed !== 0) processArgFragment(args, tpTags[0].text, {nonname: true});
-				tpTags = tpTags.filter((obj) => obj.startIndex >= endIndex);
+			} else if ((idx = params.findIndex(obj => obj.startIndex === i)) !== -1) { // Parameter
+				const {text} = params[idx];
+				if (numUnclosed !== 0) processArgFragment(args, text, {nonname: true});
+				params.splice(0, idx + 1);
+				i += text.length - 1;
 				continue;
-			} else if ((m = wkt.match(/^\[\[.*?\]\]/))) { // Wikilink
+			} else if ((m = wkt.match(/^\[\[[^[]]*?\]\]/))) { // Wikilink
 				i += m[0].length - 1;
 				if (numUnclosed !== 0) processArgFragment(args, m[0], {nonname: true});
 				continue;
@@ -797,7 +803,8 @@ export class Wikitext {
 						text,
 						startIndex: startIdx,
 						endIndex: endIdx,
-						hierarchy: cfg.hierarchy
+						hierarchy: cfg.hierarchy,
+						nestLevel: cfg._nestLevel
 					});
 					if (t) {
 						if (!cfg.namePredicate || cfg.namePredicate(t.getName('clean'))) {
@@ -806,14 +813,22 @@ export class Wikitext {
 							}
 						}
 					}
+					if (!cfg.recursivePredicate || cfg.recursivePredicate(t)) {
+						const inner = text.slice(2, -2);
+						if (/\{\{/.test(inner) && /\}\}/.test(inner)) {
+							const nested = new Wikitext(inner).parseTemplates(Object.assign(cfg, {_nestLevel: ++cfg._nestLevel}));
+							if (nested.length) {
+								nested.forEach((Temp) => {
+									Temp._startIndex += startIdx + 2;
+									Temp._endIndex += startIdx + 2;
+								});
+								ret = ret.concat(nested);
+							}
+							cfg._nestLevel = 0;
+						}
+					}
 					numUnclosed -= 2;
 					i++;
-					// if (!cfg.recursivePredicate || cfg.recursivePredicate(t)) {
-					// 	const inner = text.slice(2, -2);
-					// 	if (/\{\{/.test(inner) && /\}\}/.test(inner)) {
-					// 		ret = ret.concat(this.parseTemplates(inner, cfg));
-					// 	}
-					// }
 				} else { // Just part of the template
 					processArgFragment(args, wkt[0], wkt[0] === '|' ? {new: true} : {});
 				}
@@ -915,6 +930,7 @@ interface ParsedTemplateParam extends ArgumentHierarchy {
 	text: string;
 	startIndex: number;
 	endIndex: number;
+	nestLevel: number;
 }
 
 class ParsedTemplate extends Template {
@@ -925,16 +941,28 @@ class ParsedTemplate extends Template {
 	 */
 	readonly originalText: string;
 	/**
+	 * **CAUTION**: Pseudo-private property. Use `ParsedTemplate.getStartIndex` to get this property's value.
+	 * 
 	 * The string index to the start of the template in the wikitext out of which the template was parsed.
-	 * @readonly
+	 * 
+	 * Note that this property is made private-like because it shouldn't be modified externally but there are
+	 * occasions on which `Wikitext.parseTemplates` has to modify it externally.
 	 */
-	readonly startIndex: number;
+	_startIndex: number;
 	/**
+	 * **CAUTION**: Pseudo-private property. Use `ParsedTemplate.getEndIndex` to get this property's value.
+	 * 
 	 * The string index to the end of the template in the wikitext out of which the template was parsed.
 	 * The template is up to, but not including, the character at this index.
-	 * @readonly
+	 * 
+	 * Note that this property is made private-like because it shouldn't be modified externally but there are
+	 * occasions on which `Wikitext.parseTemplates` has to modify it externally.
 	 */
-	readonly endIndex: number;
+	_endIndex: number;
+	/**
+	 * Whether the template is nested inside another. For non-nested templates, the value is `0`.
+	 */
+	readonly nestLevel: number;
 
 	/**
 	 * Initialize a new `ParsedTemplate` instance.
@@ -942,12 +970,13 @@ class ParsedTemplate extends Template {
 	 * @throws {Error} When `parsed.fullName` does not contain `parsed.name` as a substring.
 	 */
 	constructor(parsed: ParsedTemplateParam) {
-		const {name, fullName, args, text, startIndex, endIndex, hierarchy} = parsed;
+		const {name, fullName, args, text, startIndex, endIndex, hierarchy, nestLevel} = parsed;
 		super(name, {fullName, hierarchy});
-		super.addArgs(args.map((obj) => ({'name': obj.name.replace(/^\|/, ''), value: obj.value})));
+		this.addArgs(args.map((obj) => ({'name': obj.name.replace(/^\|/, ''), value: obj.value.replace(/^\|/, '')})));
 		this.originalText = text;
-		this.startIndex = startIndex;
-		this.endIndex = endIndex;
+		this._startIndex = startIndex;
+		this._endIndex = endIndex;
+		this.nestLevel = nestLevel;
 	}
 
 	/**
@@ -971,17 +1000,19 @@ class ParsedTemplate extends Template {
 		originalText: string;
 		startIndex: number;
 		endIndex: number;
+		nestLevel: number;
 	} {
 		return {
-			name: super.name,
-			fullName: super.fullName,
-			cleanName: super.cleanName,
-			fullCleanName: super.fullCleanName,
-			args: super.args.map(obj => ({...obj})),
-			overriddenArgs: super.overriddenArgs.map(obj => ({...obj})),
+			name: this.name,
+			fullName: this.fullName,
+			cleanName: this.cleanName,
+			fullCleanName: this.fullCleanName,
+			args: this.args.map(obj => ({...obj})),
+			overriddenArgs: this.overriddenArgs.map(obj => ({...obj})),
 			originalText: this.originalText,
-			startIndex: this.startIndex,
-			endIndex: this.endIndex
+			startIndex: this._startIndex,
+			endIndex: this._endIndex,
+			nestLevel: this.nestLevel
 		};
 	}
 
@@ -994,19 +1025,27 @@ class ParsedTemplate extends Template {
 	}
 
 	/**
-	 * Get `ParsedTemplate.startIndex`.
+	 * Get `ParsedTemplate._startIndex`.
 	 * @returns
 	 */
 	getStartIndex(): number {
-		return this.startIndex;
+		return this._startIndex;
 	}
 
 	/**
-	 * Get `ParsedTemplate.endIndex`.
+	 * Get `ParsedTemplate._endIndex`.
 	 * @returns
 	 */
 	getEndIndex(): number {
-		return this.endIndex;
+		return this._endIndex;
+	}
+
+	/**
+	 * Get `ParsedTemplate.nestLevel`.
+	 * @returns
+	 */
+	getNestLevel(): number {
+		return this.nestLevel;
 	}
 
 	/**
@@ -1028,7 +1067,7 @@ class ParsedTemplate extends Template {
 		with?: string;
 		/**
 		 * If `true` (default), replacement takes place only if the passed wikitext has the original template
-		 * starting at `ParsedTemplate.startIndex` and ending (exclusively) at `ParsedTemplate.endIndex`.
+		 * starting at `ParsedTemplate._startIndex` and ending (exclusively) at `ParsedTemplate._endIndex`.
 		 * This prevents a nonparsed template in a transclusion-preventing expression from being wrongly replaced.
 		 * ```
 		 * const wikitext = '<!--{{Template}}-->\n{{Template}}'; // The second one is parsed
@@ -1044,14 +1083,14 @@ class ParsedTemplate extends Template {
 	}): string {
 
 		const cfg = Object.assign({useIndex: true}, options || {});
-		const replacer = typeof cfg.with === 'string' ? cfg.with : super.render(cfg);
+		const replacer = typeof cfg.with === 'string' ? cfg.with : this.render(cfg);
 
 		if (!cfg.useIndex) {
 			return wikitext.replace(this.originalText, replacer);
-		} else if (wikitext.slice(this.startIndex, this.endIndex) === this.originalText) {
-			let chunk1 = wikitext.slice(0, this.startIndex);
+		} else if (wikitext.slice(this._startIndex, this._endIndex) === this.originalText) {
+			let chunk1 = wikitext.slice(0, this._startIndex);
 			const chunk2 = replacer;
-			let chunk3 = wikitext.slice(this.endIndex);
+			let chunk3 = wikitext.slice(this._endIndex);
 			const hasLineBreak = /\n[^\S\n\r]*$/.test(chunk1) || /^[^\S\n\r]*\n[^\S\n\r]*/.test(chunk3);
 			if (replacer === '' && hasLineBreak) {
 				chunk1 = chunk1.trim();
