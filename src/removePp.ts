@@ -1,6 +1,6 @@
 import * as lib from './lib';
 import { log } from './server';
-import { Template } from './template';
+import { Wikitext } from './wikitext';
 
 const pp = [
 	'Pp',
@@ -112,7 +112,7 @@ export async function editPageWithPp(pagetitle: string): Promise<void|null> {
 	lr.content = lib.clean(lr.content);
 	let content = lr.content;
 
-	const templates = Template.parseWikitext(content, {
+	const templates = Wikitext.parseTemplates(content, {
 		templatePredicate: (Temp) => {
 			return pp.includes(Temp.getName('clean')) && !Temp.hasArg('demolevel', {
 				conditionPredicate: (arg) => !!arg.value
