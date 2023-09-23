@@ -107,12 +107,10 @@ function needToQuit(botRunTs: string): boolean {
  */
 export async function editPageWithPp(pagetitle: string): Promise<void|null> {
 
-	const lr = await lib.getLatestRevision(pagetitle);
-	if (!lr) return log(`${pagetitle}: Failed to parse the page.`);
-	lr.content = lib.clean(lr.content);
-	let content = lr.content;
+	const Wkt = await Wikitext.newFromTitle(pagetitle);
+	if (!Wkt) return;
 
-	const templates = Wikitext.parseTemplates(content, {
+	const templates = Wkt.parseTemplates({
 		templatePredicate: (Temp) => {
 			return pp.includes(Temp.getName('clean')) && !Temp.hasArg('demolevel', {
 				conditionPredicate: (arg) => !!arg.value
@@ -126,26 +124,28 @@ export async function editPageWithPp(pagetitle: string): Promise<void|null> {
 	}
 
 	// Remove {{pp}}
-	templates.slice().reverse().forEach((Temp) => {
-		content = Temp.replace(content, {useIndex: true, replacer: ''});
-	});
+	let content = Wkt.wikitext;
+	for (let i = templates.length - 1; i >= 0; i--) {
+		content = templates[i].replaceIn(content, {with: ''});
+	}
 
 	// Remove empty <noinclude> tags and the like if there's any
 	content = content.replace(/<noinclude>\s*?<\/noinclude>[^\S\n\r]*\n?/gm, '').replace(/\/\*\s*?\*\/[^\S\n\r]*\n?/gm, '');
 
-	if (content === lr.content) {
+	if (content === Wkt.wikitext) {
 		log(`${pagetitle}: Procedure cancelled: Same content`);
 		return null;
 	}
 
+	const rev = Wkt.getRevision()!;
 	const params = {
 		title: pagetitle,
 		text: content,
 		summary: 'Bot: [[Template:Pp|保護テンプレート]]の除去',
 		minor: true,
 		bot: true,
-		basetimestamp: lr.basetimestamp,
-		starttimestamp: lr.curtimestamp
+		basetimestamp: rev.basetimestamp,
+		starttimestamp: rev.curtimestamp
 	};
 	await lib.edit(params);
 
