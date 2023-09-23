@@ -71,21 +71,21 @@ interface ParseTagsConfig {
 
 /** The object that is an element of the returned array of `Wikitext.parseSections`. */
 interface Section {
-	/** 
+	/**
 	 * The title of the section. Could be different from the result of `action=parse` if it contains HTML tags or templates.
 	 * For the top section, the value is `top`.
 	 */
 	title: string;
-	/** 
+	/**
 	 * `==heading==` or the outerHTML of a heading element. Any leading/trailing `\s`s are trimmed.
 	 * For the top section, the value is empty.
 	 */
 	heading: string;
-	/** 
+	/**
 	 * The level of the section (1 to 6). For the top section, the value is `1`.
 	 */
 	level: number;
-	/** 
+	/**
 	 * The index number of the section. This is the same as the `section` parameter of [the edit API]{@link https://www.mediawiki.org/wiki/API:Edit}.
 	 * For the top section, the value is `0`.
 	 */
@@ -98,7 +98,7 @@ interface Section {
 	 * The string index to the end of the section in the wikitext. The section is up to, but not including, the character at this index.
 	 */
 	endIndex: number;
-	/** 
+	/**
 	 * The content of the section including the heading.
 	 */
 	content: string;
@@ -127,7 +127,7 @@ interface Parameter {
 interface ParseParametersConfig {
 	/**
 	 * Whether to parse {{{parameter}}}s inside another {{{parameter}}}.
-	 * 
+	 *
 	 * Default: `true`
 	 */
 	recursive?: boolean;
@@ -152,9 +152,9 @@ interface ParseTemplatesConfig extends ArgumentHierarchy {
 	 * @param Template
 	 */
 	templatePredicate?: (Template: Template) => boolean;
-	/** 
+	/**
 	 * Parse nested templates in accordance with this predicate.
-	 * 
+	 *
 	 * Default: Always parse nested templates
 	 * @param Template Can be `null` if #constructor has thrown an error.
 	 */
@@ -172,28 +172,28 @@ export class Wikitext {
 	readonly wikitext: string;
 	/**
 	 * Stores the return value of `Wikitext.fetch` when a `Wikitext` instance is created by `Wikitext.newFromTitle`.
-	 * 
+	 *
 	 * A deep copy can be retrieved by `Wikitext.getRevision`.
 	 * @private
 	 */
 	#revision: Revision|null;
 	/**
 	 * Stores the return value of `Wikitext.parseTags`.
-	 * 
+	 *
 	 * A deep copy can be retrieved by `Wikitext.getTags`.
 	 * @private
 	 */
 	#tags: Tag[]|null;
 	/**
 	 * Stores the return value of `Wikitext.parseSections`.
-	 * 
+	 *
 	 * A deep copy can be retrieved by `Wikitext.getSections`.
 	 * @private
 	 */
 	#sections: Section[]|null;
 	/**
 	 * Stores the return value of `Wikitext.parseParameters`.
-	 * 
+	 *
 	 * A deep copy can be retrieved by `Wikitext.getParameters`.
 	 * @private
 	 */
@@ -201,7 +201,7 @@ export class Wikitext {
 
 	/**
 	 * Initialize a `Wikitext` instance.
-	 * @param wikitext 
+	 * @param wikitext
 	 */
 	constructor(wikitext: string) {
 		this.wikitext = wikitext;
@@ -300,8 +300,8 @@ export class Wikitext {
 
 	/**
 	 * Parse \<tag>s in the wikitext.
-	 * @param config 
-	 * @returns 
+	 * @param config
+	 * @returns
 	 */
 	parseTags(config?: ParseTagsConfig): Tag[] {
 
@@ -332,7 +332,7 @@ export class Wikitext {
 			commentOpening: /^<!--/,
 			commentClosing: /^-->/
 		};
-		/** 
+		/**
 		 * Stores the last-found opening tag at index `0`.
 		 * Once the opening of a comment tag is unshifted, no new opening tag is unshifted before the comment tag is shifted.
 		 */
@@ -449,7 +449,7 @@ export class Wikitext {
 		if (cfg.conditionPredicate) {
 			tags = tags.filter(Tag => cfg.conditionPredicate!(Tag));
 		}
-		
+
 		return tags;
 
 	}
@@ -469,7 +469,7 @@ export class Wikitext {
 	 * @param tpTags An array of transclusion-preventing tags fetched by `Wikitext.parseTags`.
 	 * @param startIndex The start index of the string in the wikitext.
 	 * @param endIndex The end index of the string in the wikitext.
-	 * @returns 
+	 * @returns
 	 */
 	#inTpTag(tpTags: Tag[], startIndex: number, endIndex: number): boolean {
 		return tpTags.some((obj) => obj.startIndex < startIndex && endIndex < obj.endIndex);
@@ -506,23 +506,23 @@ export class Wikitext {
 		// Define regular expressions
 		/**
 		 * Regular expression to parse out ==heading==s.
-		 * 
+		 *
 		 * Notes on the wiki markup of headings:
 		 * - `== 1 ===`: `<h2>1 =</h2>`
 		 * - `=== 1 ==`: `<h2>= 1</h2>`
 		 * - `== 1 ==\S+`: Not recognized as the beginning of a section (but see below)
 		 * - `== 1 ==<!--string-->`: `<h2>1</h2>`
 		 * - `======= 1 =======`: `<h6>= 1 =</h6>`
-		 * 
+		 *
 		 * Capture groups:
 		 * - `$1`: Left equals
 		 * - `$2`: Heading text
 		 * - `$3`: Right equals
 		 * - `$4`: Remaining characters
-		 * 
+		 *
 		 * In `$4`, basically no character can appear, except:
 		 * - `[\t\n\u0020\u00a0]` ( = `[\u0009\u000a\u0020\u00a0]`)
-		 * 
+		 *
 		 * Note that this is not the same as the JS `\s`, which is equivalent to
 		 * `[\t\n\v\f\r\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]`.
 		 */
@@ -585,7 +585,7 @@ export class Wikitext {
 		// Parse sections from the headings
 		const wkt = this.wikitext;
 		const sections: Section[] = headings.map(({text, title, level, index}, i, arr) => {
-			const boundaryIdx = 
+			const boundaryIdx =
 				i === 0 ? // If this is the top section,
 				(arr.length > 1 ? 1 : -1) :	// the next heading or else no boundary, otherwise
 				arr.findIndex((obj, j) => j > i && obj.level <= level); // find a next non-subsection of this section
@@ -608,7 +608,7 @@ export class Wikitext {
 		this.#sections = sections.map(obj => ({...obj})); // Deep copy
 
 		return sections;
-	
+
 	}
 
 	/**
@@ -641,7 +641,7 @@ export class Wikitext {
 				return acc;
 			}, []);
 		}
-		
+
 		const tpTags = this.parseTags({
 			conditionPredicate: (tag) => ['comment', 'nowiki', 'pre', 'syntaxhighlight', 'source', 'math'].includes(tag.name)
 		});
@@ -701,7 +701,7 @@ export class Wikitext {
 			} else {
 				log(`Unparsable parameter: ${para}`);
 			}
-			
+
 		}
 
 		// Save the parameters
@@ -844,16 +844,16 @@ export class Wikitext {
 // ************************************************ HELPER FUNCTION FOR WIKITEXT CLASS ************************************************
 
 export interface ParsedArgument {
-	/** 
+	/**
 	 * The whole text of the template argument (e.g. `|1=value`).
 	 */
 	text: string;
-	/** 
+	/**
 	 * The name of the template argument, if any (e.g. `1`). If the argument isn't named, this property carries an empty string.
-	 * This property carries a direct parsing result and is always prefixed by a pipe character for named arguments. 
+	 * This property carries a direct parsing result and is always prefixed by a pipe character for named arguments.
 	 */
 	name: string;
-	/** 
+	/**
 	 * The value of the template argument.
 	 */
 	value: string;
@@ -867,18 +867,18 @@ interface FragmentOptions {
 /**
  * Incrementally process fragments of template arguments. This method has no return value, and the original array
  * passed as `args` is modified.
- * 
+ *
  * The `args` array will consist of:
  * ```
  * const [name, params] = args;
  * ```
  * meaning that `args[0]` will store the name of the template. For `args[0]`, `text` is the whole of the name slot (which could
  * contain redundant strings in cases like `{{Template<!--1-->|arg1=}}`, and `name` is its clean counterpart.
- * 
+ *
  * The other elements will be the arguments of the template, and each of the `text` properties starts with a pipe character (e.g. `|1=`).
  * Note also that `args[1+].name` properties also have a leading pipe to be stripped (e.g. `|1`) because the parser would otherwise face
  * problems if an unnamed argument has a value that starts with `=` (e.g. `{{Template|=}}`).
- * 
+ *
  * @param args Pass-by-reference array that stores the arguments of the template that is getting parsed.
  * @param fragment Character(s) to register into the `args` array.
  * @param options Optional object that characterizes the fragment.
@@ -895,7 +895,7 @@ function processArgFragment(args: ParsedArgument[], fragment: string, options?: 
 	} else if (len === 0) { // Looking for a template name and the fragment is part of the name
 		args[len].text += fragment;
 		args[len].name += fragment;
-	} else if ((frIdx = fragment.indexOf('=')) !== -1 && !args[len].name && !options.nonname) { // Found `=` when `name` is empty 
+	} else if ((frIdx = fragment.indexOf('=')) !== -1 && !args[len].name && !options.nonname) { // Found `=` when `name` is empty
 		args[len].name = args[len].text + fragment.slice(0, frIdx);
 		args[len].text += fragment;
 		args[len].value = args[len].text.slice(args[len].name.length + 1);
@@ -1013,7 +1013,7 @@ class ParsedTemplate extends Template {
 	 * Find the original template in a wikitext and replace it with the (updated) template obtained by
 	 * `ParsedTemplate.render(options)`. This method is supposed to be called on a wiktiext same as the one
 	 * from which the `ParsedTemplate` instance was parsed and initialized.
-	 * 
+	 *
 	 * @param wikitext Wikitext in which to search for the original template.
 	 * @param options Optional object to specify rendering and replacement options.
 	 * @returns New wikitext with the original template replaced. (Could be the same as the input wikitext
@@ -1022,7 +1022,7 @@ class ParsedTemplate extends Template {
 	replaceIn(wikitext: string, options?: RenderOptions & {
 		/**
 		 * Replace the original template with this string.
-		 * 
+		 *
 		 * Default: `ParsedTemplate.render(options)`
 		 */
 		with?: string;

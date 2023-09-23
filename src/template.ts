@@ -4,13 +4,13 @@ import { ucFirst } from './string';
 
 /** The object that stores the properties of a template argument, used in `Template.args`. */
 interface TemplateArgument {
-	/** 
+	/**
 	 * The argument name, from which unicode bidirectional characters and leading/trailing spaces are removed.
-	 * 
+	 *
 	 * Note that this property is never an empty string even for unnamed arguments.
 	 */
 	name: string;
-	/** 
+	/**
 	 * The argument value, from which unicode bidirectional characters are removed. As for leading/trailing spaces,
 	 * whether they are removed depends on whether the argument is named: Unnamed arguments ignore them, while named
 	 * ones don't. Note, however, that trailing linebreak characters are always removed.
@@ -18,7 +18,7 @@ interface TemplateArgument {
 	value: string;
 	/**
 	 * The argument's text created out of `name` and `value`, starting with a pipe character.
-	 * 
+	 *
 	 * Note that the name is not rendered for unnamed arguments.
 	 */
 	text: string;
@@ -32,7 +32,7 @@ interface TemplateArgument {
 	ufvalue: string;
 	/**
 	 * The argument's text created out of `ufname` and `ufvalue`, starting with a pipe character.
-	 * 
+	 *
 	 * Note that the name is not rendered for unnamed arguments.
 	 */
 	uftext: string;
@@ -45,7 +45,7 @@ interface TemplateArgument {
 export interface ArgumentHierarchy {
 	/**
 	 * Argument hierarchies.
-	 * 
+	 *
 	 * When the template has `|user={{{1|{{{user|}}}}}}` for instance, the value of `{{{1}}}` should be overridden by
 	 * `{{{user}}}`. In this case, pass `[['1', 'user'], [...]]`.
 	 */
@@ -61,22 +61,22 @@ interface ConstructorConfig extends ArgumentHierarchy {
 	fullName?: string;
 }
 
-/** 
+/**
  * The object that is an element of the array to specify what template arguments to add/update.
- * 
+ *
  * Used in `Template.addArgs` and `Template.setArgs`.
  */
 interface NewArg {
 	/**
 	 * The name of the new argument. This can be an empty string if the class should automatically assign an interger name
 	 * in accordance with the arguments that have already been registered.
-	 * 
+	 *
 	 * This property accepts leading/trailing spaces, for an output wikitext of e.g. `| 1 = value ` instead of `|1=value`.
 	 */
 	name: string;
 	/**
 	 * The value of the new argument.
-	 * 
+	 *
 	 * This property accepts leading/trailing spaces, for an output wikitext of e.g. `| 1 = value ` instead of `|1=value`.
 	 * It can also end with `\n` when the argument should have a linebreak before the next argument or `}}`.
 	 */
@@ -87,7 +87,7 @@ interface NewArg {
 interface GetArgOptions {
 	/**
 	 * If provided, also check whether the argument with the matched name meets this condition predicate.
-	 * @param arg 
+	 * @param arg
 	 */
 	conditionPredicate?: (arg: TemplateArgument) => boolean;
 }
@@ -128,7 +128,7 @@ export interface RenderOptions {
 		/**
 		 * Whether to put a new line after each template argument. `\n` is added if the callback is true, to either
 		 * `uftext` (when `{unformatted: true}`) or `text` (when `{unformatted: false}`).
-		 * @param obj 
+		 * @param obj
 		 */
 		args: (obj: TemplateArgument) => boolean;
 	};
@@ -176,7 +176,7 @@ export class Template {
 	 * Stores template argument keys.
 	 * @readonly
 	 */
-	readonly keys: string[]; 
+	readonly keys: string[];
 	/**
 	 * Stores overridden template arguments.
 	 * @readonly
@@ -190,7 +190,7 @@ export class Template {
 
 	/**
 	 * Initialize a new `Template` instance.
-	 * 
+	 *
 	 * @param name Name of the page that is to be transcluded. Should not contain anything but a page title.
 	 * @param config Optional initializer object.
 	 * @throws {Error} When `config.fullName` does not contain `name` as a substring.
@@ -235,14 +235,14 @@ export class Template {
 
 	/**
 	 * Get the name of the template.
-	 * 
+	 *
 	 * @param prop By default, returns `name` passed to #constructor.
 	 * - If `full` is passed, returns `fullName` passed to #constructor (same as `name` if none was passed).
 	 * - If `clean` is passed, returns the formatted name.
 	 * - If `fullclean` is passed, returns the formatted name pushed into `fullName`.
-	 * 
+	 *
 	 * In specifying any of the above, the first letter is capitalized.
-	 * 
+	 *
 	 * Note that if `name` is prefixed by `Template:`, the namespace prefix is truncated in `prop=clean` and `prop=fullclean`.
 	 * ```
 	 * // name: Template:test
@@ -276,7 +276,7 @@ export class Template {
 
 	/**
 	 * Register template arguments into `Template.args`.
-	 * 
+	 *
 	 * @param newArgs An array of `{name: string; value: string;}` objects.
 	 * @param logOverride Whether to leave a log when overriding argument values.
 	 */
@@ -393,7 +393,7 @@ export class Template {
 	/**
 	 * Add new arguments to the `Template` instance. This method leaves a log when argument override takes place,
 	 * which can be viewed by `getOverriddenArgs`.
-	 * 
+	 *
 	 * @param newArgs An array of `{name: string; value: string;}` objects.
 	 */
 	addArgs(newArgs: NewArg[]) {
@@ -402,7 +402,7 @@ export class Template {
 
 	/**
 	 * Add template arguments from a raw text (e.g. `|1=v1|2=v2`).
-	 * 
+	 *
 	 * @param argText String starting with a pipe character ("|").
 	 * @throws When `argText` does not start with a pipe character.
 	 */
@@ -422,9 +422,9 @@ export class Template {
 
 	/**
 	 * Set (or update) arguments in(to) the `Template` instance. This method does not leave a log when argument override takes place.
-	 * 
-	 * Note: New arguments are simply newly added, just as when `addArgs` is used. 
-	 * 
+	 *
+	 * Note: New arguments are simply newly added, just as when `addArgs` is used.
+	 *
 	 * @param newArgs An array of `{name: string; value: string;}` objects.
 	 */
 	setArgs(newArgs: NewArg[]) {
@@ -433,7 +433,7 @@ export class Template {
 
 	/**
 	 * Get template arguments as an array of objects.
-	 * 
+	 *
 	 * @param deepCopy Whether to return a deep copy, defaulted to `true`. Otherwise, `Template.args` is passed by reference.
 	 * Note, however, that the latter option is not recommended because directly modifying the argument array can fatally complicate it.
 	 * @returns
@@ -447,7 +447,7 @@ export class Template {
 	}
 
 	/**
-	 * Get a deep copy of a template argument from an argument name. 
+	 * Get a deep copy of a template argument from an argument name.
 	 * @param name Argument name.
 	 * @param options Optional search options.
 	 * @returns `null` if no argument is found with the specified name.
@@ -500,7 +500,7 @@ export class Template {
 
 	/**
 	 * Delete template arguments.
-	 * @param names 
+	 * @param names
 	 * @returns Deleted arguments.
 	 */
 	deleteArgs(names: string[]): TemplateArgument[] {
@@ -541,11 +541,11 @@ export class Template {
 
 	/**
 	 * Render the `Template` instance as wikitext.
-	 * 
+	 *
 	 * If you need the raw wikitext found by `Wikitext.parseTemplates`, use `renderOriginal`. Note that `toString` or
 	 * `render({nameprop: 'full', unformatted: true})` returns a similar result, except that these two methods
 	 * do not render duplicate arguments, unlike `renderOriginal`.
-	 * 
+	 *
 	 * @param options Optional object of rendering specifications
 	 */
 	render(options?: RenderOptions): string {
