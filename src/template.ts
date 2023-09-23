@@ -329,7 +329,7 @@ export class Template {
 				hier.priority === 0 && arg.value // This argument is a duplicate and has a non-empty value
 			) {
 				if (logOverride) {
-					this.overriddenArgs.push(foundArg); // Leave a log of the argument to be overidden
+					this.overriddenArgs.push({...foundArg}); // Leave a log of the argument to be overidden
 				}
 				// Delete the formerly-registered argument and proceed to registering this argument
 				this.keys.splice(hier.index, 1);
@@ -337,13 +337,13 @@ export class Template {
 			} else {
 				// The current argument is to be overridden by a formerly-registered argument
 				if (logOverride) {
-					this.overriddenArgs.push(arg); // Leave a log of this argument
+					this.overriddenArgs.push({...arg}); // Leave a log of this argument
 				}
 				return; // Don't register this argument
 			}
 		} else if ((oldArg = this.getArg(arg.name))){
 			if (logOverride) {
-				this.overriddenArgs.push(oldArg);
+				this.overriddenArgs.push({...oldArg});
 			}
 			this.deleteArg(arg.name);
 		}
@@ -516,7 +516,7 @@ export class Template {
 	 * and modifying the return value does not modify the original array stored in the class.
 	 */
 	getOverriddenArgs(): TemplateArgument[] {
-		return this.overriddenArgs.slice();
+		return this.overriddenArgs.map(obj => ({...obj}));
 	}
 
 	/**
@@ -558,7 +558,7 @@ export class Template {
 		}
 
 		// Render args
-		const args = this.args.slice();
+		const args = this.args.map(obj => ({...obj}));
 		if (options.sortPredicate) {
 			args.sort(options.sortPredicate);
 		}
