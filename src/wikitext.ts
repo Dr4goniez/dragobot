@@ -933,7 +933,8 @@ interface ParsedTemplateParam extends ArgumentHierarchy {
 	nestLevel: number;
 }
 
-class ParsedTemplate extends Template {
+/** Class used by `Wikitext.parseTemplates`. */
+export class ParsedTemplate extends Template {
 
 	/**
 	 * The original text of the template.

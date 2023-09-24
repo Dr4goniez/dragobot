@@ -413,7 +413,12 @@ export async function scrapeWebpage(url: string) {
 	}
 }
 
-/** Send an API request that automatically continues until the limit is reached. Works only for calls that have a 'continue' property in the response. */
+/**
+ * Send an API request that automatically continues until the limit is reached. Works only for calls that have a 'continue' property in the response.
+ * @param params
+ * @param limit Default: 10
+ * @returns
+ */
 export function continuedRequest(params: DynamicObject, limit = 10): Promise<ApiResponse[]> {
 
 	const mw = getMw();
