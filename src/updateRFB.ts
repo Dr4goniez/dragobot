@@ -1,8 +1,9 @@
-import * as lib from './lib';
 import { log } from './server';
+import { Wikitext } from './wikitext';
+import { edit } from './lib';
 
 /** Do a monthly update of RFB-related pages. */
-export async function updateRFB(): Promise<void> {
+export async function updateRFB(testrun = false): Promise<void> {
 
 	log('Starting monthly update of RFB-replated pages...');
 
@@ -19,7 +20,9 @@ export async function updateRFB(): Promise<void> {
 
 	// Get years and months
 	const dt = new Date();
-	dt.setHours(dt.getHours() + 9); // e.g. 2022-07-31T23:35:00Z
+	if (!testrun) {
+		dt.setHours(dt.getHours() + 9); // JST: Needed only on Toolforge server
+	}
 	const curYear = dt.getFullYear();
 	const curMonth = dt.getMonth() + 1;
 	const d = {
@@ -36,23 +39,26 @@ export async function updateRFB(): Promise<void> {
 			month: curMonth === 12 ? 1 : curMonth + 1
 		}
 	};
-	const testPagePrefix = ''; // For debugging
 
 	// Create [[Wikipedia:投稿ブロック依頼 YYYY年MM月]]
 	const createMonthlySubpage = async () => {
 
-		const pagetitle = `${testPagePrefix}Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
+		const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年${d.next.month}月`;
 		log(`Creating ${pagetitle}...`);
-		const lr = await lib.getLatestRevision(pagetitle);
-		if (lr) return log(`Cancelled: ${pagetitle} already exists.`);
-		if (lr === undefined) return;
-		const params = {
-			title: pagetitle,
-			text: '{{投稿ブロック依頼}}\n== ログ ==\n\n== 依頼 ==',
-			summary: 'Bot: 月次更新処理',
-			bot: true
-		};
-		await lib.edit(params);
+
+		const revision = await Wikitext.fetch(pagetitle); // Check existence
+		if (revision) { // Already exists
+			return log(`Cancelled: ${pagetitle} already exists.`);
+		} else if (revision === null) { // Query failed
+			return log(`Cancelled: failed to get the existence of ${pagetitle}.`);
+		} else { // Doesn't exist
+			await edit({
+				title: pagetitle,
+				text: '{{投稿ブロック依頼}}\n== ログ ==\n\n== 依頼 ==',
+				summary: 'Bot: 月次更新処理',
+				bot: true
+			});
+		}
 
 	};
 	await createMonthlySubpage();
@@ -72,7 +78,7 @@ export async function updateRFB(): Promise<void> {
 	const updateLinks = async (pagetitle: string, linktype: 'next'|'current') => {
 
 		log(`Updating links on ${pagetitle}...`);
-		const lr = await lib.getLatestRevision(pagetitle);
+		const lr = await Wikitext.fetch(pagetitle);
 		if (!lr) return log('Failed to get the lastest revision of ' + pagetitle);
 
 		let content = lr.content;
@@ -103,7 +109,7 @@ export async function updateRFB(): Promise<void> {
 		}
 		if (content === lr.content) return log(pagetitle + ': Edit cancelled (same content).');
 
-		const params = {
+		await edit({
 			title: pagetitle,
 			text: content,
 			summary: 'Bot: 月次更新処理',
@@ -111,12 +117,11 @@ export async function updateRFB(): Promise<void> {
 			minor: true,
 			basetimestamp: lr.basetimestamp,
 			starttimestamp: lr.curtimestamp
-		};
-		await lib.edit(params);
+		});
 
 	};
 
-	const pages = [`${testPagePrefix}Template:投稿ブロック依頼`, `${testPagePrefix}Wikipedia:投稿ブロック依頼`];
+	const pages = [`Template:投稿ブロック依頼`, `Wikipedia:投稿ブロック依頼`];
 	for (let i = 0; i < pages.length; i++) {
 		const linktype = i === 0 ? 'next' : 'current';
 		await updateLinks(pages[i], linktype);
@@ -125,11 +130,14 @@ export async function updateRFB(): Promise<void> {
 
 	const createNewAnnualSubpage = async () => {
 
-		const pagetitle = `${testPagePrefix}Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
+		const pagetitle = `Wikipedia:投稿ブロック依頼 ${d.next.year}年`;
 		log(`Creating ${pagetitle}...`);
-		const lr = await lib.getLatestRevision(pagetitle);
-		if (lr) return log(`Cancelled: ${pagetitle} already exists.`);
-		if (lr === undefined) return;
+		const lr = await Wikitext.fetch(pagetitle);
+		if (lr) {
+			return log(`Cancelled: ${pagetitle} already exists.`);
+		} else if (lr === null) {
+			return log(`Cancelled: failed to get the existence of ${pagetitle}.`);
+		}
 
 		let content = '__NOTOC__\n<!--\n';
 		for (let i = 1; i <= 12; i++) {
@@ -141,22 +149,21 @@ export async function updateRFB(): Promise<void> {
 		'<!-- 本ページでの直接節編集が可能なように、月別の見出し（例：「== 1月 ==」）は各ページ内に設定してください。 -->\n' +
 		`<noinclude>[[Category:投稿ブロック依頼|済 ${d.next.year}]]</noinclude>`;
 
-		const params = {
+		await edit({
 			title: pagetitle,
 			text: content,
 			summary: 'Bot: 年次更新処理',
 			bot: true
-		};
-		await lib.edit(params);
+		});
 
 	};
 	await createNewAnnualSubpage();
 
 	const updateArchiveTemplte = async () => {
 
-		const pagetitle = `${testPagePrefix}Template:投稿ブロック依頼過去ログ`;
+		const pagetitle = `Template:投稿ブロック依頼過去ログ`;
 		log(`Updating links on ${pagetitle}...`);
-		const lr = await lib.getLatestRevision(pagetitle);
+		const lr = await Wikitext.fetch(pagetitle);
 		if (!lr) return log('Failed to get the lastest revision of ' + pagetitle);
 
 		let content = lr.content;
@@ -166,7 +173,7 @@ export async function updateRFB(): Promise<void> {
 		if (content.includes(linkNewYear)) return log('Cancelled: Links have already been updated.');
 		content = content.replace(linkOldYear, linkOldYear + ' - ' + linkNewYear);
 
-		const params = {
+		await edit({
 			title: pagetitle,
 			text: content,
 			summary: 'Bot: 年次更新処理',
@@ -174,8 +181,7 @@ export async function updateRFB(): Promise<void> {
 			minor: true,
 			basetimestamp: lr.basetimestamp,
 			starttimestamp: lr.curtimestamp
-		};
-		await lib.edit(params);
+		});
 
 	};
 	await updateArchiveTemplte();
