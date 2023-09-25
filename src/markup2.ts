@@ -576,7 +576,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		newlyModified = newlyModified || !!info.modified;
 		if (info.date) { // The UserAN is to be closed
 			const display = [info.domain + info.duration, info.flags, info.date].filter(el => el);
-			Temp.addArgs([{name: '2', value: display.join(' ')}]);
+			Temp.addArgs([{name: '2', value: display.join(' '), forceUnnamed: true}]);
 			return true;
 		} else if (info.modified) {
 			return true;

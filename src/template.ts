@@ -68,7 +68,7 @@ interface ConstructorConfig extends ArgumentHierarchy {
  */
 interface NewArg {
 	/**
-	 * The name of the new argument. This can be an empty string if the class should automatically assign an interger name
+	 * The name of the new argument. This can be an empty string if the class should automatically assign an integer name
 	 * in accordance with the arguments that have already been registered.
 	 *
 	 * This property accepts leading/trailing spaces, for an output wikitext of e.g. `| 1 = value ` instead of `|1=value`.
@@ -81,6 +81,10 @@ interface NewArg {
 	 * It can also end with `\n` when the argument should have a linebreak before the next argument or `}}`.
 	 */
 	value: string;
+	/**
+	 * Forcibly register this argument as unnamed. Ignored if `name` is not an integer.
+	 */
+	forceUnnamed?: boolean;
 }
 
 /** The option object passed to `Template.getArg` and `Template.hasArg`. */
@@ -103,9 +107,10 @@ export interface RenderOptions {
 	 */
 	subst?: boolean;
 	/**
-	 * Use `uftext` instead of `text` for `args`.
+	 * Use the unformatted counterpart(s) of `name` (i.e. `ufname`), `value` (i.e. `ufvalue`), or both, instead of the formatted ones.
+	 * Note that specifying this option disables the auto-rendering of the name of an unnamed argument whose value contains a `=`.
 	 */
-	unformatted?: boolean;
+	unformatted?: 'name'|'value'|'both';
 	/**
 	 * Callback function to `Array.prototype.sort`, called on the `args` array before stringifying the template arguments.
 	 * @param obj1
@@ -113,7 +118,7 @@ export interface RenderOptions {
 	 */
 	sortPredicate?: (obj1: TemplateArgument, obj2: TemplateArgument) => number;
 	/**
-	 * Whether to break lines for each template slot.
+	 * Whether to break lines for each template slot. Overridden by `linebreakPredicate`.
 	 */
 	linebreak?: boolean;
 	/**
@@ -281,12 +286,12 @@ export class Template {
 	 * @param logOverride Whether to leave a log when overriding argument values.
 	 */
 	#registerArgs(newArgs: NewArg[], logOverride: boolean) {
-		newArgs.forEach(({name, value}) => {
+		newArgs.forEach(({name, value, forceUnnamed}) => {
 
 			const ufname = name;
 			const ufvalue = value;
 			name = clean(name);
-			const unnamed = !name;
+			const unnamed = forceUnnamed || !name;
 			if (unnamed) {
 				value = clean(value, false).replace(/\n*$/, '');
 			} else {
@@ -550,7 +555,7 @@ export class Template {
 				n = subst + this.name;
 		}
 		if (options.linebreakPredicate) {
-			ret += n + (options.linebreakPredicate.name(n) ? '\n' : '');
+			ret += n.replace(/\n+$/, '') + (options.linebreakPredicate.name(n) ? '\n' : '');
 		} else if (options.linebreak) {
 			ret += n.replace(/\n+$/, '') + '\n';
 		} else {
@@ -563,13 +568,19 @@ export class Template {
 			args.sort(options.sortPredicate);
 		}
 		for (const obj of args) {
-			const el = options.unformatted ? obj.uftext : obj.text;
+			let text = '|';
+			const name = options.unformatted === 'name' || options.unformatted === 'both' ? obj.ufname : obj.name;
+			const value = options.unformatted === 'value' || options.unformatted === 'both' ? obj.ufvalue : obj.value;
+			if (!obj.unnamed || !options.unformatted && value.includes('=')) {
+				text += name + '=';
+			}
+			text += value;
 			if (options.linebreakPredicate) {
-				ret += el + (options.linebreakPredicate.args(obj) ? '\n' : '');
+				ret += text.replace(/\n+$/, '') + (options.linebreakPredicate.args(obj) ? '\n' : '');
 			} else if (options.linebreak) {
-				ret += el.replace(/\n+$/, '') + '\n';
+				ret += text.replace(/\n+$/, '') + '\n';
 			} else {
-				ret += el;
+				ret += text;
 			}
 		}
 		ret += '}}';
@@ -579,10 +590,10 @@ export class Template {
 	}
 
 	/**
-	 * Stringify the `Template` instance. Same as `render({nameprop: 'full', unformatted: true})`.
+	 * Stringify the `Template` instance. Same as `render({nameprop: 'full', unformatted: 'both'})`.
 	 */
 	toString(): string {
-		return this.render({nameprop: 'full', unformatted: true});
+		return this.render({nameprop: 'full', unformatted: 'both'});
 	}
 
 	/**
