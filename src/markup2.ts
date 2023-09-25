@@ -1,6 +1,7 @@
 import { log } from './server';
-import * as lib from './lib';
 import { Wikitext, ParsedTemplate } from './wikitext';
+import * as lib from './lib';
+import { ucFirst } from './string';
 import {
 	ApiResponse,
 	ApiParamsQueryLogEvents,
@@ -26,23 +27,24 @@ class IDList {
 	}
 
 	/**
-	 * Evaluate an ID and check whether it needs to be processed (i.e. whether we need to attempt to convert the ID
-	 * to a username). If it doesn't (i.e. the list can already convert the ID to an username), returns the username.
-	 * Otherwise, push the ID into the `processing` array if it isn't unprocessable.
+	 * Evaluate an ID and check whether it needs to be processed (i.e. whether we need to convert the ID to a username).
+	 * If it doesn't (i.e. `list` already has an ID-username pair for it), the relevant username is returned.
+	 * Otherwise, the ID is pushed into the `processing` array if it isn't unprocessable.
 	 * @param id
 	 * @returns
 	 */
-	evaluate(id: string): string|undefined {
+	evaluate(id: string): string|null {
 		if (this.list[id]) {
 			return this.list[id];
 		} else if (!this.processing.includes(id) && !this.isUnprocessable(id)) {
 			this.processing.push(id);
 		}
+		return null;
 	}
 
 	/**
 	 * Get IDs that are being processed.
-	 * @returns
+	 * @returns A deep copy of the `processing` array.
 	 */
 	getProcessing(): string[] {
 		return this.processing.slice();
@@ -100,81 +102,34 @@ const ANI = 'Wikipedia:管理者伝言板/投稿ブロック';
 const ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット';
 const AN3RR = 'Wikipedia:管理者伝言板/3RR';
 
-export async function markupANs(checkGlobal: boolean) {
+/** Mark up UserANs on the administrators' noticeboards. */
+export async function markupANs(checkGlobal: boolean): Promise<void> {
 	for (const page of [ANI, ANS, AN3RR]) {
 		log(`Checking ${page}...`);
 		await markup(page, checkGlobal);
 	}
 }
 
+/** Mark up UserANs on a specific page. */
 export async function markup(pagetitle: string, checkGlobal: boolean): Promise<void> {
 
 	// Get page content
 	const Wkt = await Wikitext.newFromTitle(pagetitle);
 	if (!Wkt) return log('Failed to parse the page.');
 
-	// Find open UserANs
-	const openUserANs = Wkt.parseTemplates({
+	// Find UserANs
+	const rawUserANs = Wkt.parseTemplates({
 		namePredicate: (name) => name === 'UserAN',
 		recursivePredicate: (Temp) => !Temp || Temp.getName('clean') !== 'UserAN',
 		hierarchy: [
 			['1', 'user', 'User'],
 			['t', 'type', 'Type'],
 			['状態', 's', 'status', 'Status']
-		],
-		templatePredicate: (Temp) => {
-
-			/*/********************************************************************************************************\
-				A full list of argument combinations
-					args.length === 1
-					- [(1=)username] (open)
-					args.length === 2
-					- [t=TYPE, (1=)username] (open)
-					- [(1=)username, 状態=] (open)
-					- [(1=)username, 状態=X] (closed)
-					- [(1=)username, (2=)無期限] (closed)
-					args.length === 3
-					- [t=TYPE, (1=)username, 状態=] (open)
-					- [t=TYPE, (1=)username, 状態=X] (closed)
-					- [t=TYPE, (1=)username, (2=)無期限] (closed)
-					- [(1=)username, 状態=, (2=)無期限] (closed)
-					args.length === 4
-					- [t=TYPE, (1=)username, 状態=, (2=)無期限] (closed)
-			\***********************************************************************************************************/
-
-			let hasUserArg = false;
-			let hasTypeArg = false;
-			let hasEmptyManualStatusArg = false;
-			for (const {name, value} of Temp.args) {
-				if (name === 'bot') {
-					if (value === 'no') {
-						return false;
-					} else {
-						Temp.deleteArg(name);
-					}
-				} else if (value && /^(1|[uU]ser)$/.test(name)) {
-					hasUserArg = true;
-				} else if (/^(t|[tT]ype)$/.test(name)) {
-					hasTypeArg = true;
-				} else if (/^(状態|s|[sS]tatus)$/.test(name)) {
-					hasEmptyManualStatusArg = !value;
-				} else {
-					Temp.deleteArg(name); // Unsupported argument
-				}
-			}
-
-			const len = Temp.args.length;
-			const isOpen = (
-				len === 1 && hasUserArg ||
-				len === 2 && hasUserArg && (hasTypeArg || hasEmptyManualStatusArg) ||
-				len === 3 && hasUserArg && hasTypeArg && hasEmptyManualStatusArg
-			);
-			return isOpen;
-
-		}
+		]
 	});
-	if (!openUserANs.length) return log('Procedure cancelled: There\'s no UserAN to update.');
+	if (!rawUserANs.length) return log('Procedure cancelled: There is no UserAN on this page.');
 
+	// Filter out open UserANs and attach to them an information object
 	interface BlockStatus {
 		duration: string;
 		date: string;
@@ -196,36 +151,66 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		info: UserANInfo;
 	}
 	const sections = Wkt.parseSections();
-	let UserAN: UserAN[] = openUserANs.reduce((acc: UserAN[], Temp) => {
+	let UserAN: UserAN[] = rawUserANs.reduce((acc: UserAN[], Temp) => {
 
 		/*/********************************************************************************************************\
-			A full list of open UserANs' argument combinations
-				[(1=)username]
-				[(1=)username, 状態=] => [(1=)username]
-				[t=TYPE, (1=)username]
-				[t=TYPE, (1=)username, 状態=] => [t=TYPE, (1=)username]
-			Now we can differentiate these four in whether they have a t= param
+			A full list of argument combinations
+				args.length === 1
+				- [(1=)username] (open)
+				args.length === 2
+				- [t=TYPE, (1=)username] (open)
+				- [(1=)username, 状態=] (open)
+				- [(1=)username, 状態=X] (closed)
+				- [(1=)username, (2=)無期限] (closed)
+				args.length === 3
+				- [t=TYPE, (1=)username, 状態=] (open)
+				- [t=TYPE, (1=)username, 状態=X] (closed)
+				- [t=TYPE, (1=)username, (2=)無期限] (closed)
+				- [(1=)username, 状態=, (2=)無期限] (closed)
+				args.length === 4
+				- [t=TYPE, (1=)username, 状態=, (2=)無期限] (closed)
 		\***********************************************************************************************************/
 
-		// Get |user= and |type= arguments
 		let user = '';
-		let typeVal = 'user2';
-		let typeKey = 't';
-		Temp.args.forEach(({name, value}) => {
-			if (/^(1|[uU]ser)$/.test(name)) {
+		let typeKey = '';
+		let typeVal = '';
+		let hasEmptyManualStatusArg = false;
+		for (const {name, value} of Temp.args) {
+			if (name === '2' && value) {
+				return acc;
+			} else if (name === 'bot') {
+				if (value === 'no') {
+					return acc;
+				} else {
+					Temp.deleteArg(name);
+				}
+			} else if (value && /^(1|[uU]ser)$/.test(name)) {
 				user = value;
 			} else if (/^(t|[tT]ype)$/.test(name)) {
 				typeVal = value.toLowerCase();
 				typeKey = name;
+			} else if (/^(状態|s|[sS]tatus)$/.test(name)) {
+				hasEmptyManualStatusArg = !value;
+			} else {
+				Temp.deleteArg(name); // Unsupported argument
 			}
-		});
-		if (!user) {
+		}
+
+		const len = Temp.args.length;
+		const isOpen = ( // Any of the 4 "open" combinations in the list above
+			len === 1 && user ||
+			len === 2 && user && (typeKey || hasEmptyManualStatusArg) ||
+			len === 3 && user && typeKey && hasEmptyManualStatusArg
+		);
+		if (!isOpen) { // This condition includes "!user"
 			return acc;
 		} else if (lib.isIPv6Address(user, true)) {
 			user = user.toUpperCase();
 		}
+		typeKey = typeKey || 't';
+		typeVal = typeVal || 'user2';
 
-		// Type-dependent modification
+		// Type-dependent modifications
 		let modified = false;
 		let logid = '';
 		let diffid = '';
@@ -270,7 +255,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 					user = '';
 				}
 		}
-		if (!user && !logid && !diffid) {
+		if (!user && !logid && !diffid) { // Can't be forwarded to block check
 			return acc;
 		}
 
@@ -280,7 +265,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 			timestamp: (() => {
 				const sig = Wkt.wikitext.slice(Temp.getEndIndex()).match(/(\d{4})年(\d{1,2})月(\d{1,2})日 \(.{1}\) (\d{2}:\d{2}) \(UTC\)/);
 				if (!sig) return '';
-				const ts = sig.map(el => el.padStart(2, '0')); // MM and DD may be of one digit but they need to be of two digits
+				const ts = sig.map(el => el.padStart(2, '0')); // MM and DD may be of one digit but they must be of two digits
 				return `${ts[1]}-${ts[2]}-${ts[3]}T${ts[4]}:00Z`; // YYYY-MM-DDThh:mm:00Z (hh:mm is one capturing group)
 			})(),
 			section: (() => {
@@ -293,13 +278,13 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 						break;
 					}
 				}
-				return sectionTitle;
+				return sectionTitle; // Supposed never to be an empty string
 			})(),
-			user: user.replace(/_/g, ' '),
+			user: ucFirst(user.replace(/_/g, ' ')), // Make it the same as in an API response
 			type: typeVal,
 			logid,
 			diffid,
-			// The following gets a value if the user reported by the UserAN has been blocked
+			// The following gets a value if the user turns out to be blocked
 			duration: '',
 			date: '',
 			domain: '', // Like partial block, global block, and global lock
@@ -313,7 +298,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		return acc;
 
 	}, []);
-	if (!UserAN.length) return log('Procedure cancelled: There\'s no UserAN to update.');
+	if (!UserAN.length) return log('Procedure cancelled: No open UserANs have been found.');
 
 	// Convert logids and diffids to usernames
 	const [logidList, diffidList] = await Promise.all([queryAccountCreations(), queryEditDiffs(DiffIDList.getProcessing())]);
@@ -321,17 +306,20 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 	DiffIDList.register(diffidList);
 
 	// Another attempt to convert logids to usernames
-	const scrapeQueries: Promise<string|null>[] = [];
-	LogIDList.getProcessing().forEach((id) => {
-		scrapeQueries.push(scrapeUsernameFromLogid(id));
-	});
-	const scrapedUsernames = await Promise.all(scrapeQueries);
-	LogIDList.getProcessing().forEach((logid, i) => {
-		const username = scrapedUsernames[i];
-		if (username) {
-			LogIDList.register({[logid]: username});
-		}
-	});
+	const remainingLogids = LogIDList.getProcessing();
+	if (remainingLogids.length) {
+		const scrapeQueries: Promise<string|null>[] = [];
+		remainingLogids.forEach((id) => {
+			scrapeQueries.push(scrapeUsernameFromLogid(id));
+		});
+		const scrapedUsernames = await Promise.all(scrapeQueries);
+		remainingLogids.forEach((logid, i) => {
+			const username = scrapedUsernames[i];
+			if (username) {
+				LogIDList.register({[logid]: username});
+			}
+		});
+	}
 
 	// Sort registered users and IPs
 	const users: string[] = [];
@@ -361,7 +349,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 		const user = info.user;
 		if (!user) {
-			// ID conversion attempts won't be made any longer, meaning that UserANs without a username at this point
+			// ID conversion attempts won't be made any further, meaning that UserANs without a username at this point
 			// can't be processed (impossible to forward to block check)
 			return false;
 		} else if (lib.isIPAddress(user, true)) {
@@ -372,7 +360,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		return true;
 
 	});
-	if (!users.length && !ips.length) return log('Procedure cancelled: There\'s no UserAN to update.');
+	if (!users.length && !ips.length) return log('Procedure cancelled: No UserANs can be marked up.');
 
 	// Check if the users and IPs in the arrays are locally blocked
 	const [bkUsers, bkIps] = await Promise.all([queryBlockedUsers(users, pagetitle === ANS), queryBlockedIps(ips)]);
@@ -415,6 +403,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 	}, []);
 
+	// Process UserANs with users to be reblocked
 	if (toBeReblocked.length) {
 
 		const response = await lib.massRequest({
@@ -427,7 +416,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 		const cleanupBlockLog = (obj: ApiResponseQueryListLogevents) => {
 
-			// Make sure that both elements have a 'expiry' property (the prop is undefined in the case of indefinite block)
+			// Make sure that 'params' has an 'expiry' property (it's undefined in the case of indefinite block)
 			obj.params = obj.params || {};
 			if (obj.params.duration === 'infinity' && !obj.params.expiry) obj.params.expiry = 'infinity';
 
@@ -437,7 +426,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 		};
 
-		const reblockInfo = response.reduce((acc: {[username: string]: BlockStatus;}, res, i) => {
+		const reblockInfo = response.reduce((acc: {[username: string]: {reblockTs: string;} & BlockStatus;}, res, i) => {
 
 			const resLgev = res && res.query && res.query.logevents;
 			if (!resLgev) return acc;
@@ -445,11 +434,14 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 			let latestBlock: ApiResponseQueryListLogevents|null = null;
 			let olderBlock: ApiResponseQueryListLogevents|null = null;
+			let reblockTs = '';
 			for (const obj of resLgev) {
 				if (obj.action && ['block', 'reblock'].includes(obj.action) && obj.timestamp) {
 					if (obj.action === 'reblock' && !latestBlock) {
 						latestBlock = cleanupBlockLog(obj);
-					} else if (latestBlock && !olderBlock && lib.compareTimestamps(obj.timestamp, latestBlock.timestamp!) > 30*60*1000) {
+						reblockTs = latestBlock.timestamp!;
+					} else if (latestBlock && !olderBlock && lib.compareTimestamps(obj.timestamp, reblockTs) > 30*60*1000) {
+						// Initial block log or an older reblock log generated at least 30 minutes before the latest reblock
 						olderBlock = cleanupBlockLog(obj);
 						break;
 					}
@@ -510,8 +502,9 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 			}
 
 			acc[username] = {
-				duration: duration === 'infinity' && '無期限' || duration && lib.getDuration(latestBlock.timestamp!, duration)!,
-				date: getBlockedDate(latestBlock.timestamp!),
+				reblockTs,
+				duration: duration === 'infinity' && '無期限' || duration && lib.getDuration(reblockTs, duration)!,
+				date: getBlockedDate(reblockTs),
 				domain,
 				flags: flags.join('・'),
 				reblocked: '条件変更'
@@ -523,9 +516,12 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		// Set properties of the UserAN array
 		if (Object.keys(reblockInfo).length) {
 			for (const {info} of UserAN) {
-				const obj = reblockInfo[info.user];
-				if (obj) {
-					Object.assign(info, obj);
+				if (reblockInfo[info.user]) {
+					const {reblockTs, ...obj} = reblockInfo[info.user];
+					const newlyReported = lib.compareTimestamps(info.timestamp, reblockTs, true) >= 0;
+					if (newlyReported) {
+						Object.assign(info, obj);
+					}
 				}
 			}
 		}
@@ -550,20 +546,22 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		});
 		const [gLkUsers, gBkIps] = await Promise.all([queryLockedUsers(gUsers), queryGloballyBlockedIps(gIps)]);
 
-		UserAN.forEach(({info}) => {
-			if (info.date) return;
-			const lockInfo = gLkUsers[info.user];
-			const gBlockInfo = gBkIps[info.user];
-			if (lockInfo) {
-				Object.assign(info, lockInfo);
-			} else if (gBlockInfo) {
-				const {timestamp, ...obj} = gBlockInfo;
-				const newlyReported = lib.compareTimestamps(info.timestamp, timestamp, true) >= 0;
-				if (newlyReported) {
-					Object.assign(info, obj);
+		if (Object.keys(gLkUsers).length || Object.keys(gBkIps).length) {
+			UserAN.forEach(({info}) => {
+				if (info.date) return;
+				const lockInfo = gLkUsers[info.user];
+				const gBlockInfo = gBkIps[info.user];
+				if (lockInfo) {
+					Object.assign(info, lockInfo);
+				} else if (gBlockInfo) {
+					const {timestamp, ...obj} = gBlockInfo;
+					const newlyReported = lib.compareTimestamps(info.timestamp, timestamp, true) >= 0;
+					if (newlyReported) {
+						Object.assign(info, obj);
+					}
 				}
-			}
-		});
+			});
+		}
 
 	}
 
@@ -576,7 +574,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 	UserAN = UserAN.filter(({info, Temp}) => {
 		newlyBlocked = newlyBlocked || !!info.date;
 		newlyModified = newlyModified || !!info.modified;
-		if (info.date) {
+		if (info.date) { // The UserAN is to be closed
 			const display = [info.domain + info.duration, info.flags, info.date].filter(el => el);
 			Temp.addArgs([{name: '2', value: display.join(' ')}]);
 			return true;
@@ -587,7 +585,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		}
 	});
 	if (!newlyBlocked && !newlyModified) {
-		return log('Procedure cancelled: There\'s no UserAN to update.');
+		return log('Procedure cancelled: There is no UserAN to be closed.');
 	} else if (!newlyBlocked) {
 		modOnly = true;
 	}
@@ -599,7 +597,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		/** Creates a contribs link from an object that is an element of the 'UserAN' array. */
 		const getUserLink = (info: UserANInfo) => {
 			const condition = info.reblocked || info.domain + info.duration;
-			if (/^(?:user2|unl|usernolink)$/.test(info.type)) {
+			if (/^(user2|unl|usernolink)$/.test(info.type)) {
 				const maxLetterCnt = containsJapaneseCharacter(info.user) ? 10 : 20;
 				if (info.user.length > maxLetterCnt) {
 					return `${info.user.substring(0, maxLetterCnt)}.. (${condition})`;
@@ -667,10 +665,13 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 	// Get the latest revision again because the procedure above can take a while to finish
 	const lr = await Wikitext.fetch(pagetitle);
 	if (!lr) return log('Failed to get the latest revision.');
+	if (lr.basetimestamp !== Wkt.getRevision()!.basetimestamp) {
+		log('It seems that the page was updated after starting this procedure.');
+	}
 	let content = lr.content;
 
 	// Update UserANs in the source text
-	const argOrder = ['t', 'type', 'Type', '1', 'user', 'User', '2', '状態', 's', 'status', 'Status'];
+	const argOrder = ['t', 'type', 'Type', '1', 'user', 'User', '状態', 's', 'status', 'Status', '2'];
 	for (let i = UserAN.length - 1; i >= 0; i--) {
 		const Temp = UserAN[i].Temp;
 		content = Temp.replaceIn(content, {
@@ -680,7 +681,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		});
 	}
 	if (content === lr.content) {
-		return log('Cancelled: same content.');
+		return log('Procedure cancelled: Same content.');
 	}
 
 	// Edit the page
@@ -701,6 +702,10 @@ let lookedUntil = '';
 
 /** Query the API and update `LogIDList`. */
 async function queryAccountCreations(): Promise<IdObject> {
+
+	if (!LogIDList.getProcessing().length) {
+		return {};
+	}
 
 	const params: ApiParamsQueryLogEvents = {
 		action: 'query',
@@ -729,7 +734,6 @@ async function queryAccountCreations(): Promise<IdObject> {
 		}
 		return acc;
 	}, Object.create(null));
-
 	if (ts) lookedUntil = ts;
 
 	return list;
@@ -803,9 +807,8 @@ async function scrapeUsernameFromLogid(logid: string): Promise<string|null> {
 interface BlockInfoObject {
 	[username: string]: ApiResponseQueryListBlocks;
 }
-
 /** Get the local block statuses of registered users. */
-async function queryBlockedUsers(usersArr: string[], isANS: boolean) {
+async function queryBlockedUsers(usersArr: string[], isANS: boolean): Promise<BlockInfoObject> {
 
 	if (!usersArr.length) return {};
 
@@ -821,7 +824,8 @@ async function queryBlockedUsers(usersArr: string[], isANS: boolean) {
 	const response = await lib.massRequest(params, 'bkusers');
 
 	return response.reduce((acc: BlockInfoObject, res) => {
-		const resBlck = res && res.query && res.query.blocks || [];
+		const resBlck = res && res.query && res.query.blocks;
+		if (!resBlck) return acc;
 		const ret = resBlck.reduce((accBl: BlockInfoObject, blck) => {
 			accBl[blck.user] = blck;
 			return accBl;
@@ -833,7 +837,7 @@ async function queryBlockedUsers(usersArr: string[], isANS: boolean) {
 }
 
 /** Get the local block statuses of IP users. */
-async function queryBlockedIps(ipsArr: string[]) {
+async function queryBlockedIps(ipsArr: string[]): Promise<BlockInfoObject> {
 
 	if (!ipsArr.length) return {};
 
@@ -871,9 +875,9 @@ interface LockInfo {
 	[username: string]: {
 		date: string;
 		domain: string;
-	}
+	};
 }
-/** Get the glocal lock statuses of registered users. */
+/** Get the global lock statuses of registered users. */
 async function queryLockedUsers(usersArr: string[]): Promise<LockInfo> {
 
 	if (!usersArr.length) return {};
@@ -911,8 +915,9 @@ interface GlobalBlockInfo {
 		duration: string;
 		date: string;
 		domain: string;
-	}
+	};
 }
+/** Get the global block statuses of IP users. */
 async function queryGloballyBlockedIps(ipsArr: string[]): Promise<GlobalBlockInfo> {
 
 	if (!ipsArr.length) return {};
