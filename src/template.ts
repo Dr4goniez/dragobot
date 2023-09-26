@@ -213,7 +213,7 @@ export class Template {
 	 *
 	 * @param name Name of the page that is to be transcluded. Should not contain anything but a page title.
 	 * @param config Optional initializer object.
-	 * @throws {Error} When `name` has inline `\n` characters  or when`config.fullName` does not contain `name` as a substring.
+	 * @throws {Error} When `name` has inline `\n` characters or when`config.fullName` does not contain `name` as a substring.
 	 */
 	constructor(name: string, config?: ConstructorConfig) {
 
@@ -539,6 +539,14 @@ export class Template {
 	 */
 	getOverriddenArgs(): TemplateArgument[] {
 		return this.overriddenArgs.map(obj => ({...obj}));
+	}
+
+	/**
+	 * Get the argument hierarchies.
+	 * @returns
+	 */
+	getHierarchy(): string[][] {
+		return this.#hierarchy.map(arr => [...arr]);
 	}
 
 	/**
