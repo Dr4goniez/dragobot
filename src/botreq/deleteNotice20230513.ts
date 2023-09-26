@@ -1,6 +1,6 @@
 import { createServer } from '../server';
 import { init } from '../mw';
-import * as lib from '../lib';
+import * as lib from './oldlib';
 import { ApiResponse, ApiResponseError, ApiResponseQueryListLogevents, ApiResponseQueryListUsercontribs } from '..';
 
 const testrun = true;

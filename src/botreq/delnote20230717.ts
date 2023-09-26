@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import { createServer, log } from '../server';
 import { init, getMw, isBot } from '../mw';
-import * as lib from '../lib';
+import * as lib from './oldlib';
 import {
 	ApiResponse,
 	ApiResponseError,

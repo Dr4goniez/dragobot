@@ -1,6 +1,6 @@
 import { createServer } from '../server';
 import { init, getMw } from '../mw';
-import * as lib from '../lib';
+import * as lib from './oldlib';
 import { ApiParamsEditPage, ApiResponse, ApiResponseError, ApiResponseQueryListSearch } from '..';
 
 const testrun = true;

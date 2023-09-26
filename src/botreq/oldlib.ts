@@ -2,12 +2,12 @@ import net from 'net';
 import isCidr, { v4, v6 } from 'is-cidr';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
-import { log } from './server';
-import { getMw, init, isBot } from './mw';
-import { DynamicObject, ApiResponse, ApiResponseError, ApiResponseQueryPagesProtection, ApiResponseQueryListSearch, ApiParamsEditPage, ApiParamsQueryEmbeddedIn } from '.';
-import * as siteinfo from './siteinfo';
-import { rUnicodeBidi } from './title';
-import { ucFirst } from './string';
+import { log } from '../server';
+import { getMw, init, isBot } from '../mw';
+import { DynamicObject, ApiResponse, ApiResponseError, ApiResponseQueryPagesProtection, ApiResponseQueryListSearch, ApiParamsEditPage, ApiParamsQueryEmbeddedIn } from '..';
+import * as siteinfo from '../siteinfo';
+import { rUnicodeBidi } from '../title';
+import { ucFirst } from '../string';
 
 // ****************************** ASYNCHRONOUS FUNCTIONS ******************************
 
