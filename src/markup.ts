@@ -717,7 +717,7 @@ async function queryAccountCreations(): Promise<IdObject> {
 	};
 	if (lookedUntil) Object.assign(params, {leend: lookedUntil});
 
-	const response: ApiResponse[] = await lib.continuedRequest(params);
+	const response = await lib.continuedRequest(params);
 
 	let ts = '';
 	const list = response.reduce((acc: IdObject, obj) => {

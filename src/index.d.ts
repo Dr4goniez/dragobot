@@ -2911,9 +2911,9 @@ export interface MediaWikiBabelApiQueryBabelParams extends ApiParamsQuery {
 
 export interface ApiParamsQueryBacklinks extends ApiParamsQuery {
 	bltitle?: string;
-	blpageid?: number;
+	blpageid?: number|string;
 	blcontinue?: string;
-	blnamespace?: namespace | namespace[];
+	blnamespace?: string;
 	bldir?: "ascending" | "descending";
 	blfilterredir?: "all" | "nonredirects" | "redirects";
 	bllimit?: limit;
@@ -2956,10 +2956,10 @@ export interface ApiParamsQueryCategoryInfo extends ApiParamsQuery {
 
 export interface ApiParamsQueryCategoryMembers extends ApiParamsQuery {
 	cmtitle?: string;
-	cmpageid?: number;
+	cmpageid?: number|string;
 	/** One or more of the following: "ids" | "sortkey" | "sortkeyprefix" | "timestamp" | "title" | "type" */
 	cmprop?: string;
-	cmnamespace?: namespace | namespace[];
+	cmnamespace?: string;
 	/** One or more of the following: "file" | "page" | "subcat" */
 	cmtype?: string;
 	cmcontinue?: string;
@@ -3971,7 +3971,7 @@ export interface ApiParamsQueryRevisions extends ApiParamsQuery {
 
 export interface ApiParamsQuerySearch extends ApiParamsQuery {
 	srsearch?: string;
-	srnamespace?: namespace | namespace[];
+	srnamespace?: string;
 	srlimit?: limit;
 	sroffset?: number;
 	srqiprofile?:

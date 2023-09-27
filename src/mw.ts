@@ -1,4 +1,4 @@
-import { my, bots } from './my'
+import { my, bots } from './my';
 import { log } from './server';
 import { DynamicObject } from '.';
 // eslint-disable-next-line @typescript-eslint/no-var-requires

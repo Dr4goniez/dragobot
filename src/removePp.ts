@@ -1,5 +1,6 @@
 import * as lib from './lib';
 import { log } from './server';
+import { ApiResponseQueryPagesProtection } from '.';
 import { Wikitext } from './wikitext';
 
 const pp = [
@@ -66,7 +67,7 @@ export async function removePp(botRunTs?: string): Promise<void> {
 	// Filter out unprotected pages 
 	let notProtected: string[] = [];
 	if (transcludingPp.length) {
-		const protectedPages = await lib.filterOutProtectedPages(transcludingPp);
+		const protectedPages = await filterProtected(transcludingPp);
 		if (!protectedPages) return log('Failed to filter out protected pages.');
 		const ppSubpagePrefixes = pp.map(tl => 'Template:' + tl + '/');
 		notProtected = transcludingPp.filter((pagetitle) => {
@@ -87,6 +88,51 @@ export async function removePp(botRunTs?: string): Promise<void> {
 		const result = await editPageWithPp(page);
 		if (result === null) ignore.push(page);
 	}
+
+}
+
+/** 
+ * Filter protected pages out of a list of pages.
+ * @returns `null` if any internal query fails
+ */
+async function filterProtected(pagetitles: string[]): Promise<string[]|null> {
+
+	const response = await lib.massRequest({
+		action: 'query',
+		titles: pagetitles,
+		prop: 'info',
+		inprop: 'protection',
+		formatversion: '2'
+	}, 'titles');
+
+	const d = new Date();
+	const isProtected = (protectionArray: ApiResponseQueryPagesProtection[]) => {
+		return protectionArray.some(({expiry}) => {
+			if (/^in/.test(expiry)) {
+				return true;
+			} else {
+				const protectedUntil = new Date(expiry);
+				return d < protectedUntil;
+			}
+		});
+	};
+
+	const titles: string[] = [];
+	for (const res of response) {
+		const resPgs = res && res.query && res.query.pages;
+		if (!resPgs) {
+			return null;
+		} else {
+			resPgs.forEach((obj) => {
+				const protectionArray = obj.protection || [];
+				if (obj.title && !titles.includes(obj.title) && isProtected(protectionArray)) {
+					titles.push(obj.title);
+				}
+			});
+		}
+	}
+
+	return titles;
 
 }
 
