@@ -14,16 +14,20 @@ import isCidr, { v4, v6 } from 'is-cidr';
 
 // ****************************************** ASYNCHRONOUS FUNCTIONS ******************************************
 
-/** Let the code sleep for n milliseconds. */
+/**
+ * Let the code sleep for n milliseconds.
+ * @param milliseconds The milliseconds to sleep. If a negative number is passed, it is automatically rounded up to `0`.
+ * @returns
+ */
 export function sleep(milliseconds: number): Promise<void> {
-	return new Promise<void>(resolve => setTimeout(resolve, milliseconds));
+	return new Promise<void>(resolve => setTimeout(resolve, Math.max(0, milliseconds)));
 }
 
 let lastedit: string;
 let tokenExpired: boolean|null;
 /**
  * Edit a given page. If the edit fails because of an expired token, another edit attempt is automatically made after re-login.
- * 
+ *
  * @param params Automatically added params: `{ action: 'edit', token: mw.editToken, formatversion: '2' }`
  * @param autoInterval Ensure a 5 second interval since the last edit, defaulted to `true`.
  * @returns A boolean value indicating whether the edit succeeded, or `null` if a second edit attempt failed.
@@ -46,30 +50,24 @@ export async function edit(params: ApiParamsEditPage, autoInterval = true): Prom
 	// Make sure that it's been more than 5 seconds since the last edit
 	if (lastedit && autoInterval) {
 		const diff = compareTimestamps(lastedit, new Date().toJSON());
-		await sleep(Math.max(0, 4600 - diff));
+		await sleep(4600 - diff);
 	}
 
 	// Edit the page
-	/**
-	 * @param reqParams
-	 * @returns `true` on success, `false` on failure by a known error, `null` on failure by an unknown error.
-	 */
-	const req = (reqParams: ApiParamsEditPage): Promise<boolean|null> => {
-		return mw.request(reqParams)
-			.then((res: ApiResponse) => {
-				return res && res.edit && res.edit.result === 'Success' || null;
-			})
-			.catch((err: ApiResponseError) => {
-				if (err) log(err);
-				if (tokenExpired === false && err && err.info.includes('Invalid CSRF token')) {
-					tokenExpired = true;
-				}
-				return false;
-			});
-	};
 	log(`Editing ${params.title}...`);
-	const result = await req(params);
-	
+	/** `true` on success, `false` on failure by a known error, `null` on failure by an unknown error. */
+	const result: boolean|null = await mw.request(params)
+		.then((res: ApiResponse) => {
+			return res && res.edit && res.edit.result === 'Success' || null;
+		})
+		.catch((err: ApiResponseError) => {
+			if (err) log(err);
+			if (tokenExpired === false && err && err.info.includes('Invalid CSRF token')) {
+				tokenExpired = true;
+			}
+			return false;
+		});
+
 	// Process result
 	switch (result) {
 		case true:
@@ -96,15 +94,15 @@ export async function edit(params: ApiParamsEditPage, autoInterval = true): Prom
 }
 
 interface BackLlinksOptions {
-	/** 
+	/**
 	 * The namespace to enumerate. Separate values with a pipe.
-	 * 
+	 *
 	 * To specify all values, use `*`.
 	 */
 	blnamespace?: string;
 	/**
 	 * How to filter for redirects.
-	 * 
+	 *
 	 * Default: `all`
 	 */
 	blfilterredir?: 'all'|'nonredirects'|'redirects';
@@ -142,7 +140,7 @@ interface CatMembersOptions {
 	/**
 	 * Only include pages in these namespaces. Note that `cmtype=subcat` or `cmtype=file` may be used instead of
 	 * `cmnamespace=14` or `6`. Separate values with a pipe.
-	 * 
+	 *
 	 * To specify all values, use `*`.
 	 */
 	cmnamespace?: string;
@@ -150,7 +148,7 @@ interface CatMembersOptions {
 	 * Which type of category members to include.
 	 *
 	 * Values (separate with | or alternative): `file`, `page`, `subcat`
-	 * 
+	 *
 	 * Default: `page|subcat|file`
 	 */
 	cmtype?: string;
@@ -192,32 +190,32 @@ export async function getCatMembers(cattitle: string, options?: CatMembersOption
 interface EmbeddedInOptions {
 	/**
 	 * The namespace to enumerate. Separate values with a pipe.
-	 * 
+	 *
 	 * To specify all values, use `*`.
 	 */
 	einamespace?: string;
-	/** 
+	/**
 	 * The direction in which to list.
-	 * 
+	 *
 	 * Default: `ascending`
 	 */
 	eidir?: 'ascending'|'descending';
-	/** 
+	/**
 	 * How to filter for redirects.
-	 * 
+	 *
 	 * Default: `all`
 	 */
 	eifilterredir?: 'all'|'nonredirects'|'redirects';
-	/** 
+	/**
 	 * How many total pages to return.
-	 * 
+	 *
 	 * Default: `max`
 	 */
 	eilimit?: number|'max';
 }
 /**
  * Find all pages that embed (i.e. transclude) the given title.
- * 
+ *
  * Default query parameters:
  * ```
  * {
@@ -260,11 +258,11 @@ export async function getEmbeddedIn(pagetitle: string, options?: EmbeddedInOptio
  * @param condition
  * @param namespace
  * Search only within these namespaces. Separate values with a pipe.
- * 
+ *
  * To specify all values, use `*`.
- * 
+ *
  * Default: `0`
- * @returns
+ * @returns Always a string array even if some internal API request failed.
  */
 export async function searchText(condition: string, namespace?: string): Promise<string[]> {
 
@@ -290,8 +288,12 @@ export async function searchText(condition: string, namespace?: string): Promise
 
 }
 
-/** Scrape a webpage. */
-export async function scrapeWebpage(url: string) {
+/**
+ * Scrape a webpage.
+ * @param url
+ * @returns `null` on failure.
+ */
+export async function scrapeWebpage(url: string): Promise<cheerio.Root|null> {
 	try {
 		const res = await axios.get(url);
 		const $ = cheerio.load(res.data);
@@ -339,8 +341,8 @@ export function continuedRequest(params: DynamicObject, limit = 10): Promise<(Ap
  * internally converted to a pipe-separated string by splicing the array by 500 (or 50 for users without apihighlimits).
  * The name(s) of the multi-value field(s) must also be provided. If the splicing number needs to be configured, pass
  * the relevant number as the third argument.
- * 
- * @param params 
+ *
+ * @param params
  * @param batchParam
  * The name of the multi-value field (can be an array if there are more than one multi-value field, but the values
  * must be the same.)
@@ -413,7 +415,7 @@ export function massRequest(params: DynamicObject, batchParam: string|string[], 
 		}
 		result.push(req(params));
 	}
-	
+
 	return Promise.all(result);
 
 }
@@ -422,133 +424,52 @@ export function massRequest(params: DynamicObject, batchParam: string|string[], 
 
 /**
  * Remove unicode bidirectional characters and leading/trailing `\s`s from a string.
- * 
+ *
  * @param str Input string.
  * @param trim Whether to trim `str`, defaulted to `true`.
+ * @returns
  */
-export function clean(str: string, trim = true) {
+export function clean(str: string, trim = true): string {
    str = str.replace(rUnicodeBidi, '');
    return trim ? str.trim() : str;
 }
 
 /**
- * @param timestamp1
- * @param timestamp2
- * @param rewind5minutes if true, rewind timestamp1 by 5 minutes
- * @returns timestamp2 - timestamp1 (in milliseconds)
+ * Compare two JSON timestamps and get the difference between them in milliseconds.
+ * @param earlierTimestamp
+ * @param laterTimestamp
+ * @param rewindMilliseconds If provided, subtract `earlierTimestamp` by this value (only accepts a positive number).
+ * This makes it possible to specify a time earlier than the time represented by `earlierTimestamp`.
+ * @returns `laterTimestamp` subtracted by `earlierTimestamp` (in milliseconds). Can be a negative number.
  */
-export function compareTimestamps(timestamp1: string, timestamp2: string, rewind5minutes?: boolean) {
-	const ts1 = new Date(timestamp1);
-	if (rewind5minutes) ts1.setMinutes(ts1.getMinutes() - 5);
-	const ts2 = new Date(timestamp2);
-	const diff = ts2.getTime() - ts1.getTime();
-	return diff;
+export function compareTimestamps(earlierTimestamp: string|Date, laterTimestamp: string|Date, rewindMilliseconds?: number): number {
+	const ts1 = earlierTimestamp instanceof Date ? earlierTimestamp : new Date(earlierTimestamp);
+	if (typeof rewindMilliseconds === 'number') {
+		ts1.setMilliseconds(ts1.getMilliseconds() - Math.max(0, rewindMilliseconds));
+	}
+	const ts2 = laterTimestamp instanceof Date ? laterTimestamp : new Date(laterTimestamp);
+	return ts2.getTime() - ts1.getTime();
 }
 
-/** Get a JSON timestamp of the current time. Milliseconds omitted. */
-export function getCurTimestamp() {
-	return new Date().toJSON().split('.')[0] + 'Z';
-}
-
-/** 
- * Subtract timestamp2 by timestamp1 and output the resultant duration in Japanese.
- * If the time difference is a negative value, undefined is returned.
+/**
+ * Get a JSON timestamp of the current time. Milliseconds omitted.
+ * @param omitMilliseconds
+ * Whether to omit the milliseconds (`2100-01-01T00:00:00Z` instead of `2100-01-01T00:00:00.000Z`).
+ *
+ * Default: `true`
+ * @returns
  */
-export function getDuration(timestamp1: string, timestamp2: string) {
-
-	const ts1 = new Date(timestamp1);
-	const ts2 = new Date(timestamp2);
-	const diff = ts2.getTime() - ts1.getTime();
-	if (diff < 0) return;
-
-	let seconds = Math.round(diff / 1000);
-	let minutes = Math.round(seconds / 60);
-	let hours = Math.round(minutes / 60);
-	let days = Math.round(hours / 24);
-	let weeks = Math.round(days / 7);
-	let months = Math.round(days / 30);
-	let years = Math.floor(days / 365);
-	// console.log(seconds, minutes, hours, days, weeks, months, years);
-
-	seconds %= 60;
-	minutes %= 60;
-	hours %= 24;
-	days %= 30;
-	weeks %= 7;
-	months %= 30;
-	years %= 365;
-	// console.log(seconds, minutes, hours, days, weeks, months, years);
-
-	let duration: number, unit: string;
-	if (years) {
-		duration = years;
-		unit = '年';
-	} else if (months) {
-		duration = months;
-		unit = 'か月';
-	} else if (weeks) {
-		duration = weeks;
-		unit = '週間';
-	} else if (days) {
-		duration = days;
-		unit = '日';
-	} else if (hours) {
-		duration = hours;
-		unit = '時間';
-	} else if (minutes) {
-		duration = minutes;
-		unit = '分';
-	} else {
-		duration = seconds;
-		unit = '秒';
-	}
-
-	switch (unit) {
-		case 'か月':
-			if (duration % 12 === 0) {
-				duration /= 12;
-				unit = '年';
-			}
-			break;
-		case '週間':
-			if (duration % 4 === 0) {
-				duration /= 4;
-				unit = 'か月';
-			}
-			break;
-		case '日':
-			if (duration % 7 === 0) {
-				duration /= 7;
-				unit = '週間';
-			}
-			break;
-		case '時間':
-			if (duration % 24 === 0) {
-				duration /= 24;
-				unit = '日';
-			}
-			break;
-		case '分':
-			if (duration % 60 === 0) {
-				duration /= 60;
-				unit = '時間';
-			}
-			break;
-		case '秒':
-				if (duration % 60 === 0) {
-					duration /= 60;
-					unit = '分';
-				}
-			break;
-		default:
-	}
-
-	return duration + unit;
-
+export function getCurTimestamp(omitMilliseconds = true): string {
+	const ts = new Date().toJSON();
+	return omitMilliseconds ? ts.split('.')[0] + 'Z' : ts;
 }
 
-/** Escapes \ { } ( ) . ? * + - ^ $ [ ] | (but not '!'). */
-export function escapeRegExp(str: string) {
+/**
+ * Escapes `\ { } ( ) . ? * + - ^ $ [ ] |` (but not `!`).
+ * @param str
+ * @returns
+ */
+export function escapeRegExp(str: string): string {
 	return str.replace(/[\\{}().?*+\-^$[\]|]/g, '\\$&');
 }
 
@@ -556,49 +477,82 @@ export function escapeRegExp(str: string) {
  * Get the last day of a given month.
  * @param year
  * @param month 1-12
+ * @returns 28-31
  */
-export function lastDay(year: number|string, month: number|string) {
-	if (typeof year === 'string') year = parseInt(year);
-	if (typeof month === 'string') month = parseInt(month);
+export function lastDay(year: number, month: number): number {
 	return new Date(year, month, 0).getDate();
 }
 
-/** Get the Japanese name of a day of the week from JSON timestamp. */
-export function getWeekDayJa(timestamp: string) {
+/**
+ * Get the Japanese name of a day of the week.
+ * @param date A JSON timestamp or a Date instance.
+ * @returns
+ */
+export function getWeekDayJa(date: string|Date): string {
 	const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
-	return daysOfWeek[new Date(timestamp).getDay()];
+	const d = date instanceof Date ? date : new Date(date);
+	return daysOfWeek[d.getDay()];
 }
 
-/** Check whether a given string is an IP address. */
-export function isIPAddress(ip: string, allowBlock = false) {
-	return net.isIP(ip) || allowBlock && isCidr(ip);
+/**
+ * Check whether a given string is an IP address.
+ * @param ip
+ * @param allowBlock Whether to allow a CIDR address.
+ * @returns
+ */
+export function isIPAddress(ip: string, allowBlock = false): boolean {
+	return !!net.isIP(ip) || allowBlock && !!isCidr(ip);
 }
 
-/** Check whether a given string is an IPv4 address. */
-export function isIPv4Address(ip: string, allowBlock = false) {
+/**
+ * Check whether a given string is an IPv4 address.
+ * @param ip
+ * @param allowBlock Whether to allow a CIDR address.
+ * @returns
+ */
+export function isIPv4Address(ip: string, allowBlock = false): boolean {
 	return net.isIPv4(ip) || allowBlock && v4(ip);
 }
 
-/** Check whether a given string is an IPv6 address. */
-export function isIPv6Address(ip: string, allowBlock = false) {
+/**
+ * Check whether a given string is an IPv6 address.
+ * @param ip
+ * @param allowBlock Whether to allow a CIDR address.
+ * @returns
+ */
+export function isIPv6Address(ip: string, allowBlock = false): boolean {
 	return net.isIPv6(ip) || allowBlock && v6(ip);
 }
 
-type PrimitiveArray = (string|number|bigint|boolean|null|undefined)[];
+/**
+ * A disjunctive union type for primitive types.
+ */
+type primitive = string|number|bigint|boolean|null|undefined;
 
-/** Check whether two arrays are equal. Neither array should contain objects nor other arrays. */
-export function arraysEqual(array1: PrimitiveArray, array2: PrimitiveArray, orderInsensitive = false): boolean {
+/**
+ * Check whether two arrays are equal. Neither array should contain non-primitive values as its elements.
+ * @param array1
+ * @param array2
+ * @param orderInsensitive Default: `false`
+ * @returns
+ */
+export function arraysEqual(array1: primitive[], array2: primitive[], orderInsensitive = false): boolean {
 	if (orderInsensitive) {
-		return array1.every(el => array2.includes(el)) && array1.length === array2.length;
+		return array1.length === array2.length && array1.every(el => array2.includes(el));
 	} else {
-		return array1.every((el, i) => array2[i] === el) && array1.length === array2.length;
+		return array1.length === array2.length && array1.every((el, i) => array2[i] === el);
 	}
 }
 
-/** Compare elements in two arrays. */
-export function arrayDiff(sourceArray: PrimitiveArray, targetArray: PrimitiveArray) {
-	const added: PrimitiveArray = [];
-	const removed: PrimitiveArray = [];
+/**
+ * Compare elements in two arrays and get differences.
+ * @param sourceArray
+ * @param targetArray
+ * @returns
+ */
+export function arrayDiff(sourceArray: primitive[], targetArray: primitive[]) {
+	const added: primitive[] = [];
+	const removed: primitive[] = [];
 	sourceArray.forEach((el) => {
 		if (!targetArray.includes(el)) removed.push(el);
 	});

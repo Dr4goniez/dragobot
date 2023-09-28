@@ -371,7 +371,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		const blck = blockInfo[info.user];
 		if (!blck) return acc;
 
-		const newlyReported = lib.compareTimestamps(info.timestamp, blck.timestamp, true) >= 0;
+		const newlyReported = lib.compareTimestamps(info.timestamp, blck.timestamp, 5*60*1000) >= 0;
 		if (newlyReported) {
 
 			const isIp = lib.isIPAddress(info.user, true);
@@ -386,7 +386,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 				return isIp && m && info.user.slice(-m[0].length) !== m[0] ? m[0] + 'で' : '';
 			})();
 
-			info.duration = range + (indef ? '無期限' : lib.getDuration(blck.timestamp, blck.expiry)!);
+			info.duration = range + (indef ? '無期限' : getDuration(blck.timestamp, blck.expiry)!);
 			info.date = getBlockedDate(blck.timestamp);
 			info.domain = partial ? '部分ブロック' : '';
 
@@ -503,7 +503,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 			acc[username] = {
 				reblockTs,
-				duration: duration === 'infinity' && '無期限' || duration && lib.getDuration(reblockTs, duration)!,
+				duration: duration === 'infinity' && '無期限' || duration && getDuration(reblockTs, duration)!,
 				date: getBlockedDate(reblockTs),
 				domain,
 				flags: flags.join('・'),
@@ -518,7 +518,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 			for (const {info} of UserAN) {
 				if (reblockInfo[info.user]) {
 					const {reblockTs, ...obj} = reblockInfo[info.user];
-					const newlyReported = lib.compareTimestamps(info.timestamp, reblockTs, true) >= 0;
+					const newlyReported = lib.compareTimestamps(info.timestamp, reblockTs, 5*60*1000) >= 0;
 					if (newlyReported) {
 						Object.assign(info, obj);
 					}
@@ -555,7 +555,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 					Object.assign(info, lockInfo);
 				} else if (gBlockInfo) {
 					const {timestamp, ...obj} = gBlockInfo;
-					const newlyReported = lib.compareTimestamps(info.timestamp, timestamp, true) >= 0;
+					const newlyReported = lib.compareTimestamps(info.timestamp, timestamp, 5*60*1000) >= 0;
 					if (newlyReported) {
 						Object.assign(info, obj);
 					}
@@ -864,6 +864,105 @@ async function queryBlockedIps(ipsArr: string[]): Promise<BlockInfoObject> {
 
 }
 
+/**
+ * Subtract `laterTimestamp` by `earlierTimestamp`, and get the difference between them as a duration in Japanese.
+ * @param earlierTimestamp
+ * @param laterTimestamp
+ * @returns `null` if the difference is a negative value.
+ */
+function getDuration(earlierTimestamp: string|Date, laterTimestamp: string|Date): string|null {
+
+	const ts1 = earlierTimestamp instanceof Date ? earlierTimestamp : new Date(earlierTimestamp);
+	const ts2 = laterTimestamp instanceof Date ? laterTimestamp : new Date(laterTimestamp);
+	const diff = ts2.getTime() - ts1.getTime();
+	if (diff < 0) return null;
+
+	let seconds = Math.round(diff / 1000);
+	let minutes = Math.round(seconds / 60);
+	let hours = Math.round(minutes / 60);
+	let days = Math.round(hours / 24);
+	let weeks = Math.round(days / 7);
+	let months = Math.round(days / 30);
+	let years = Math.floor(days / 365);
+	// console.log(seconds, minutes, hours, days, weeks, months, years);
+
+	seconds %= 60;
+	minutes %= 60;
+	hours %= 24;
+	days %= 30;
+	weeks %= 7;
+	months %= 30;
+	years %= 365;
+	// console.log(seconds, minutes, hours, days, weeks, months, years);
+
+	let duration: number, unit: string;
+	if (years) {
+		duration = years;
+		unit = '年';
+	} else if (months) {
+		duration = months;
+		unit = 'か月';
+	} else if (weeks) {
+		duration = weeks;
+		unit = '週間';
+	} else if (days) {
+		duration = days;
+		unit = '日';
+	} else if (hours) {
+		duration = hours;
+		unit = '時間';
+	} else if (minutes) {
+		duration = minutes;
+		unit = '分';
+	} else {
+		duration = seconds;
+		unit = '秒';
+	}
+
+	switch (unit) {
+		case 'か月':
+			if (duration % 12 === 0) {
+				duration /= 12;
+				unit = '年';
+			}
+			break;
+		case '週間':
+			if (duration % 4 === 0) {
+				duration /= 4;
+				unit = 'か月';
+			}
+			break;
+		case '日':
+			if (duration % 7 === 0) {
+				duration /= 7;
+				unit = '週間';
+			}
+			break;
+		case '時間':
+			if (duration % 24 === 0) {
+				duration /= 24;
+				unit = '日';
+			}
+			break;
+		case '分':
+			if (duration % 60 === 0) {
+				duration /= 60;
+				unit = '時間';
+			}
+			break;
+		case '秒':
+				if (duration % 60 === 0) {
+					duration /= 60;
+					unit = '分';
+				}
+			break;
+		default:
+	}
+
+	return duration + unit;
+
+}
+
 /** Get '(MM/DD)' from a JSON timestamp or the current time. */
 function getBlockedDate(timestamp?: string): string {
 	const d = timestamp ? new Date(timestamp) : new Date();
@@ -939,7 +1038,7 @@ async function queryGloballyBlockedIps(ipsArr: string[]): Promise<GlobalBlockInf
 		const ip = ipsArr[i];
 		acc[ip] = {
 			timestamp: gBlck.timestamp,
-			duration: gBlck.expiry === 'infinity' ? '無期限' : lib.getDuration(gBlck.timestamp, gBlck.expiry)!,
+			duration: gBlck.expiry === 'infinity' ? '無期限' : getDuration(gBlck.timestamp, gBlck.expiry)!,
 			date: getBlockedDate(gBlck.timestamp),
 			domain: 'グローバルブロック'
 		};
