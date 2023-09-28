@@ -1033,7 +1033,7 @@ async function queryGloballyBlockedIps(ipsArr: string[]): Promise<GlobalBlockInf
 
 	return response.reduce((acc: GlobalBlockInfo, res, i) => {
 		const resGBlck = res && res.query && res.query.globalblocks;
-		if (!resGBlck) return acc;
+		if (!resGBlck || !resGBlck.length) return acc;
 		const gBlck = resGBlck[0];
 		const ip = ipsArr[i];
 		acc[ip] = {
