@@ -10,14 +10,143 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
     if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
     return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
 };
-var _Wikitext_instances, _Wikitext_revision, _Wikitext_tags, _Wikitext_sections, _Wikitext_parameters, _Wikitext_inTpTag, _ParsedTemplate_hierarchy;
+var _ParsedTemplate_hierarchy, _Wikitext_instances, _Wikitext_revision, _Wikitext_tags, _Wikitext_sections, _Wikitext_parameters, _Wikitext_inTpTag;
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ParsedTemplate = exports.Wikitext = void 0;
+exports.Wikitext = exports.ParsedTemplate = void 0;
 const template_1 = require("./template");
 const string_1 = require("./string");
 const mw_1 = require("./mw");
 const server_1 = require("./server");
 const lib_1 = require("./lib");
+/** Class used by `Wikitext.parseTemplates`. */
+class ParsedTemplate extends template_1.Template {
+    /**
+     * Initialize a new `ParsedTemplate` instance.
+     * @param parsed
+     * @throws {Error} When `name` has inline `\n` characters or when`config.fullName` does not contain `name` as a substring.
+     */
+    constructor(parsed) {
+        const { name, fullName, args, text, startIndex, endIndex, hierarchy, nestLevel } = parsed;
+        super(name, { fullName, hierarchy });
+        /**
+         * Argument hierarchies.
+         * @private
+         */
+        _ParsedTemplate_hierarchy.set(this, void 0);
+        __classPrivateFieldSet(this, _ParsedTemplate_hierarchy, super.getHierarchy(), "f");
+        this.addArgs(args.map((obj) => ({ 'name': obj.name.replace(/^\|/, ''), value: obj.value.replace(/^\|/, '') })));
+        this.originalText = text;
+        this._startIndex = startIndex;
+        this._endIndex = endIndex;
+        this.nestLevel = nestLevel;
+    }
+    /**
+     * Error-proof constructor.
+     * @param parsed
+     * @returns `null` if the constructor threw an error.
+     */
+    static new(parsed) {
+        try {
+            return new ParsedTemplate(parsed);
+        }
+        catch (err) {
+            return null;
+        }
+    }
+    /**
+     * Get class properties in a JSON format.
+     */
+    toJSON() {
+        return {
+            name: this.name,
+            fullName: this.fullName,
+            cleanName: this.cleanName,
+            fullCleanName: this.fullCleanName,
+            args: this.args.map(obj => ({ ...obj })),
+            keys: this.keys.slice(),
+            overriddenArgs: this.overriddenArgs.map(obj => ({ ...obj })),
+            hierarchy: __classPrivateFieldGet(this, _ParsedTemplate_hierarchy, "f").map(arr => [...arr]),
+            originalText: this.originalText,
+            startIndex: this._startIndex,
+            endIndex: this._endIndex,
+            nestLevel: this.nestLevel
+        };
+    }
+    /**
+     * Get the argument hierarchies.
+     * @returns
+     */
+    getHierarchy() {
+        return __classPrivateFieldGet(this, _ParsedTemplate_hierarchy, "f").map(arr => [...arr]);
+    }
+    /**
+     * Render the original template text.
+     * @returns
+     */
+    renderOriginal() {
+        return this.originalText;
+    }
+    /**
+     * Get `ParsedTemplate._startIndex`.
+     * @returns
+     */
+    getStartIndex() {
+        return this._startIndex;
+    }
+    /**
+     * Get `ParsedTemplate._endIndex`.
+     * @returns
+     */
+    getEndIndex() {
+        return this._endIndex;
+    }
+    /**
+     * Get the nest level of the template.
+     * @returns
+     */
+    getNestLevel() {
+        return this.nestLevel;
+    }
+    /**
+     * Find the original template in a wikitext and replace it with the (updated) template obtained by
+     * `ParsedTemplate.render(options)`. This method is supposed to be called on a wiktiext same as the one
+     * from which the `ParsedTemplate` instance was parsed and initialized.
+     *
+     * Note that if this method is called recursively against an array of `ParsedTemplate`, the looped array
+     * needs to be reversed so that the replacement takes place from the bottom of the wikitext. This is because
+     * the method reads the start and end indexes of the original template before the replacement (unless `useIndex`
+     * is set to `false`), and if the replacement is done in a top-down fashion, the indexes change and the subsequent
+     * replacements are affected.
+     *
+     * @param wikitext Wikitext in which to search for the original template.
+     * @param options Optional object to specify rendering and replacement options.
+     * @returns New wikitext with the original template replaced. (Could be the same as the input wikitext
+     * if the replacement didn't take place.)
+     */
+    replaceIn(wikitext, options) {
+        const cfg = Object.assign({ useIndex: true }, options || {});
+        const replacer = typeof cfg.with === 'string' ? cfg.with : this.render(cfg);
+        if (!cfg.useIndex) {
+            return wikitext.replace(this.originalText, replacer);
+        }
+        else if (wikitext.slice(this._startIndex, this._endIndex) === this.originalText) {
+            let chunk1 = wikitext.slice(0, this._startIndex);
+            const chunk2 = replacer;
+            let chunk3 = wikitext.slice(this._endIndex);
+            const hasLineBreak = /\n[^\S\n\r]*$/.test(chunk1) || /^[^\S\n\r]*\n[^\S\n\r]*/.test(chunk3);
+            if (replacer === '' && hasLineBreak) {
+                chunk1 = chunk1.trim();
+                chunk3 = (chunk1 !== '' ? '\n' : '') + chunk3.trim();
+            }
+            return chunk1 + chunk2 + chunk3;
+        }
+        else {
+            return wikitext;
+        }
+    }
+}
+exports.ParsedTemplate = ParsedTemplate;
+_ParsedTemplate_hierarchy = new WeakMap();
 /**
  * The `Wikitext` class with methods to manipulate wikitext.
  */
@@ -707,132 +836,3 @@ function processArgFragment(args, fragment, options) {
         args[len].value += fragment;
     }
 }
-/** Class used by `Wikitext.parseTemplates`. */
-class ParsedTemplate extends template_1.Template {
-    /**
-     * Initialize a new `ParsedTemplate` instance.
-     * @param parsed
-     * @throws {Error} When `name` has inline `\n` characters or when`config.fullName` does not contain `name` as a substring.
-     */
-    constructor(parsed) {
-        const { name, fullName, args, text, startIndex, endIndex, hierarchy, nestLevel } = parsed;
-        super(name, { fullName, hierarchy });
-        /**
-         * Argument hierarchies.
-         * @private
-         */
-        _ParsedTemplate_hierarchy.set(this, void 0);
-        __classPrivateFieldSet(this, _ParsedTemplate_hierarchy, super.getHierarchy(), "f");
-        this.addArgs(args.map((obj) => ({ 'name': obj.name.replace(/^\|/, ''), value: obj.value.replace(/^\|/, '') })));
-        this.originalText = text;
-        this._startIndex = startIndex;
-        this._endIndex = endIndex;
-        this.nestLevel = nestLevel;
-    }
-    /**
-     * Error-proof constructor.
-     * @param parsed
-     * @returns `null` if the constructor threw an error.
-     */
-    static new(parsed) {
-        try {
-            return new ParsedTemplate(parsed);
-        }
-        catch (err) {
-            return null;
-        }
-    }
-    /**
-     * Get class properties in a JSON format.
-     */
-    toJSON() {
-        return {
-            name: this.name,
-            fullName: this.fullName,
-            cleanName: this.cleanName,
-            fullCleanName: this.fullCleanName,
-            args: this.args.map(obj => ({ ...obj })),
-            keys: this.keys.slice(),
-            overriddenArgs: this.overriddenArgs.map(obj => ({ ...obj })),
-            hierarchy: __classPrivateFieldGet(this, _ParsedTemplate_hierarchy, "f").map(arr => [...arr]),
-            originalText: this.originalText,
-            startIndex: this._startIndex,
-            endIndex: this._endIndex,
-            nestLevel: this.nestLevel
-        };
-    }
-    /**
-     * Get the argument hierarchies.
-     * @returns
-     */
-    getHierarchy() {
-        return __classPrivateFieldGet(this, _ParsedTemplate_hierarchy, "f").map(arr => [...arr]);
-    }
-    /**
-     * Render the original template text.
-     * @returns
-     */
-    renderOriginal() {
-        return this.originalText;
-    }
-    /**
-     * Get `ParsedTemplate._startIndex`.
-     * @returns
-     */
-    getStartIndex() {
-        return this._startIndex;
-    }
-    /**
-     * Get `ParsedTemplate._endIndex`.
-     * @returns
-     */
-    getEndIndex() {
-        return this._endIndex;
-    }
-    /**
-     * Get the nest level of the template.
-     * @returns
-     */
-    getNestLevel() {
-        return this.nestLevel;
-    }
-    /**
-     * Find the original template in a wikitext and replace it with the (updated) template obtained by
-     * `ParsedTemplate.render(options)`. This method is supposed to be called on a wiktiext same as the one
-     * from which the `ParsedTemplate` instance was parsed and initialized.
-     *
-     * Note that if this method is called recursively against an array of `ParsedTemplate`, the looped array
-     * needs to be reversed so that the replacement takes place from the bottom of the wikitext. This is because
-     * the method reads the start and end indexes of the original template before the replacement (unless `useIndex`
-     * is set to `false`), and if the replacement is done in a top-down fashion, the indexes change and the subsequent
-     * replacements are affected.
-     *
-     * @param wikitext Wikitext in which to search for the original template.
-     * @param options Optional object to specify rendering and replacement options.
-     * @returns New wikitext with the original template replaced. (Could be the same as the input wikitext
-     * if the replacement didn't take place.)
-     */
-    replaceIn(wikitext, options) {
-        const cfg = Object.assign({ useIndex: true }, options || {});
-        const replacer = typeof cfg.with === 'string' ? cfg.with : this.render(cfg);
-        if (!cfg.useIndex) {
-            return wikitext.replace(this.originalText, replacer);
-        }
-        else if (wikitext.slice(this._startIndex, this._endIndex) === this.originalText) {
-            let chunk1 = wikitext.slice(0, this._startIndex);
-            const chunk2 = replacer;
-            let chunk3 = wikitext.slice(this._endIndex);
-            const hasLineBreak = /\n[^\S\n\r]*$/.test(chunk1) || /^[^\S\n\r]*\n[^\S\n\r]*/.test(chunk3);
-            if (replacer === '' && hasLineBreak) {
-                chunk1 = chunk1.trim();
-                chunk3 = (chunk1 !== '' ? '\n' : '') + chunk3.trim();
-            }
-            return chunk1 + chunk2 + chunk3;
-        }
-        else {
-            return wikitext;
-        }
-    }
-}
-exports.ParsedTemplate = ParsedTemplate;
-_ParsedTemplate_hierarchy = new WeakMap();
