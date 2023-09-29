@@ -377,8 +377,11 @@ async function markup(pagetitle, checkGlobal) {
                 flags.push('ハードブロック');
             info.flags = flags.join('・');
         }
-        else if (!acc.includes(info.user)) {
-            acc.push(info.user);
+        else {
+            acc.push({
+                user: info.user,
+                timestamp: info.timestamp
+            });
         }
         return acc;
     }, []);
@@ -388,7 +391,7 @@ async function markup(pagetitle, checkGlobal) {
             action: 'query',
             list: 'logevents',
             letype: 'block',
-            letitle: toBeReblocked.map((el) => '利用者:' + el),
+            letitle: toBeReblocked.map(({ user }) => '利用者:' + user),
             formatversion: '2'
         }, 'letitle', 1);
         const cleanupBlockLog = (obj) => {
@@ -404,19 +407,27 @@ async function markup(pagetitle, checkGlobal) {
             const resLgev = res && res.query && res.query.logevents;
             if (!resLgev)
                 return acc;
-            const username = toBeReblocked[i];
+            const username = toBeReblocked[i].user;
+            const reportTs = toBeReblocked[i].timestamp;
             let latestBlock = null;
             let olderBlock = null;
-            let reblockTs = '';
-            for (const obj of resLgev) {
+            for (let obj of resLgev) {
+                obj = cleanupBlockLog(obj);
                 if (obj.action && ['block', 'reblock'].includes(obj.action) && obj.timestamp) {
-                    if (obj.action === 'reblock' && !latestBlock) {
-                        latestBlock = cleanupBlockLog(obj);
-                        reblockTs = latestBlock.timestamp;
+                    if (obj.action === 'reblock' && !latestBlock &&
+                        lib.compareTimestamps(reportTs, obj.timestamp) >= 0 // Reblock log after report
+                    ) {
+                        latestBlock = obj;
                     }
-                    else if (latestBlock && !olderBlock && lib.compareTimestamps(obj.timestamp, reblockTs) > 30 * 60 * 1000) {
-                        // Initial block log or an older reblock log generated at least 30 minutes before the latest reblock
-                        olderBlock = cleanupBlockLog(obj);
+                    else if (latestBlock && !olderBlock &&
+                        lib.compareTimestamps(obj.timestamp, reportTs) >= 5 * 60 * 1000 && ( // Block log before report
+                    // Not expired before report
+                    obj.params.expiry === 'infinity' ||
+                        lib.compareTimestamps(reportTs, obj.params.expiry) > 0)) {
+                        olderBlock = obj;
+                        break;
+                    }
+                    else if (!latestBlock && obj.action === 'block') {
                         break;
                     }
                 }
@@ -475,9 +486,8 @@ async function markup(pagetitle, checkGlobal) {
                 });
             }
             acc[username] = {
-                reblockTs,
-                duration: duration === 'infinity' && '無期限' || duration && getDuration(reblockTs, duration),
-                date: getBlockedDate(reblockTs),
+                duration: duration === 'infinity' && '無期限' || duration && getDuration(latestBlock.timestamp, duration),
+                date: getBlockedDate(latestBlock.timestamp),
                 domain,
                 flags: flags.join('・'),
                 reblocked: '条件変更'
@@ -488,11 +498,7 @@ async function markup(pagetitle, checkGlobal) {
         if (Object.keys(reblockInfo).length) {
             for (const { info } of UserAN) {
                 if (reblockInfo[info.user]) {
-                    const { reblockTs, ...obj } = reblockInfo[info.user];
-                    const newlyReported = lib.compareTimestamps(info.timestamp, reblockTs, 5 * 60 * 1000) >= 0;
-                    if (newlyReported) {
-                        Object.assign(info, obj);
-                    }
+                    Object.assign(info, reblockInfo[info.user]);
                 }
             }
         }
