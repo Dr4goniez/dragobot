@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.arrayDiff = exports.arraysEqual = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getCurTimestamp = exports.compareTimestamps = exports.clean = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.searchText = exports.getEmbeddedIn = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = void 0;
+exports.arraysDiff = exports.arraysEqual = exports.isIPv6Address = exports.isIPv4Address = exports.isIPAddress = exports.getWeekDayJa = exports.lastDay = exports.escapeRegExp = exports.getCurTimestamp = exports.compareTimestamps = exports.clean = exports.massRequest = exports.continuedRequest = exports.scrapeWebpage = exports.searchText = exports.getEmbeddedIn = exports.getCatMembers = exports.getBackLinks = exports.edit = exports.sleep = void 0;
 const mw_1 = require("./mw");
 const server_1 = require("./server");
 const axios_1 = __importDefault(require("axios"));
@@ -278,7 +278,7 @@ function continuedRequest(params, limit = 10) {
 }
 exports.continuedRequest = continuedRequest;
 /**
- * Send API requests with a query parameter subject to the apilimit all at once. For instance:
+ * Send API requests with an apilimit-susceptible query parameter all at once. For instance:
  * ```
  * {
  * 	action: 'query',
@@ -346,9 +346,9 @@ function massRequest(params, batchParams, apilimit = (0, mw_1.isBot)() ? 500 : 5
     const mw = (0, mw_1.getMw)();
     const req = (reqParams) => {
         return mw.request(reqParams)
-            .then((res) => res)
+            .then((res) => res || null)
             .catch((err) => {
-            (0, server_1.log)(err && err.info);
+            (0, server_1.log)(err && err.info || 'mw.request reached the catch block.');
             return null;
         });
     };
@@ -360,7 +360,6 @@ function massRequest(params, batchParams, apilimit = (0, mw_1.isBot)() ? 500 : 5
             acc[key] = batchArrayStr;
             return acc;
         }, Object.create(null)));
-        console.log(JSON.stringify(params, null, 4));
         result.push(req(params));
     }
     return Promise.all(result);
@@ -491,7 +490,7 @@ exports.arraysEqual = arraysEqual;
  * @param targetArray
  * @returns
  */
-function arrayDiff(sourceArray, targetArray) {
+function arraysDiff(sourceArray, targetArray) {
     const added = [];
     const removed = [];
     sourceArray.forEach((el) => {
@@ -504,4 +503,4 @@ function arrayDiff(sourceArray, targetArray) {
     });
     return { added, removed };
 }
-exports.arrayDiff = arrayDiff;
+exports.arraysDiff = arraysDiff;

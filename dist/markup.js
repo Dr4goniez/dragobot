@@ -459,7 +459,7 @@ async function markup(pagetitle, checkGlobal) {
             const duration = paraOld.expiry !== paraNew.expiry ? paraNew.expiry : '';
             // Flags
             const flags = [];
-            const diff = lib.arrayDiff(paraOld.flags, paraNew.flags);
+            const diff = lib.arraysDiff(paraOld.flags, paraNew.flags);
             if (diff.added.length || diff.removed.length) {
                 [diff.added, diff.removed].forEach((arr, j) => {
                     const removed = j === 1;

@@ -484,7 +484,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 			// Flags
 			const flags: string[] = [];
-			const diff = lib.arrayDiff(paraOld.flags!, paraNew.flags!);
+			const diff = lib.arraysDiff(paraOld.flags!, paraNew.flags!);
 			if (diff.added.length || diff.removed.length) {
 
 				[diff.added, diff.removed].forEach((arr, j) => {

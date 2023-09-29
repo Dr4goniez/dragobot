@@ -337,7 +337,7 @@ export function continuedRequest(params: DynamicObject, limit = 10): Promise<(Ap
 }
 
 /**
- * Send API requests with a query parameter subject to the apilimit all at once. For instance:
+ * Send API requests with an apilimit-susceptible query parameter all at once. For instance:
  * ```
  * {
  * 	action: 'query',
@@ -404,9 +404,9 @@ export function massRequest(params: DynamicObject, batchParams: string|string[],
 	const mw = getMw();
 	const req = (reqParams: DynamicObject): Promise<DynamicObject|null> => {
 		return mw.request(reqParams)
-		.then((res: DynamicObject) => res)
+		.then((res: DynamicObject) => res || null)
 		.catch((err: ApiResponseError) => {
-			log(err && err.info);
+			log(err && err.info || 'mw.request reached the catch block.');
 			return null;
 		});
 	};
@@ -420,7 +420,6 @@ export function massRequest(params: DynamicObject, batchParams: string|string[],
 				return acc;
 			}, Object.create(null))
 		);
-		console.log(JSON.stringify(params, null, 4));
 		result.push(req(params));
 	}
 
@@ -558,7 +557,7 @@ export function arraysEqual(array1: primitive[], array2: primitive[], orderInsen
  * @param targetArray
  * @returns
  */
-export function arrayDiff(sourceArray: primitive[], targetArray: primitive[]) {
+export function arraysDiff(sourceArray: primitive[], targetArray: primitive[]) {
 	const added: primitive[] = [];
 	const removed: primitive[] = [];
 	sourceArray.forEach((el) => {
