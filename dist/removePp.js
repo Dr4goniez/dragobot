@@ -26,7 +26,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.editPageWithPp = exports.removePp = void 0;
 const lib = __importStar(require("./lib"));
 const server_1 = require("./server");
-const template_1 = require("./template");
+const wikitext_1 = require("./wikitext");
 const pp = [
     'Pp',
     'Pp-dispute',
@@ -87,7 +87,7 @@ async function removePp(botRunTs) {
     // Filter out unprotected pages 
     let notProtected = [];
     if (transcludingPp.length) {
-        const protectedPages = await lib.filterOutProtectedPages(transcludingPp);
+        const protectedPages = await filterProtected(transcludingPp);
         if (!protectedPages)
             return (0, server_1.log)('Failed to filter out protected pages.');
         const ppSubpagePrefixes = pp.map(tl => 'Template:' + tl + '/');
@@ -113,6 +113,47 @@ async function removePp(botRunTs) {
 }
 exports.removePp = removePp;
 /**
+ * Filter protected pages out of a list of pages.
+ * @returns `null` if any internal query fails
+ */
+async function filterProtected(pagetitles) {
+    const response = await lib.massRequest({
+        action: 'query',
+        titles: pagetitles,
+        prop: 'info',
+        inprop: 'protection',
+        formatversion: '2'
+    }, 'titles');
+    const d = new Date();
+    const isProtected = (protectionArray) => {
+        return protectionArray.some(({ expiry }) => {
+            if (/^in/.test(expiry)) {
+                return true;
+            }
+            else {
+                const protectedUntil = new Date(expiry);
+                return d < protectedUntil;
+            }
+        });
+    };
+    const titles = [];
+    for (const res of response) {
+        const resPgs = res && res.query && res.query.pages;
+        if (!resPgs) {
+            return null;
+        }
+        else {
+            resPgs.forEach((obj) => {
+                const protectionArray = obj.protection || [];
+                if (obj.title && !titles.includes(obj.title) && isProtected(protectionArray)) {
+                    titles.push(obj.title);
+                }
+            });
+        }
+    }
+    return titles;
+}
+/**
  * Check whether the next procedure starts in 10 seconds.
  * @param botRunTs The time at which the current procedure started; JSON timestamp
  */
@@ -127,12 +168,10 @@ function needToQuit(botRunTs) {
  * @returns Null if the page can't be edited.
  */
 async function editPageWithPp(pagetitle) {
-    const lr = await lib.getLatestRevision(pagetitle);
-    if (!lr)
-        return (0, server_1.log)(`${pagetitle}: Failed to parse the page.`);
-    lr.content = lib.clean(lr.content);
-    let content = lr.content;
-    const templates = template_1.Template.parseWikitext(content, {
+    const Wkt = await wikitext_1.Wikitext.newFromTitle(pagetitle);
+    if (!Wkt)
+        return;
+    const templates = Wkt.parseTemplates({
         templatePredicate: (Temp) => {
             return pp.includes(Temp.getName('clean')) && !Temp.hasArg('demolevel', {
                 conditionPredicate: (arg) => !!arg.value
@@ -145,23 +184,25 @@ async function editPageWithPp(pagetitle) {
         return null;
     }
     // Remove {{pp}}
-    templates.slice().reverse().forEach((Temp) => {
-        content = Temp.replace(content, { useIndex: true, replacer: '' });
-    });
+    let content = Wkt.wikitext;
+    for (let i = templates.length - 1; i >= 0; i--) {
+        content = templates[i].replaceIn(content, { with: '' });
+    }
     // Remove empty <noinclude> tags and the like if there's any
     content = content.replace(/<noinclude>\s*?<\/noinclude>[^\S\n\r]*\n?/gm, '').replace(/\/\*\s*?\*\/[^\S\n\r]*\n?/gm, '');
-    if (content === lr.content) {
+    if (content === Wkt.wikitext) {
         (0, server_1.log)(`${pagetitle}: Procedure cancelled: Same content`);
         return null;
     }
+    const rev = Wkt.getRevision();
     const params = {
         title: pagetitle,
         text: content,
         summary: 'Bot: [[Template:Pp|保護テンプレート]]の除去',
         minor: true,
         bot: true,
-        basetimestamp: lr.basetimestamp,
-        starttimestamp: lr.curtimestamp
+        basetimestamp: rev.basetimestamp,
+        starttimestamp: rev.curtimestamp
     };
     await lib.edit(params);
 }
