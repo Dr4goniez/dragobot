@@ -6,6 +6,7 @@ import {
 	ApiResponse,
 	ApiParamsQueryLogEvents,
 	ApiResponseQueryListLogevents,
+	ApiParamsEditPage,
 	ApiResponseQueryListBlocks,
 	ApiParamsQueryBlocks
 } from '.';
@@ -692,15 +693,18 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 	}
 
 	// Edit the page
-	await lib.edit({
+	const params: ApiParamsEditPage = {
 		title: pagetitle,
 		text: content,
 		summary: summary,
 		minor: true,
-		bot: modOnly,
 		basetimestamp: lr.basetimestamp,
 		starttimestamp: lr.curtimestamp,
-	});
+	};
+	if (modOnly) {
+		params.bot = true; // For some reason the edit is awalys marked as a bot edit if "bot: modOnly" is included in the params
+	}
+	await lib.edit(params);
 
 }
 

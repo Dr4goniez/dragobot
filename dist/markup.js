@@ -657,15 +657,18 @@ async function markup(pagetitle, checkGlobal) {
         return (0, server_1.log)('Procedure cancelled: Same content.');
     }
     // Edit the page
-    await lib.edit({
+    const params = {
         title: pagetitle,
         text: content,
         summary: summary,
         minor: true,
-        bot: modOnly,
         basetimestamp: lr.basetimestamp,
         starttimestamp: lr.curtimestamp,
-    });
+    };
+    if (modOnly) {
+        params.bot = true; // For some reason the edit is awalys marked as a bot edit if "bot: modOnly" is included in the params
+    }
+    await lib.edit(params);
 }
 exports.markup = markup;
 /** JSON timestamp passed to the API as a list=logevents query parameter (leend). Look only for log entries newer than this timestamp. */
