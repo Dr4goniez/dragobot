@@ -12,7 +12,9 @@ import { clean } from './lib';
 
 // ************************************************ PARSED TEMPLATE CLASS ************************************************
 
-/** The object that is passed to the `ParsedTemplate` constructor. */
+/** 
+ * The object that is passed to {@link ParsedTemplate.constructor}.
+ */
 interface ParsedTemplateParam extends ArgumentHierarchy {
 	name: string;
 	fullName: string;
@@ -23,35 +25,56 @@ interface ParsedTemplateParam extends ArgumentHierarchy {
 	nestLevel: number;
 }
 
-/** Class used by `Wikitext.parseTemplates`. */
+/** Part of the object passed to the second parameter of {@link ParsedTemplate.replaceIn}. */
+interface ReplaceInOptions {
+	/**
+	 * Replace the original template with this string.
+	 *
+	 * Default: {@link ParsedTemplate.render}(options)
+	 */
+	with?: string;
+	/**
+	 * If `true` (default), replacement takes place only if the passed wikitext has the original template
+	 * starting at {@link ParsedTemplate._startIndex} and ending (exclusively) at {@link ParsedTemplate._endIndex}.
+	 * This prevents a nonparsed template in a transclusion-preventing tag from being wrongly replaced
+	 * ({@link Wikitext.parseTemplates} does not parse templates inside the relevant tags).
+	 * ```
+	 * const wikitext = '<!--{{Template}}-->\n{{Template}}'; // The second one is parsed
+	 * const Wkt = new Wikitext(wikitext);
+	 * const Temps = Wkt.parseTemplates(); // Temps[0]: ParsedTemplate, Temps[1]: undefined
+	 * const newWikitext1 = Temps[0].replaceIn(wikitext, {with: ''});
+	 * const newWikitext2 = Temps[0].replaceIn(wikitext, {with: '', useIndex: false});
+	 * console.log(newWikitext1); // '<!--{{Template}}-->', expected result
+	 * console.log(newWikitext2); // '<!---->\n{{Template}}', unexpected result
+	 * ```
+	 */
+	useIndex?: boolean;
+}
+
+/** Class used by {@link Wikitext.parseTemplates}. */
 export class ParsedTemplate extends Template {
 
-	/**
-	 * Argument hierarchies.
-	 * @private
-	 */
-	#hierarchy: string[][];
 	/**
 	 * The original text of the template.
 	 * @readonly
 	 */
 	readonly originalText: string;
 	/**
-	 * **CAUTION**: Pseudo-private property. Use `ParsedTemplate.getStartIndex` to get this property's value.
+	 * **CAUTION**: Pseudo-private property. Use {@link getStartIndex} to get this property's value.
 	 * 
 	 * The index to the start of the template in the wikitext out of which the template was parsed.
 	 * 
 	 * Note that this property is made private-like because it shouldn't be modified externally, but sometimes
-	 * `Wikitext.parseTemplates` needs to modify this property, from outside this class.
+	 * {@link Wikitext.parseTemplates} needs to modify this property, from outside this class.
 	 */
 	_startIndex: number;
 	/**
-	 * **CAUTION**: Pseudo-private property. Use `ParsedTemplate.getEndIndex` to get this property's value.
+	 * **CAUTION**: Pseudo-private property. Use {@link getEndIndex} to get this property's value.
 	 * 
 	 * The index up to, but not including, the end of the template in the wikitext out of which the template was parsed.
 	 * 
 	 * Note that this property is made private-like because it shouldn't be modified externally, but sometimes
-	 * `Wikitext.parseTemplates` needs to modify this property, from outside this class.
+	 * {@link Wikitext.parseTemplates} needs to modify this property, from outside this class.
 	 */
 	_endIndex: number;
 	/**
@@ -60,14 +83,13 @@ export class ParsedTemplate extends Template {
 	readonly nestLevel: number;
 
 	/**
-	 * Initialize a new `ParsedTemplate` instance.
+	 * Initialize a new {@link ParsedTemplate} instance. **This constructor is not supposed to be used externally**.
 	 * @param parsed
-	 * @throws {Error} When `name` has inline `\n` characters or when`config.fullName` does not contain `name` as a substring.
+	 * @throws {Error} When `name` has inline `\n` characters or when `fullName` does not contain `name` as a substring.
 	 */
 	constructor(parsed: ParsedTemplateParam) {
 		const {name, fullName, args, text, startIndex, endIndex, hierarchy, nestLevel} = parsed;
 		super(name, {fullName, hierarchy});
-		this.#hierarchy = super.getHierarchy();
 		this.addArgs(args.map((obj) => ({'name': obj.name.replace(/^\|/, ''), value: obj.value.replace(/^\|/, '')})));
 		this.originalText = text;
 		this._startIndex = startIndex;
@@ -76,7 +98,7 @@ export class ParsedTemplate extends Template {
 	}
 
 	/**
-	 * Error-proof constructor.
+	 * Error-proof constructor. **This method is supposed to be used only by {@link Wikitext.parseTemplates}**.
 	 * @param parsed
 	 * @returns `null` if the constructor threw an error.
 	 */
@@ -106,20 +128,12 @@ export class ParsedTemplate extends Template {
 			args: this.args.map(obj => ({...obj})),
 			keys: this.keys.slice(),
 			overriddenArgs: this.overriddenArgs.map(obj => ({...obj})),
-			hierarchy: this.#hierarchy.map(arr => [...arr]),
+			hierarchy: this.hierarchy.map(arr => [...arr]),
 			originalText: this.originalText,
 			startIndex: this._startIndex,
 			endIndex: this._endIndex,
 			nestLevel: this.nestLevel
 		};
-	}
-
-	/**
-	 * Get the argument hierarchies.
-	 * @returns
-	 */
-	getHierarchy(): string[][] {
-		return this.#hierarchy.map(arr => [...arr]);
 	}
 
 	/**
@@ -131,7 +145,7 @@ export class ParsedTemplate extends Template {
 	}
 
 	/**
-	 * Get `ParsedTemplate._startIndex`.
+	 * Get {@link _startIndex}.
 	 * @returns
 	 */
 	getStartIndex(): number {
@@ -139,7 +153,7 @@ export class ParsedTemplate extends Template {
 	}
 
 	/**
-	 * Get `ParsedTemplate._endIndex`.
+	 * Get {@link _endIndex}.
 	 * @returns
 	 */
 	getEndIndex(): number {
@@ -156,44 +170,21 @@ export class ParsedTemplate extends Template {
 
 	/**
 	 * Find the original template in a wikitext and replace it with the (updated) template obtained by
-	 * `ParsedTemplate.render(options)`. This method is supposed to be called on a wiktiext same as the one
-	 * from which the `ParsedTemplate` instance was parsed and initialized.
+	 * {@link render}. This method is supposed to be called on a wiktiext same as the one from which the
+	 * {@link ParsedTemplate} instance was parsed and initialized.
 	 * 
-	 * Note that if this method is called recursively against an array of `ParsedTemplate`, the looped array
-	 * needs to be reversed so that the replacement takes place from the bottom of the wikitext. This is because
-	 * the method reads the start and end indexes of the original template before the replacement (unless `useIndex`
-	 * is set to `false`), and if the replacement is done in a top-down fashion, the indexes change and the subsequent
-	 * replacements are affected.
+	 * Note that if this method is called recursively against an array of {@link ParsedTemplate}, the looped array needs to be
+	 * reversed so that the replacement takes place from the bottom of the wikitext. This is because the method reads the start
+	 * and end indexes of the original template before the replacement (unless {@link ReplaceInOptions.useIndex|useIndex} is set
+	 * to `false`), and if the replacement is done in a top-down fashion, the indexes change and the subsequent replacements are
+	 * affected.
 	 *
 	 * @param wikitext Wikitext in which to search for the original template.
 	 * @param options Optional object to specify rendering and replacement options.
-	 * @returns New wikitext with the original template replaced. (Could be the same as the input wikitext
-	 * if the replacement didn't take place.)
+	 * @returns New wikitext with the original template replaced. (Could be the same as the input wikitext if the replacement
+	 * didn't take place.)
 	 */
-	replaceIn(wikitext: string, options?: RenderOptions & {
-		/**
-		 * Replace the original template with this string.
-		 *
-		 * Default: `ParsedTemplate.render(options)`
-		 */
-		with?: string;
-		/**
-		 * If `true` (default), replacement takes place only if the passed wikitext has the original template
-		 * starting at `ParsedTemplate._startIndex` and ending (exclusively) at `ParsedTemplate._endIndex`.
-		 * This prevents a nonparsed template in a transclusion-preventing tag from being wrongly replaced
-		 * (`Wikitext.parseTemplates` does not parse templates inside the relevant tags).
-		 * ```
-		 * const wikitext = '<!--{{Template}}-->\n{{Template}}'; // The second one is parsed
-		 * const Wkt = new Wikitext(wikitext);
-		 * const Temps = Wkt.parseTemplates(); // Temps[0]: ParsedTemplate, Temps[1]: undefined
-		 * const newWikitext1 = Temps[0].replaceIn(wikitext, {with: ''});
-		 * const newWikitext2 = Temps[0].replaceIn(wikitext, {with: '', useIndex: false});
-		 * console.log(newWikitext1); // '<!--{{Template}}-->', expected result
-		 * console.log(newWikitext2); // '<!---->\n{{Template}}', unexpected result
-		 * ```
-		 */
-		useIndex?: boolean;
-	}): string {
+	replaceIn(wikitext: string, options?: RenderOptions & ReplaceInOptions): string {
 
 		const cfg = Object.assign({useIndex: true}, options || {});
 		const replacer = typeof cfg.with === 'string' ? cfg.with : this.render(cfg);
@@ -220,7 +211,7 @@ export class ParsedTemplate extends Template {
 
 // ************************************************ WIKITEXT CLASS ************************************************
 
-/** The object that stores revision information fetched by `Wikitext.fetch`. */
+/** The object that stores revision information fetched by {@link Wikitext.fetch}. */
 interface Revision {
 	/** The ID of the page. */
 	pageid: number;
@@ -242,10 +233,10 @@ interface Revision {
 	redirect: boolean;
 }
 
-/** The object that is an element of the returned array of `Wikitext.parseTags`. */
+/** The object that is an element of the return array of {@link Wikitext.parseTags}. */
 interface Tag {
 	/**
-	 * The name of the tag in lowercase (`comment` for a `<!---->` tag).
+	 * The name of the tag in lowercase (for `<!---->` tags, the name is `comment`).
 	 */
 	name: string;
 	/**
@@ -277,7 +268,7 @@ interface Tag {
 	 */
 	nestLevel: number;
 }
-/** The parsing config of `Wikitext.parseTags`. */
+/** The parsing config of {@link Wikitext.parseTags}. */
 interface ParseTagsConfig {
 	/**
 	 * Only include \<tag>s that match this predicate.
@@ -287,7 +278,7 @@ interface ParseTagsConfig {
 	conditionPredicate?: (tag: Tag) => boolean;
 }
 
-/** The object that is an element of the returned array of `Wikitext.parseSections`. */
+/** The object that is an element of the return array of {@link Wikitext.parseSections}. */
 interface Section {
 	/**
 	 * The title of the section. Could be different from the result of `action=parse` if it contains HTML tags or templates.
@@ -322,7 +313,7 @@ interface Section {
 	content: string;
 }
 
-/** The object that is an element of the returned array of `Wikitext.parseParameters`. */
+/** The object that is an element of the return array of {@link Wikitext.parseParameters}. */
 interface Parameter {
 	/**
 	 * The entire text of the parameter.
@@ -341,7 +332,7 @@ interface Parameter {
 	 */
 	nestLevel: number;
 }
-/** The parsing config of `Wikitext.parseParameters`. */
+/** The parsing config of {@link Wikitext.parseParameters}. */
 interface ParseParametersConfig {
 	/**
 	 * Whether to parse {{{parameter}}}s inside another {{{parameter}}}.
@@ -350,25 +341,25 @@ interface ParseParametersConfig {
 	 */
 	recursive?: boolean;
 	/**
-	 * Only include {{{parameter}}}s that match this predicate. Note that this predicate is evaluated after evaluating
-	 * the value of the `recursive` config, meaning that if it's set to `false`, the predicate is evaluated only against
-	 * {{{parameter}}}s with the `nestLevel` property of `0`.
+	 * Only include {{{parameter}}}s that match this predicate. Note that this predicate is evaluated after the {@link recursive} config.
+	 * For this reason, it had better not specify both of the configs simultaneously, but rather include a condition to see if the callback
+	 * function's parameter of {@link Parameter.nestLevel|nestLevel} has the value of `0`.
 	 * @param parameter
 	 * @returns
 	 */
 	conditionPredicate?: (parameter: Parameter) => boolean;
 }
 
-/** The parsing config of `Wikitext.parseTemplates`. */
+/** The parsing config of {@link Wikitext.parseTemplates}. */
 interface ParseTemplatesConfig extends ArgumentHierarchy {
 	/**
 	 * Only parse templates whose names match this predicate.
-	 * @param name The name of the parsed template, which is the same as `ParsedTemplate.getName('clean')`.
+	 * @param name The name of the parsed template, which is the same as {@link ParsedTemplate.getName}('clean')`.
 	 */
 	namePredicate?: (name: string) => boolean;
 	/**
-	 * Only parse templates whose `ParsedTemplate` instances match this predicate. Can be used together with `namePredicate`,
-	 * although this predicate is evaluated after evaluating `namePredicate`.
+	 * Only parse templates whose {@link ParsedTemplate} instances match this predicate. Can be used together with
+	 * {@link namePredicate}, although this predicate is evaluated after evaluating {@link namePredicate}.
 	 * @param Template
 	 */
 	templatePredicate?: (Template: ParsedTemplate) => boolean;
@@ -376,67 +367,67 @@ interface ParseTemplatesConfig extends ArgumentHierarchy {
 	 * Parse nested templates in accordance with this predicate.
 	 *
 	 * Default: Always parse nested templates
-	 * @param Template Can be `null` if `ParsedTemplate.prototype.constructor` has thrown an error.
+	 * @param Template Can be `null` if {@link ParsedTemplate.constructor} has thrown an error.
 	 */
 	recursivePredicate?: (Template: ParsedTemplate|null) => boolean;
 	/**
-	 * Private parameter used to determine the value of the `nestLevel` property of `ParsedTemplate`.
+	 * Private parameter used to determine the value of {@link ParsedTemplate.nestLevel}.
+	 * @private
 	 */
 	_nestLevel?: number;
 }
 
-/**
- * The `Wikitext` class with methods to manipulate wikitext.
- */
+/** The Wikitext class with methods to manipulate wikitext. */
 export class Wikitext {
 
 	/**
-	 * The wikitext from which the `Wikitext` instance was initialized.
+	 * The wikitext from which the {@link Wikitext} instance was initialized.
 	 */
 	readonly wikitext: string;
 	/**
-	 * Stores the return value of `Wikitext.fetch` when a `Wikitext` instance is created by `Wikitext.newFromTitle`.
+	 * Stores the return value of {@link Wikitext.fetch|fetch} when a {@link Wikitext} instance is created by {@link newFromTitle}.
 	 *
-	 * A deep copy can be retrieved by `Wikitext.getRevision`.
+	 * A deep copy can be retrieved by {@link getRevision}.
 	 * @private
 	 */
-	#revision: Revision|null;
+	private revision: Revision|null;
 	/**
-	 * Stores the return value of `Wikitext.parseTags`.
+	 * Stores the return value of {@link parseTags}.
 	 *
-	 * A deep copy can be retrieved by `Wikitext.getTags`.
+	 * A deep copy can be retrieved by {@link getTags}.
 	 * @private
 	 */
-	#tags: Tag[]|null;
+	private tags: Tag[]|null;
 	/**
-	 * Stores the return value of `Wikitext.parseSections`.
+	 * Stores the return value of {@link parseSections}.
 	 *
-	 * A deep copy can be retrieved by `Wikitext.getSections`.
+	 * A deep copy can be retrieved by {@link getSections}.
 	 * @private
 	 */
-	#sections: Section[]|null;
+	private sections: Section[]|null;
 	/**
-	 * Stores the return value of `Wikitext.parseParameters`.
+	 * Stores the return value of {@link parseParameters}.
 	 *
-	 * A deep copy can be retrieved by `Wikitext.getParameters`.
+	 * A deep copy can be retrieved by {@link getParameters}.
 	 * @private
 	 */
-	#parameters: Parameter[]|null;
+	private parameters: Parameter[]|null;
 
 	/**
-	 * Initialize a `Wikitext` instance.
+	 * Initialize a {@link Wikitext} instance.
 	 * @param wikitext
+	 * @requires mediawiki.api
 	 */
 	constructor(wikitext: string) {
 		this.wikitext = wikitext;
-		this.#revision = null;
-		this.#tags = null;
-		this.#sections = null;
-		this.#parameters = null;
+		this.revision = null;
+		this.tags = null;
+		this.sections = null;
+		this.parameters = null;
 	}
 
 	/**
-	 * Returns the length of the wikitext referring to which the `Wikitext` instance was initialized.
+	 * Returns the length of the wikitext.
 	 */
 	get length(): number {
 		return this.wikitext.length;
@@ -496,7 +487,7 @@ export class Wikitext {
 	}
 
 	/**
-	 * Fetch the wikitext of a page. If additional revision information should be included, use `Wikitext.fetch`.
+	 * Fetch the wikitext of a page. If additional revision information should be included, use {@link Wikitext.fetch|fetch}.
 	 * @param pagetitle
 	 * @returns `false` if the page doesn't exist, `null` if the API request failed.
 	 */
@@ -506,7 +497,7 @@ export class Wikitext {
 	}
 
 	/**
-	 * Initialize a new `Wikitext` instance by fetching the content of a page.
+	 * Initialize a new {@link Wikitext} instance by fetching the content of a page.
 	 * @param pagetitle
 	 * @returns `false` if the page doesn't exist, `null` if the content of the page failed to be fetched.
 	 */
@@ -516,18 +507,18 @@ export class Wikitext {
 			return revision;
 		} else {
 			const Wkt = new Wikitext(revision.content);
-			Wkt.#revision = revision;
+			Wkt.revision = revision;
 			return Wkt;
 		}
 	}
 
 	/**
-	 * Get a deep copy of `Wikitext.#revision`, which is a private property available only when the `Wikitext` instance was initialized
-	 * by `Wikitext.newFromTitle`.
-	 * @returns `null` if the instance doesn't have the relevant property, meaning that it wasn't initialized by `Wikitext.newFromTitle`.
+	 * Get a deep copy of {@link revision}, which is a private property available only when the {@link Wikitext} instance was initialized
+	 * by {@link newFromTitle}.
+	 * @returns `null` if the instance doesn't have the relevant property, meaning that it wasn't initialized by {@link newFromTitle}.
 	 */
 	getRevision(): Revision|null {
-		return this.#revision && {...this.#revision};
+		return this.revision && {...this.revision};
 	}
 
 	/**
@@ -538,8 +529,8 @@ export class Wikitext {
 	parseTags(config?: ParseTagsConfig): Tag[] {
 
 		const cfg = config || {};
-		if (this.#tags) {
-			return this.#tags.reduce((acc: Tag[], obj) => {
+		if (this.tags) {
+			return this.tags.reduce((acc: Tag[], obj) => {
 				if (!cfg.conditionPredicate || cfg.conditionPredicate(obj)) {
 					acc.push({...obj}); // Deep copy
 				}
@@ -680,7 +671,7 @@ export class Wikitext {
 		});
 
 		// Save the tags
-		this.#tags = tags.map(obj => ({...obj})); // Deep copy
+		this.tags = tags.map(obj => ({...obj})); // Deep copy
 
 		// Filter the result in accordance with the config
 		if (cfg.conditionPredicate) {
@@ -692,23 +683,23 @@ export class Wikitext {
 	}
 
 	/**
-	 * Get a deep copy of `Wikitext.#tags`, which is a private property available only when `Wikitext.parseTags` has
-	 * been called at least once. Note that `Wikitext.parseTags` returns a (filtered) deep copy of `Wikitext.#tags`
+	 * Get a deep copy of {@link tags}, which is a private property available only when {@link parseTags} has
+	 * been called at least once. Note that {@link parseTags} returns a (filtered) deep copy of {@link tags}
 	 * on a non-first call, so simply call the relevant method if there is no need for a `null` return.
 	 * @returns
 	 */
 	getTags(): Tag[]|null {
-		return this.#tags && this.#tags.map(obj => ({...obj}));
+		return this.tags && this.tags.map(obj => ({...obj}));
 	}
 
 	/**
 	 * Check whether a substring of the wikitext starting and ending at a given index is inside any transclusion-preventing tag.
-	 * @param tpTags An array of transclusion-preventing tags fetched by `Wikitext.parseTags`.
+	 * @param tpTags An array of transclusion-preventing tags fetched by {@link parseTags}.
 	 * @param startIndex The start index of the string in the wikitext.
 	 * @param endIndex The end index of the string in the wikitext.
 	 * @returns
 	 */
-	#inTpTag(tpTags: Tag[], startIndex: number, endIndex: number): boolean {
+	private inTpTag(tpTags: Tag[], startIndex: number, endIndex: number): boolean {
 		return tpTags.some((obj) => obj.startIndex < startIndex && endIndex < obj.endIndex);
 	}
 
@@ -718,8 +709,8 @@ export class Wikitext {
 	 */
 	parseSections(): Section[] {
 
-		if (this.#sections) {
-			return this.#sections.map(obj => ({...obj})); // Deep copy
+		if (this.sections) {
+			return this.sections.map(obj => ({...obj})); // Deep copy
 		}
 
 		// Get transclusion-preventing tags
@@ -779,7 +770,7 @@ export class Wikitext {
 		}
 		const headings = this.parseTags().reduce((acc: Heading[], obj) => {
 			let m;
-			if ((m = obj.name.match(/^h([1-6])$/)) && !obj.selfClosed && !this.#inTpTag(tpTags, obj.startIndex, obj.endIndex)) {
+			if ((m = obj.name.match(/^h([1-6])$/)) && !obj.selfClosed && !this.inTpTag(tpTags, obj.startIndex, obj.endIndex)) {
 				// The tag is a heading element, not self-closing, and not in a transclusion-preventing tag
 				acc.push({
 					text: obj.text,
@@ -797,7 +788,7 @@ export class Wikitext {
 
 			// If `$4` isn't empty or the ==heading== is inside a transclusion-preventing tag, the heading isn't the start of a section
 			const m4 = m[4].replace(rWhitespace, '');
-			if (m4 && removeComments(m4) || this.#inTpTag(tpTags, m.index, m.index + m[0].length)) {
+			if (m4 && removeComments(m4) || this.inTpTag(tpTags, m.index, m.index + m[0].length)) {
 				continue;
 			}
 
@@ -842,20 +833,20 @@ export class Wikitext {
 		});
 
 		// Save the sections
-		this.#sections = sections.map(obj => ({...obj})); // Deep copy
+		this.sections = sections.map(obj => ({...obj})); // Deep copy
 
 		return sections;
 
 	}
 
 	/**
-	 * Get a deep copy of `Wikitext.#sections`, which is a private property available only when `Wikitext.parseSections` has
-	 * been called at least once. Note that `Wikitext.parseSections` returns a (filtered) deep copy of `Wikitext.#sections`
+	 * Get a deep copy of {@link sections}, which is a private property available only when {@link parseSections} has
+	 * been called at least once. Note that {@link parseSections} returns a (filtered) deep copy of {@link sections}
 	 * on a non-first call, so simply call the relevant method if there is no need for a `null` return.
 	 * @returns
 	 */
 	getSections(): Section[]|null {
-		return this.#sections && this.#sections.map(obj => ({...obj}));
+		return this.sections && this.sections.map(obj => ({...obj}));
 	}
 
 	/**
@@ -866,8 +857,8 @@ export class Wikitext {
 	parseParameters(config?: ParseParametersConfig): Parameter[] {
 
 		const cfg: ParseParametersConfig = Object.assign({recursive: true}, config || {});
-		if (this.#parameters) {
-			return this.#parameters.reduce((acc: Parameter[], obj) => {
+		if (this.parameters) {
+			return this.parameters.reduce((acc: Parameter[], obj) => {
 				if (obj.nestLevel > 0 && !cfg.recursive) {
 					return acc;
 				}
@@ -921,7 +912,7 @@ export class Wikitext {
 			}
 
 			if (grammatical) {
-				if (!this.#inTpTag(tpTags, exe.index, regex.lastIndex)) {
+				if (!this.inTpTag(tpTags, exe.index, regex.lastIndex)) {
 					params.push({
 						text: para,
 						startIndex: exe.index,
@@ -942,7 +933,7 @@ export class Wikitext {
 		}
 
 		// Save the parameters
-		this.#parameters = params.map(obj => ({...obj})); // Deep copy
+		this.parameters = params.map(obj => ({...obj})); // Deep copy
 
 		return params.reduce((acc: Parameter[], obj) => {
 			if (obj.nestLevel > 0 && !cfg.recursive) {
@@ -958,13 +949,13 @@ export class Wikitext {
 	}
 
 	/**
-	 * Get a deep copy of `Wikitext.#parameters`, which is a private property available only when `Wikitext.parseParameters` has
-	 * been called at least once. Note that `Wikitext.parseParameters` returns a (filtered) deep copy of `Wikitext.#parameters`
+	 * Get a deep copy of {@link parameters}, which is a private property available only when {@link parseParameters} has
+	 * been called at least once. Note that {@link parseParameters} returns a (filtered) deep copy of {@link parameters}
 	 * on a non-first call, so simply call the relevant method if there is no need for a `null` return.
 	 * @returns
 	 */
 	getParameters(): Parameter[]|null {
-		return this.#parameters && this.#parameters.map(obj => ({...obj}));
+		return this.parameters && this.parameters.map(obj => ({...obj}));
 	}
 
 	/**
@@ -1114,9 +1105,9 @@ interface FragmentOptions {
 }
 /**
  * Incrementally process fragments of template arguments. This function has no return value, and the original array
- * passed as `args` is modified.
+ * passed as {@link args} is modified.
  *
- * The `args` array will consist of:
+ * The {@link args} array will consist of:
  * ```
  * const [name, ...params] = args;
  * ```
@@ -1128,7 +1119,7 @@ interface FragmentOptions {
  * problems if an unnamed argument has a value that starts with `=` (e.g. `{{Template|=}}`).
  *
  * @param args Pass-by-reference array that stores the arguments of the template that is getting parsed.
- * @param fragment Character(s) to register into the `args` array.
+ * @param fragment Character(s) to register into the {@link args} array.
  * @param options Optional object that characterizes the fragment.
  */
 function processArgFragment(args: ParsedArgument[], fragment: string, options?: FragmentOptions): void {

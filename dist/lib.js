@@ -36,7 +36,7 @@ const net_1 = __importDefault(require("net"));
 const is_cidr_1 = __importStar(require("is-cidr"));
 // ****************************************** ASYNCHRONOUS FUNCTIONS ******************************************
 /**
- * Let the code sleep for n milliseconds.
+ * Let the code sleep for `n` milliseconds.
  * @param milliseconds The milliseconds to sleep. If a negative number is passed, it is automatically rounded up to `0`.
  * @returns
  */
@@ -253,7 +253,7 @@ exports.scrapeWebpage = scrapeWebpage;
  * Send an API request that automatically continues until the limit is reached. Works only for calls that have a 'continue' property in the response.
  * @param params
  * @param limit Default: 10
- * @returns The returned array might have `null` elements if any internal API request failed.
+ * @returns The return array might have `null` elements if any internal API request failed.
  */
 function continuedRequest(params, limit = 10) {
     const mw = (0, mw_1.getMw)();
@@ -292,8 +292,7 @@ exports.continuedRequest = continuedRequest;
  * an array can be passed to the second parameter).
  *
  * @param params The request parameters.
- * @param batchParam
- * The name of the multi-value field (can be an array).
+ * @param batchParam The name of the multi-value field (can be an array).
  * @param apilimit
  * Optional splicing number (default: `500/50`). The `**limit` parameter, if there is any, is automatically set to `max`
  * if this argument has the value of either `500` or `50`. It also accepts a unique value like `1`, in cases such as

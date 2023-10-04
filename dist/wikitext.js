@@ -1,16 +1,4 @@
 "use strict";
-var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
-    if (kind === "m") throw new TypeError("Private method is not writable");
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
-    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
-};
-var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
-    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
-    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
-    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _ParsedTemplate_hierarchy, _Wikitext_instances, _Wikitext_revision, _Wikitext_tags, _Wikitext_sections, _Wikitext_parameters, _Wikitext_inTpTag;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Wikitext = exports.ParsedTemplate = void 0;
 const template_1 = require("./template");
@@ -18,22 +6,16 @@ const string_1 = require("./string");
 const mw_1 = require("./mw");
 const server_1 = require("./server");
 const lib_1 = require("./lib");
-/** Class used by `Wikitext.parseTemplates`. */
+/** Class used by {@link Wikitext.parseTemplates}. */
 class ParsedTemplate extends template_1.Template {
     /**
-     * Initialize a new `ParsedTemplate` instance.
+     * Initialize a new {@link ParsedTemplate} instance. **This constructor is not supposed to be used externally**.
      * @param parsed
-     * @throws {Error} When `name` has inline `\n` characters or when`config.fullName` does not contain `name` as a substring.
+     * @throws {Error} When `name` has inline `\n` characters or when `fullName` does not contain `name` as a substring.
      */
     constructor(parsed) {
         const { name, fullName, args, text, startIndex, endIndex, hierarchy, nestLevel } = parsed;
         super(name, { fullName, hierarchy });
-        /**
-         * Argument hierarchies.
-         * @private
-         */
-        _ParsedTemplate_hierarchy.set(this, void 0);
-        __classPrivateFieldSet(this, _ParsedTemplate_hierarchy, super.getHierarchy(), "f");
         this.addArgs(args.map((obj) => ({ 'name': obj.name.replace(/^\|/, ''), value: obj.value.replace(/^\|/, '') })));
         this.originalText = text;
         this._startIndex = startIndex;
@@ -41,7 +23,7 @@ class ParsedTemplate extends template_1.Template {
         this.nestLevel = nestLevel;
     }
     /**
-     * Error-proof constructor.
+     * Error-proof constructor. **This method is supposed to be used only by {@link Wikitext.parseTemplates}**.
      * @param parsed
      * @returns `null` if the constructor threw an error.
      */
@@ -65,19 +47,12 @@ class ParsedTemplate extends template_1.Template {
             args: this.args.map(obj => ({ ...obj })),
             keys: this.keys.slice(),
             overriddenArgs: this.overriddenArgs.map(obj => ({ ...obj })),
-            hierarchy: __classPrivateFieldGet(this, _ParsedTemplate_hierarchy, "f").map(arr => [...arr]),
+            hierarchy: this.hierarchy.map(arr => [...arr]),
             originalText: this.originalText,
             startIndex: this._startIndex,
             endIndex: this._endIndex,
             nestLevel: this.nestLevel
         };
-    }
-    /**
-     * Get the argument hierarchies.
-     * @returns
-     */
-    getHierarchy() {
-        return __classPrivateFieldGet(this, _ParsedTemplate_hierarchy, "f").map(arr => [...arr]);
     }
     /**
      * Render the original template text.
@@ -87,14 +62,14 @@ class ParsedTemplate extends template_1.Template {
         return this.originalText;
     }
     /**
-     * Get `ParsedTemplate._startIndex`.
+     * Get {@link _startIndex}.
      * @returns
      */
     getStartIndex() {
         return this._startIndex;
     }
     /**
-     * Get `ParsedTemplate._endIndex`.
+     * Get {@link _endIndex}.
      * @returns
      */
     getEndIndex() {
@@ -109,19 +84,19 @@ class ParsedTemplate extends template_1.Template {
     }
     /**
      * Find the original template in a wikitext and replace it with the (updated) template obtained by
-     * `ParsedTemplate.render(options)`. This method is supposed to be called on a wiktiext same as the one
-     * from which the `ParsedTemplate` instance was parsed and initialized.
+     * {@link render}. This method is supposed to be called on a wiktiext same as the one from which the
+     * {@link ParsedTemplate} instance was parsed and initialized.
      *
-     * Note that if this method is called recursively against an array of `ParsedTemplate`, the looped array
-     * needs to be reversed so that the replacement takes place from the bottom of the wikitext. This is because
-     * the method reads the start and end indexes of the original template before the replacement (unless `useIndex`
-     * is set to `false`), and if the replacement is done in a top-down fashion, the indexes change and the subsequent
-     * replacements are affected.
+     * Note that if this method is called recursively against an array of {@link ParsedTemplate}, the looped array needs to be
+     * reversed so that the replacement takes place from the bottom of the wikitext. This is because the method reads the start
+     * and end indexes of the original template before the replacement (unless {@link ReplaceInOptions.useIndex|useIndex} is set
+     * to `false`), and if the replacement is done in a top-down fashion, the indexes change and the subsequent replacements are
+     * affected.
      *
      * @param wikitext Wikitext in which to search for the original template.
      * @param options Optional object to specify rendering and replacement options.
-     * @returns New wikitext with the original template replaced. (Could be the same as the input wikitext
-     * if the replacement didn't take place.)
+     * @returns New wikitext with the original template replaced. (Could be the same as the input wikitext if the replacement
+     * didn't take place.)
      */
     replaceIn(wikitext, options) {
         const cfg = Object.assign({ useIndex: true }, options || {});
@@ -146,53 +121,22 @@ class ParsedTemplate extends template_1.Template {
     }
 }
 exports.ParsedTemplate = ParsedTemplate;
-_ParsedTemplate_hierarchy = new WeakMap();
-/**
- * The `Wikitext` class with methods to manipulate wikitext.
- */
+/** The Wikitext class with methods to manipulate wikitext. */
 class Wikitext {
     /**
-     * Initialize a `Wikitext` instance.
+     * Initialize a {@link Wikitext} instance.
      * @param wikitext
+     * @requires mediawiki.api
      */
     constructor(wikitext) {
-        _Wikitext_instances.add(this);
-        /**
-         * Stores the return value of `Wikitext.fetch` when a `Wikitext` instance is created by `Wikitext.newFromTitle`.
-         *
-         * A deep copy can be retrieved by `Wikitext.getRevision`.
-         * @private
-         */
-        _Wikitext_revision.set(this, void 0);
-        /**
-         * Stores the return value of `Wikitext.parseTags`.
-         *
-         * A deep copy can be retrieved by `Wikitext.getTags`.
-         * @private
-         */
-        _Wikitext_tags.set(this, void 0);
-        /**
-         * Stores the return value of `Wikitext.parseSections`.
-         *
-         * A deep copy can be retrieved by `Wikitext.getSections`.
-         * @private
-         */
-        _Wikitext_sections.set(this, void 0);
-        /**
-         * Stores the return value of `Wikitext.parseParameters`.
-         *
-         * A deep copy can be retrieved by `Wikitext.getParameters`.
-         * @private
-         */
-        _Wikitext_parameters.set(this, void 0);
         this.wikitext = wikitext;
-        __classPrivateFieldSet(this, _Wikitext_revision, null, "f");
-        __classPrivateFieldSet(this, _Wikitext_tags, null, "f");
-        __classPrivateFieldSet(this, _Wikitext_sections, null, "f");
-        __classPrivateFieldSet(this, _Wikitext_parameters, null, "f");
+        this.revision = null;
+        this.tags = null;
+        this.sections = null;
+        this.parameters = null;
     }
     /**
-     * Returns the length of the wikitext referring to which the `Wikitext` instance was initialized.
+     * Returns the length of the wikitext.
      */
     get length() {
         return this.wikitext.length;
@@ -251,7 +195,7 @@ class Wikitext {
         });
     }
     /**
-     * Fetch the wikitext of a page. If additional revision information should be included, use `Wikitext.fetch`.
+     * Fetch the wikitext of a page. If additional revision information should be included, use {@link Wikitext.fetch|fetch}.
      * @param pagetitle
      * @returns `false` if the page doesn't exist, `null` if the API request failed.
      */
@@ -260,7 +204,7 @@ class Wikitext {
         return res && res.content;
     }
     /**
-     * Initialize a new `Wikitext` instance by fetching the content of a page.
+     * Initialize a new {@link Wikitext} instance by fetching the content of a page.
      * @param pagetitle
      * @returns `false` if the page doesn't exist, `null` if the content of the page failed to be fetched.
      */
@@ -271,17 +215,17 @@ class Wikitext {
         }
         else {
             const Wkt = new Wikitext(revision.content);
-            __classPrivateFieldSet(Wkt, _Wikitext_revision, revision, "f");
+            Wkt.revision = revision;
             return Wkt;
         }
     }
     /**
-     * Get a deep copy of `Wikitext.#revision`, which is a private property available only when the `Wikitext` instance was initialized
-     * by `Wikitext.newFromTitle`.
-     * @returns `null` if the instance doesn't have the relevant property, meaning that it wasn't initialized by `Wikitext.newFromTitle`.
+     * Get a deep copy of {@link revision}, which is a private property available only when the {@link Wikitext} instance was initialized
+     * by {@link newFromTitle}.
+     * @returns `null` if the instance doesn't have the relevant property, meaning that it wasn't initialized by {@link newFromTitle}.
      */
     getRevision() {
-        return __classPrivateFieldGet(this, _Wikitext_revision, "f") && { ...__classPrivateFieldGet(this, _Wikitext_revision, "f") };
+        return this.revision && { ...this.revision };
     }
     /**
      * Parse \<tag>s in the wikitext.
@@ -290,8 +234,8 @@ class Wikitext {
      */
     parseTags(config) {
         const cfg = config || {};
-        if (__classPrivateFieldGet(this, _Wikitext_tags, "f")) {
-            return __classPrivateFieldGet(this, _Wikitext_tags, "f").reduce((acc, obj) => {
+        if (this.tags) {
+            return this.tags.reduce((acc, obj) => {
                 if (!cfg.conditionPredicate || cfg.conditionPredicate(obj)) {
                     acc.push({ ...obj }); // Deep copy
                 }
@@ -434,7 +378,7 @@ class Wikitext {
             }
         });
         // Save the tags
-        __classPrivateFieldSet(this, _Wikitext_tags, tags.map(obj => ({ ...obj })), "f"); // Deep copy
+        this.tags = tags.map(obj => ({ ...obj })); // Deep copy
         // Filter the result in accordance with the config
         if (cfg.conditionPredicate) {
             tags = tags.filter(Tag => cfg.conditionPredicate(Tag));
@@ -442,21 +386,31 @@ class Wikitext {
         return tags;
     }
     /**
-     * Get a deep copy of `Wikitext.#tags`, which is a private property available only when `Wikitext.parseTags` has
-     * been called at least once. Note that `Wikitext.parseTags` returns a (filtered) deep copy of `Wikitext.#tags`
+     * Get a deep copy of {@link tags}, which is a private property available only when {@link parseTags} has
+     * been called at least once. Note that {@link parseTags} returns a (filtered) deep copy of {@link tags}
      * on a non-first call, so simply call the relevant method if there is no need for a `null` return.
      * @returns
      */
     getTags() {
-        return __classPrivateFieldGet(this, _Wikitext_tags, "f") && __classPrivateFieldGet(this, _Wikitext_tags, "f").map(obj => ({ ...obj }));
+        return this.tags && this.tags.map(obj => ({ ...obj }));
+    }
+    /**
+     * Check whether a substring of the wikitext starting and ending at a given index is inside any transclusion-preventing tag.
+     * @param tpTags An array of transclusion-preventing tags fetched by {@link parseTags}.
+     * @param startIndex The start index of the string in the wikitext.
+     * @param endIndex The end index of the string in the wikitext.
+     * @returns
+     */
+    inTpTag(tpTags, startIndex, endIndex) {
+        return tpTags.some((obj) => obj.startIndex < startIndex && endIndex < obj.endIndex);
     }
     /**
      * Parse sections in the wikitext.
      * @returns
      */
     parseSections() {
-        if (__classPrivateFieldGet(this, _Wikitext_sections, "f")) {
-            return __classPrivateFieldGet(this, _Wikitext_sections, "f").map(obj => ({ ...obj })); // Deep copy
+        if (this.sections) {
+            return this.sections.map(obj => ({ ...obj })); // Deep copy
         }
         // Get transclusion-preventing tags
         const tpTags = this.parseTags({
@@ -502,7 +456,7 @@ class Wikitext {
         const rWhitespace = /[\t\u0020\u00a0]/g;
         const headings = this.parseTags().reduce((acc, obj) => {
             let m;
-            if ((m = obj.name.match(/^h([1-6])$/)) && !obj.selfClosed && !__classPrivateFieldGet(this, _Wikitext_instances, "m", _Wikitext_inTpTag).call(this, tpTags, obj.startIndex, obj.endIndex)) {
+            if ((m = obj.name.match(/^h([1-6])$/)) && !obj.selfClosed && !this.inTpTag(tpTags, obj.startIndex, obj.endIndex)) {
                 // The tag is a heading element, not self-closing, and not in a transclusion-preventing tag
                 acc.push({
                     text: obj.text,
@@ -518,7 +472,7 @@ class Wikitext {
         while ((m = rHeading.exec(this.wikitext))) {
             // If `$4` isn't empty or the ==heading== is inside a transclusion-preventing tag, the heading isn't the start of a section
             const m4 = m[4].replace(rWhitespace, '');
-            if (m4 && removeComments(m4) || __classPrivateFieldGet(this, _Wikitext_instances, "m", _Wikitext_inTpTag).call(this, tpTags, m.index, m.index + m[0].length)) {
+            if (m4 && removeComments(m4) || this.inTpTag(tpTags, m.index, m.index + m[0].length)) {
                 continue;
             }
             // Validate the heading
@@ -554,17 +508,17 @@ class Wikitext {
             };
         });
         // Save the sections
-        __classPrivateFieldSet(this, _Wikitext_sections, sections.map(obj => ({ ...obj })), "f"); // Deep copy
+        this.sections = sections.map(obj => ({ ...obj })); // Deep copy
         return sections;
     }
     /**
-     * Get a deep copy of `Wikitext.#sections`, which is a private property available only when `Wikitext.parseSections` has
-     * been called at least once. Note that `Wikitext.parseSections` returns a (filtered) deep copy of `Wikitext.#sections`
+     * Get a deep copy of {@link sections}, which is a private property available only when {@link parseSections} has
+     * been called at least once. Note that {@link parseSections} returns a (filtered) deep copy of {@link sections}
      * on a non-first call, so simply call the relevant method if there is no need for a `null` return.
      * @returns
      */
     getSections() {
-        return __classPrivateFieldGet(this, _Wikitext_sections, "f") && __classPrivateFieldGet(this, _Wikitext_sections, "f").map(obj => ({ ...obj }));
+        return this.sections && this.sections.map(obj => ({ ...obj }));
     }
     /**
      * Parse {{{parameter}}}s in the wikitext.
@@ -573,8 +527,8 @@ class Wikitext {
      */
     parseParameters(config) {
         const cfg = Object.assign({ recursive: true }, config || {});
-        if (__classPrivateFieldGet(this, _Wikitext_parameters, "f")) {
-            return __classPrivateFieldGet(this, _Wikitext_parameters, "f").reduce((acc, obj) => {
+        if (this.parameters) {
+            return this.parameters.reduce((acc, obj) => {
                 if (obj.nestLevel > 0 && !cfg.recursive) {
                     return acc;
                 }
@@ -625,7 +579,7 @@ class Wikitext {
                 }
             }
             if (grammatical) {
-                if (!__classPrivateFieldGet(this, _Wikitext_instances, "m", _Wikitext_inTpTag).call(this, tpTags, exe.index, regex.lastIndex)) {
+                if (!this.inTpTag(tpTags, exe.index, regex.lastIndex)) {
                     params.push({
                         text: para,
                         startIndex: exe.index,
@@ -646,7 +600,7 @@ class Wikitext {
             }
         }
         // Save the parameters
-        __classPrivateFieldSet(this, _Wikitext_parameters, params.map(obj => ({ ...obj })), "f"); // Deep copy
+        this.parameters = params.map(obj => ({ ...obj })); // Deep copy
         return params.reduce((acc, obj) => {
             if (obj.nestLevel > 0 && !cfg.recursive) {
                 return acc;
@@ -659,13 +613,13 @@ class Wikitext {
         }, []);
     }
     /**
-     * Get a deep copy of `Wikitext.#parameters`, which is a private property available only when `Wikitext.parseParameters` has
-     * been called at least once. Note that `Wikitext.parseParameters` returns a (filtered) deep copy of `Wikitext.#parameters`
+     * Get a deep copy of {@link parameters}, which is a private property available only when {@link parseParameters} has
+     * been called at least once. Note that {@link parseParameters} returns a (filtered) deep copy of {@link parameters}
      * on a non-first call, so simply call the relevant method if there is no need for a `null` return.
      * @returns
      */
     getParameters() {
-        return __classPrivateFieldGet(this, _Wikitext_parameters, "f") && __classPrivateFieldGet(this, _Wikitext_parameters, "f").map(obj => ({ ...obj }));
+        return this.parameters && this.parameters.map(obj => ({ ...obj }));
     }
     /**
      * Parse {{template}}s in the wikitext.
@@ -790,14 +744,11 @@ class Wikitext {
     }
 }
 exports.Wikitext = Wikitext;
-_Wikitext_revision = new WeakMap(), _Wikitext_tags = new WeakMap(), _Wikitext_sections = new WeakMap(), _Wikitext_parameters = new WeakMap(), _Wikitext_instances = new WeakSet(), _Wikitext_inTpTag = function _Wikitext_inTpTag(tpTags, startIndex, endIndex) {
-    return tpTags.some((obj) => obj.startIndex < startIndex && endIndex < obj.endIndex);
-};
 /**
  * Incrementally process fragments of template arguments. This function has no return value, and the original array
- * passed as `args` is modified.
+ * passed as {@link args} is modified.
  *
- * The `args` array will consist of:
+ * The {@link args} array will consist of:
  * ```
  * const [name, ...params] = args;
  * ```
@@ -809,7 +760,7 @@ _Wikitext_revision = new WeakMap(), _Wikitext_tags = new WeakMap(), _Wikitext_se
  * problems if an unnamed argument has a value that starts with `=` (e.g. `{{Template|=}}`).
  *
  * @param args Pass-by-reference array that stores the arguments of the template that is getting parsed.
- * @param fragment Character(s) to register into the `args` array.
+ * @param fragment Character(s) to register into the {@link args} array.
  * @param options Optional object that characterizes the fragment.
  */
 function processArgFragment(args, fragment, options) {

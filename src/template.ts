@@ -2,7 +2,7 @@ import { clean, escapeRegExp } from './lib';
 import { Title } from './title';
 import { ucFirst } from './string';
 
-/** The object that stores the properties of a template argument, used in `Template.args`. */
+/** The object that stores the properties of a template argument, used in {@link Template.args}. */
 interface TemplateArgument {
 	/**
 	 * The argument name, from which unicode bidirectional characters and leading/trailing spaces are removed.
@@ -17,7 +17,7 @@ interface TemplateArgument {
 	 */
 	value: string;
 	/**
-	 * The argument's text created out of `name` and `value`, starting with a pipe character.
+	 * The argument's text created out of {@link TemplateArgument.name |name} and {@link value}, starting with a pipe character.
 	 *
 	 * Note that the name is not rendered for unnamed arguments.
 	 */
@@ -31,7 +31,7 @@ interface TemplateArgument {
 	 */
 	ufvalue: string;
 	/**
-	 * The argument's text created out of `ufname` and `ufvalue`, starting with a pipe character.
+	 * The argument's text created out of {@link ufname} and {@link ufvalue}, starting with a pipe character.
 	 *
 	 * Note that the name is not rendered for unnamed arguments.
 	 */
@@ -46,14 +46,17 @@ export interface ArgumentHierarchy {
 	/**
 	 * Argument hierarchies.
 	 *
-	 * Module-invoking templates may have nested parameters (e.g. `{{#invoke|module|user={{{1|{{{user|}}}}}}}}`).
-	 * In such cases, pass `[['1', 'user'], [...]]`, and then `|1=` will be overridden by `|user=` when the
-	 * `Template` already has `|1=` as an argument.
+	 * Module-invoking templates may have nested parameters; for example, `{{#invoke:module|user={{{1|{{{user|}}}}}}}}`
+	 * can be transcluded as `{{template|user=value|1=value}}`. In this case, `|1=` and `|user=` should be regarded as
+	 * instantiating the same template argument, and any non-empty `|user=` argument should override the `|1=` argument
+	 * if any. To specify this type of argument hierarchies, pass `[['1', 'user'], [...]]`. Then, `|1=` will be
+	 * overridden by `|user=` any time when an argument registration takes place and the operation detects the presence
+	 * of a lower-hierarchy argument in the {@link Template} instance.
 	 */
 	hierarchy?: string[][];
 }
-/** The config object of the `Template` constructor. */
-interface ConstructorConfig extends ArgumentHierarchy {
+/** The config object to be passed to {@link Template.constructor}. */
+interface TemplateConfig extends ArgumentHierarchy {
 	/**
 	 * Full string that should fit into the first slot of the template (`{{fullName}}`), **excluding** double braces.
 	 * May contain whitespace characters (`{{ fullName }}`) and/or expressions that are not part of the template name
@@ -63,9 +66,9 @@ interface ConstructorConfig extends ArgumentHierarchy {
 }
 
 /**
- * The object that is an element of the array to specify what template arguments to add/update.
+ * The object that specifies what kind of a template argument should be added to {@link Template.args}.
  *
- * Used in `Template.addArgs` and `Template.setArgs`.
+ * Used in {@link Template.addArgs} and {@link Template.setArgs}.
  */
 interface NewArg {
 	/**
@@ -73,37 +76,55 @@ interface NewArg {
 	 * in accordance with the arguments that have already been registered.
 	 *
 	 * This property accepts leading/trailing spaces, for an output of e.g. `| 1 = value ` instead of `|1=value` (a config
-	 * object must be passed to `render` for this output).
+	 * object must be passed to {@link Template.render} for this output).
 	 */
 	name: string;
 	/**
 	 * The value of the new argument.
 	 *
 	 * This property accepts leading/trailing spaces, for an output of e.g. `| 1 = value ` instead of `|1=value` (a config
-	 * object must be passed to `render` for this output). It can also end with `\n` when the argument should have a linebreak
-	 * before the next argument or `}}` (although this should be regulated by the `linebreak` or `linebreakPredicate` option of
-	 * `render`).
+	 * object must be passed to {@link Template.render} for this output). It can also end with `\n` when the argument should
+	 * have a linebreak before the next argument or `}}` (although whether to add a new line should instead be specified by
+	 * passing {@link RenderOptions.linebreak} or {@link RenderOptions.linebreakPredicate} to {@link Template.render}).
 	 */
 	value: string;
 	/**
-	 * Forcibly register this (integer-named) argument as unnamed. Ignored if `name` (after being formatted) is not of an integer.
+	 * Forcibly register this (integer-named) argument as unnamed. Ignored if {@link NewArg.name|name} (after being formatted)
+	 * is not of an integer.
 	 */
 	forceUnnamed?: boolean;
 }
 
-/** The option object passed to `Template.getArg` and `Template.hasArg`. */
+/**
+ * Object used to process the argument hierarchies of a template.
+ */
+interface TemplateArgumentHierarchy {
+	/** The index number of `name` or its alias in {@link Template.keys}. */
+	index: number;
+	/** `1` if `name` is on a higher position than `key` is in the hierarchy, `-1` if lower, `0` if the same. */
+	priority: number;
+}
+
+/** The option object passed to {@link Template.getArg} and {@link Template.hasArg}. */
 interface GetArgOptions {
 	/**
-	 * Also check whether the argument with the matched name meets this condition predicate.
+	 * Check whether the argument with the matched name meets this condition predicate.
 	 * @param arg
 	 */
 	conditionPredicate?: (arg: TemplateArgument) => boolean;
 }
+/** The option object uniquely passed to {@link Template.getArg} (and not to {@link Template.hasArg}). */
+interface GetArgUniqueOptions {
+	/**
+	 * If `true`, look for the first match, instead of the last.
+	 */
+	findFirst?: boolean;
+}
 
-/** The option object passed to `Template.render`. */
+/** The option object passed to {@link Template.render}. */
 export interface RenderOptions {
 	/**
-	 * Use the template name of this format. See `Template.getName` for details.
+	 * Use the template name of this format. See {@link Template.getName} for details.
 	 */
 	nameprop?: 'full'|'clean'|'fullclean';
 	/**
@@ -111,26 +132,28 @@ export interface RenderOptions {
 	 */
 	subst?: boolean;
 	/**
-	 * For template arguments, use the unformatted counterpart(s) of `name` (i.e. `ufname`), `value` (i.e. `ufvalue`),
-	 * or both, instead of the formatted ones. Note that specifying this option disables the auto-rendering of the name
-	 * of an unnamed argument whose value contains a `=`.
+	 * For template arguments, use the unformatted counterpart(s) of {@link TemplateArgument.name |name} (i.e. 
+	 * {@link TemplateArgument.ufname |ufname}), {@link TemplateArgument.value |value} (i.e. {@link TemplateArgument.ufvalue |ufvalue}),
+	 * or both, instead of the formatted ones. Note that specifying this option disables the auto-rendering of
+	 * the name of an unnamed argument whose value contains a `=`.
 	 */
 	unformatted?: 'name'|'value'|'both';
 	/**
-	 * Callback function to `Array.prototype.sort`, called on the `args` array before stringifying the template arguments.
+	 * Callback function to {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort |Array.prototype.sort},
+	 * called on the {@link Template.args} array before stringifying the template arguments.
 	 * @param obj1
 	 * @param obj2
 	 */
 	sortPredicate?: (obj1: TemplateArgument, obj2: TemplateArgument) => number;
 	/**
-	 * Whether to break lines for each template slot. Overridden by `linebreakPredicate`.
+	 * Whether to break lines for each template slot. Overridden by {@link linebreakPredicate}.
 	 * 
 	 * Note that if this option is specified, all trailing `\n`s are first removed, and it is then evaluated whether to
 	 * add an `\n` at the end of the slot.
 	 */
 	linebreak?: boolean;
 	/**
-	 * Put a new line in accordance with this predicate. Prioritized than `linebreak`.
+	 * Put a new line in accordance with this predicate. Prioritized than {@link linebreak}.
 	 * 
 	 * Note that if this option is specified, all trailing `\n`s are first removed, and it is then evaluated whether to
 	 * add an `\n` at the end of the slot.
@@ -138,7 +161,7 @@ export interface RenderOptions {
 	linebreakPredicate?: {
 		/**
 		 * Whether to put a new line after the first template slot for the name. `\n` is added if the callback is true.
-		 * @param name The template's name in accordance with `nameprop`.
+		 * @param name The template's name in accordance with {@link RenderOptions.nameprop}.
 		 */
 		name: (name: string) => boolean;
 		/**
@@ -149,7 +172,7 @@ export interface RenderOptions {
 	};
 }
 
-/** The object returned by `Template.toJSON`. */
+/** The object returned by {@link Template.toJSON}. */
 export interface TemplateJSON {
 	name: string;
 	fullName: string;
@@ -167,23 +190,23 @@ export interface TemplateJSON {
 export class Template {
 
 	/**
-	 * Name of the page that is to be transcluded. Should not contain anything but a page title.
+	 * The trimmed `name` passed to the {@link Template.constructor |constructor}.
 	 * @readonly
 	 */
 	readonly name: string;
 	/**
-	 * Full string that fits into the first slot of the template (`{{fullName}}`). May be accompanied by additional
+	 * Full string that fits into the first slot of the template (i.e. `{{fullName}}`). May be accompanied by additional
 	 * characters that are not relevant to the title of the page to be transcluded.
 	 * @readonly
 	 */
 	readonly fullName: string;
 	/**
-	 * `name` formatted by `Title.newFromText`.
+	 * {@link Template.name |name} formatted by `Title.newFromText`.
 	 * @readonly
 	 */
 	readonly cleanName: string;
 	/**
-	 * `cleanName` with redundancies as in `fullName`.
+	 * {@link cleanName} with redundancies as in {@link fullName}.
 	 * @readonly
 	 */
 	readonly fullCleanName: string;
@@ -204,18 +227,19 @@ export class Template {
 	readonly overriddenArgs: TemplateArgument[];
 	/**
 	 * Argument hierarchies.
-	 * @private
+	 * @protected
 	 */
-	#hierarchy: string[][];
+	protected readonly hierarchy: string[][];
 
 	/**
-	 * Initialize a new `Template` instance.
+	 * Initialize a new {@link Template} instance.
 	 *
 	 * @param name Name of the page that is to be transcluded. Should not contain anything but a page title.
 	 * @param config Optional initializer object.
-	 * @throws {Error} When `name` has inline `\n` characters or when`config.fullName` does not contain `name` as a substring.
+	 * @throws {Error} When `name` has inline `\n` characters or when {@link TemplateConfig.fullName |fullName}
+	 * does not contain `name` as a substring.
 	 */
-	constructor(name: string, config?: ConstructorConfig) {
+	constructor(name: string, config?: TemplateConfig) {
 
 		const cfg = config || {};
 		this.name = clean(name);
@@ -229,7 +253,7 @@ export class Template {
 		if (!this.fullName.includes(this.name)) {
 			throw new Error(`fullName ("${this.fullName}") does not contain name ("${this.name}") as a substring.`);
 		}
-		this.#hierarchy = cfg.hierarchy || [];
+		this.hierarchy = cfg.hierarchy || [];
 
 		// Truncate the leading colon, if any
 		let colon = '';
@@ -256,10 +280,12 @@ export class Template {
 	/**
 	 * Get the name of the template.
 	 *
-	 * @param prop By default, returns the original, unformatted `name` passed to #constructor.
-	 * - If `full` is passed, returns `fullName` passed to #constructor (same as `name` if none was passed).
-	 * - If `clean` is passed, returns `name` that is formatted.
-	 * - If `fullclean` is passed, returns `name` that is formatted and accompanied by redundancies as in `fullName`.
+	 * @param prop By default, returns the original, unformatted `name` passed to {@link Template.constructor}.
+	 * - If `full` is passed, returns {@link TemplateConfig.fullName |fullName} passed to {@link Template.constructor}
+	 * (same as `name` if none was passed).
+	 * - If `clean` is passed, returns {@link Template.name |name} that is formatted.
+	 * - If `fullclean` is passed, returns {@link Template.name |name} that is formatted and accompanied by redundancies
+	 * as in {@link TemplateConfig.fullName |fullName}.
 	 *
 	 * In specifying any of the above, the first letter is capitalized.
 	 *
@@ -295,12 +321,12 @@ export class Template {
 	}
 
 	/**
-	 * Register template arguments into `Template.args`.
+	 * Register template arguments into {@link args}.
 	 *
 	 * @param newArgs An array of `{name: string; value: string;}` objects.
 	 * @param logOverride Whether to leave a log when overriding argument values.
 	 */
-	#registerArgs(newArgs: NewArg[], logOverride: boolean) {
+	private registerArgs(newArgs: NewArg[], logOverride: boolean) {
 		newArgs.forEach(({name, value, forceUnnamed}) => {
 
 			const ufname = name;
@@ -315,7 +341,7 @@ export class Template {
 			const text = '|' + (unnamed ? '' : name + '=') + value.replace(/^\|/, '');
 			const uftext = '|' + (unnamed ? '' : ufname + '=') + ufvalue.replace(/^\|/, '');
 
-			this.#registerArg(
+			this.registerArg(
 				{name, value, text, ufname, ufvalue, uftext, unnamed},
 				logOverride
 			);
@@ -327,7 +353,7 @@ export class Template {
 	 * @param arg New argument object to register.
 	 * @param logOverride Whether to leave a log when overriding argument values.
 	 */
-	#registerArg(arg: TemplateArgument, logOverride: boolean) {
+	private registerArg(arg: TemplateArgument, logOverride: boolean) {
 
 		// Name if unnamed
 		if (arg.unnamed) {
@@ -340,7 +366,7 @@ export class Template {
 		}
 
 		// Check duplicates
-		const hier = this.#getHier(arg.name);
+		const hier = this.getHier(arg.name);
 		let oldArg: TemplateArgument|null;
 		if (hier !== null) {
 			const foundArg = this.args[hier.index];
@@ -378,17 +404,12 @@ export class Template {
 	 * Check whether a given argument is to be hierarchically overridden.
 	 * @param name
 	 */
-	#getHier(name: string): {
-		/** The index number of `name` or its alias in `this.keys`. */
-		index: number;
-		/** `1` if `name` is on a higher position than `key` is in the hierarchy, `-1` if lower, `0` if the same. */
-		priority: number;
-	}|null {
+	private getHier(name: string): TemplateArgumentHierarchy|null {
 		let ret = null;
-		if (!this.#hierarchy.length || !this.keys.length) {
+		if (!this.hierarchy.length || !this.keys.length) {
 			return ret;
 		}
-		this.#hierarchy.some((arr) => {
+		this.hierarchy.some((arr) => {
 
 			// Does this hierarchy array contain the designated argument name?
 			const prIdx = arr.indexOf(name);
@@ -411,32 +432,32 @@ export class Template {
 	}
 
 	/**
-	 * Add new arguments to the `Template` instance. This method leaves a log when argument override takes place,
-	 * which can be viewed by `getOverriddenArgs`.
+	 * Add new arguments to the {@link Template} instance. This method leaves a log when argument override takes place,
+	 * which can be viewed by {@link getOverriddenArgs}.
 	 *
 	 * @param newArgs An array of `{name: string; value: string;}` objects.
 	 */
 	addArgs(newArgs: NewArg[]): Template {
-		this.#registerArgs(newArgs, true);
+		this.registerArgs(newArgs, true);
 		return this;
 	}
 
 	/**
-	 * Set (or update) arguments in(to) the `Template` instance. This method does not leave a log when argument override takes place.
+	 * Set (or update) arguments in(to) the {@link Template} instance. This method does not leave a log when argument override takes place.
 	 *
-	 * Note: New arguments are simply newly added, just as when `addArgs` is used.
+	 * Note: New arguments are simply newly added, just as when {@link addArgs} is used.
 	 *
 	 * @param newArgs An array of `{name: string; value: string;}` objects.
 	 */
 	setArgs(newArgs: NewArg[]): Template {
-		this.#registerArgs(newArgs, false);
+		this.registerArgs(newArgs, false);
 		return this;
 	}
 
 	/**
 	 * Get the arguments of the template as an array of objects.
 	 *
-	 * @param deepCopy Whether to return a deep copy, defaulted to `true`. Otherwise, `Template.args` is passed by reference
+	 * @param deepCopy Whether to return a deep copy, defaulted to `true`. Otherwise, {@link args} is passed by reference
 	 * (not recommended).
 	 * @returns
 	 */
@@ -449,17 +470,12 @@ export class Template {
 	}
 
 	/**
-	 * Get (a deep copy of) a template argument from an argument name.
+	 * Get (a deep copy of) a template argument by an argument name.
 	 * @param name Argument name.
 	 * @param options Optional search options.
 	 * @returns `null` if no argument is found with the specified name.
 	 */
-	getArg(name: string|RegExp, options?: GetArgOptions & {
-		/**
-		 * If true, look for the first match, instead of the last.
-		 */
-		findFirst?: boolean;
-	}): TemplateArgument|null {
+	getArg(name: string|RegExp, options?: GetArgOptions & GetArgUniqueOptions): TemplateArgument|null {
 
 		options = options || {};
 
@@ -483,7 +499,7 @@ export class Template {
 	}
 
 	/**
-	 * Check whether the `Template` instance has an argument with a certain name.
+	 * Check whether the {@link Template} instance has an argument with a certain name.
 	 * @param name Name of the argument to search for.
 	 * @param options Optional search options.
 	 * @returns A boolean value in accordance with whether there is a match.
@@ -520,7 +536,8 @@ export class Template {
 	/**
 	 * Delete a template argument.
 	 * @param name
-	 * @returns true if an element in the `args` existed and has been removed, or false if the element does not exist.
+	 * @returns `true` if the instance has an argument with the specified name and if the argument is successfully removed,
+	 * `false` otherwise.
 	 */
 	deleteArg(name: string): boolean {
 		let deleted = false;
@@ -546,11 +563,11 @@ export class Template {
 	 * @returns
 	 */
 	getHierarchy(): string[][] {
-		return this.#hierarchy.map(arr => [...arr]);
+		return this.hierarchy.map(arr => [...arr]);
 	}
 
 	/**
-	 * Render the `Template` instance as wikitext.
+	 * Render the {@link Template} instance as wikitext.
 	 *
 	 * Use `render({nameprop: 'full', unformatted: 'both'})` for an output that is closest to the original configurations.
 	 *
@@ -613,7 +630,7 @@ export class Template {
 	}
 
 	/**
-	 * Stringify the `Template` instance. Same as `render({nameprop: 'full', unformatted: 'both'})`.
+	 * Stringify the {@link Template} instance. Same as `render({nameprop: 'full', unformatted: 'both'})`.
 	 */
 	toString(): string {
 		return this.render({nameprop: 'full', unformatted: 'both'});
@@ -631,7 +648,7 @@ export class Template {
 			args: this.args.map(obj => ({...obj})),
 			keys: this.keys.slice(),
 			overriddenArgs: this.overriddenArgs.map(obj => ({...obj})),
-			hierarchy: this.#hierarchy.map(arr => [...arr])
+			hierarchy: this.hierarchy.map(arr => [...arr])
 		};
 	}
 

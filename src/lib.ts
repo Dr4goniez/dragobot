@@ -15,7 +15,7 @@ import isCidr, { v4, v6 } from 'is-cidr';
 // ****************************************** ASYNCHRONOUS FUNCTIONS ******************************************
 
 /**
- * Let the code sleep for n milliseconds.
+ * Let the code sleep for `n` milliseconds.
  * @param milliseconds The milliseconds to sleep. If a negative number is passed, it is automatically rounded up to `0`.
  * @returns
  */
@@ -309,7 +309,7 @@ export async function scrapeWebpage(url: string): Promise<cheerio.Root|null> {
  * Send an API request that automatically continues until the limit is reached. Works only for calls that have a 'continue' property in the response.
  * @param params
  * @param limit Default: 10
- * @returns The returned array might have `null` elements if any internal API request failed.
+ * @returns The return array might have `null` elements if any internal API request failed.
  */
 export function continuedRequest(params: DynamicObject, limit = 10): Promise<(ApiResponse|null)[]> {
 
@@ -351,8 +351,7 @@ export function continuedRequest(params: DynamicObject, limit = 10): Promise<(Ap
  * an array can be passed to the second parameter).
  *
  * @param params The request parameters.
- * @param batchParam
- * The name of the multi-value field (can be an array).
+ * @param batchParam The name of the multi-value field (can be an array).
  * @param apilimit
  * Optional splicing number (default: `500/50`). The `**limit` parameter, if there is any, is automatically set to `max`
  * if this argument has the value of either `500` or `50`. It also accepts a unique value like `1`, in cases such as
