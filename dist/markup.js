@@ -314,7 +314,7 @@ async function markup(pagetitle, checkGlobal) {
                     info.user = username;
                 }
                 else {
-                    LogIDList.abandon(diffid);
+                    LogIDList.abandon(logid);
                 }
             }
             if (diffid) {

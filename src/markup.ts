@@ -335,7 +335,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 				if (username) {
 					info.user = username;
 				} else {
-					LogIDList.abandon(diffid);
+					LogIDList.abandon(logid);
 				}
 			}
 			if (diffid) {
