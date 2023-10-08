@@ -30,6 +30,7 @@ export interface ApiResponse {
 	login?: ApiResponseLogin;
 	purge?: ApiResponsePurge[];
 	query?: ApiResponseQuery;
+	parse?: ApiResponseParse;
 }
 export interface ApiResponseError {
 	code: string;
@@ -121,7 +122,88 @@ export interface ApiResponseLogin {
 // export interface ApiResponseOpensearch {}
 // export interface ApiResponseOptions {}
 // export interface ApiResponseParaminfo {}
-// export interface ApiResponseParse {}
+export interface ApiResponseParse {
+	title: string;
+	pageid: number;
+	revid: number;
+	text: string;
+	langlinks: {
+		lang: string;
+		url: string;
+		langname: string;
+		autonym: string;
+		title: string;
+	}[];
+	categories: {
+		sortkey: string;
+		category: string;
+		hidden: boolean;
+	}[];
+	categorieshtml: string;
+	links: {
+		ns: number;
+		title: string;
+		exists: boolean;
+	}[];
+	templates: {
+		ns: number;
+		title: string;
+		exists: boolean;
+	}[];
+	images: string[];
+	externallinks: string[];
+	sections: {
+		toclevel: number;
+		level: string;
+		line: string;
+		number: string;
+		index: string;
+		fromtitle: string;
+		byteoffset: number|null;
+		anchor: string;
+		linkAnchor: string;
+		extensionData: {
+			[key: string]: string;
+		};
+	}[];
+	showtoc: boolean;
+	/** Empty array returned, type might be wrong */
+	parsewarnings: string[];
+	/** Empty array returned, type might be wrong */
+	parsewarningshtml: string[];
+	displaytitle: string;
+	subtitle: string;
+	/** Empty array returned, type might be wrong */
+	headitems: string[];
+	headhtml: string;
+	modules: string[];
+	/** Empty array returned, type might be wrong */
+	modulescripts: string[];
+	modulestyles: string[];
+	jsconfigvars: {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		[key: string]: any;
+	};
+	encodedjsconfigvars: string;
+	indicators: {
+		[key: string]: string;
+	};
+	iwlinks: {
+		prefix: string;
+		url: string;
+		title: string;
+	}[];
+	wikitext: string;
+	properties: {
+		[key: string]: string;
+	};
+	limitreportdata: {
+		name: string;
+		[number: string]: string;
+	}
+	limitreporthtml: string;
+	parsetree: string;
+}
 // export interface ApiResponsePatrol {}
 // export interface ApiResponseProtect {}
 export interface ApiResponsePurge {
