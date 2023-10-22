@@ -32,20 +32,21 @@ class Template {
         this.hierarchy = cfg.hierarchy || [];
         // Truncate the leading colon, if any
         let colon = '';
-        name = name.replace(/^[^\S\r\n]*:[^\S\r\n]*/, (m) => {
-            colon = m;
+        name = name.replace(/^[^\S\r\n]*(:?)[^\S\r\n]*/, (_, $1) => {
+            colon = $1;
             return '';
         });
+        name = (0, lib_1.clean)(name);
         // Set cleanName
-        const title = title_1.Title.newFromText(name);
+        const title = title_1.Title.newFromText(name); // The passed "name" is trimmed and without a leading colon
         if (!title) {
             this.cleanName = colon + (0, string_1.ucFirst)(name);
         }
-        else if (title.getNamespaceId() === 10) {
-            this.cleanName = title.getMain(true);
+        else if (title.getNamespaceId() === 10) { // Template:XXX
+            this.cleanName = title.getMain(true); // Get XXX
         }
         else if (title.getNamespaceId() === 0) {
-            this.cleanName = colon.trim() + title.getMain(true);
+            this.cleanName = colon + title.getMain(true);
         }
         else {
             this.cleanName = title.getPrefixedDb(true);
