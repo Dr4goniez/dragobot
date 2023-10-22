@@ -997,7 +997,7 @@ export class Wikitext {
 				params.splice(0, idx + 1);
 				i += text.length - 1;
 				continue;
-			} else if ((m = wkt.match(/^\[\[[^[]]*?\]\]/))) { // Wikilink
+			} else if ((m = wkt.match(/^\[\[[^[\]]*?\]\]/))) { // Wikilink
 				i += m[0].length - 1;
 				if (numUnclosed !== 0) processArgFragment(args, m[0], {nonname: true});
 				continue;
