@@ -462,10 +462,12 @@ export class Wikitext {
 			formatversion: 2
 		}).then((res: ApiResponse) => {
 			const resPgs = res && res.query && Array.isArray(res.query.pages) && res.query.pages[0];
-			if (!resPgs || typeof resPgs.pageid !== 'number' || !resPgs.revisions || typeof res.curtimestamp !== 'string' || typeof resPgs.length !== 'number') {
+			if (!resPgs) {
 				return null;
 			} else if (resPgs.missing) {
 				return false;
+			} else if (typeof resPgs.pageid !== 'number' || !resPgs.revisions || typeof res.curtimestamp !== 'string' || typeof resPgs.length !== 'number') {
+				return null;
 			} else {
 				const ret: Revision = {
 					pageid: resPgs.pageid,
