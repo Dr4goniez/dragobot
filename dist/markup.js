@@ -937,7 +937,7 @@ async function queryLockedUsers(usersArr) {
     const lockedDate = getBlockedDate();
     return response.reduce((acc, res, i) => {
         const resLck = res && res.query && res.query.globalallusers;
-        if (!resLck)
+        if (!resLck || !resLck[0])
             return acc;
         const username = usersArr[i];
         if (resLck[0].locked === '') {
