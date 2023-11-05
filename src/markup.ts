@@ -1,11 +1,12 @@
 import { log } from './server';
 import { Wikitext, ParsedTemplate } from './wikitext';
 import * as lib from './lib';
-import { ucFirst } from './string';
 import {
 	ApiResponse,
 	ApiParamsQueryLogEvents,
 	ApiResponseQueryListLogevents,
+	ApiParamsQueryUsers,
+	ApiResponseQueryListUsers,
 	ApiParamsEditPage,
 	ApiResponseQueryListBlocks,
 	ApiParamsQueryBlocks
@@ -281,7 +282,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 				}
 				return sectionTitle; // Supposed never to be an empty string
 			})(),
-			user: ucFirst(user.replace(/_/g, ' ')), // Make it the same as in an API response
+			user: user.replace(/_/g, ' '),
 			type: typeVal,
 			logid,
 			diffid,
@@ -362,6 +363,19 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 	});
 	if (!users.length && !ips.length) return log('Procedure cancelled: No UserANs can be marked up.');
+
+	// Validate usernames
+	// Note: When we canonicalize usernames, capitalizing their first letters isn't enough because there're cases in which
+	// the first letter isn't capitalized (e.g. [[User:გასპუერა]]; cf. "Გასპუერა"). Thus create a username mapping object
+	// here to format the usernames collected from UserANs.
+	const usernameMap = await mapUsernames(users);
+	if (Object.keys(usernameMap).length) {
+		UserAN.forEach(({info}) => {
+			if (usernameMap[info.user]) {
+				info.user = usernameMap[info.user];
+			}
+		});
+	}
 
 	// Check if the users and IPs in the arrays are locally blocked
 	const [bkUsers, bkIps] = await Promise.all([queryBlockedUsers(users, pagetitle === ANS), queryBlockedIps(ips)]);
@@ -812,6 +826,57 @@ async function scrapeUsernameFromLogid(logid: string): Promise<string|null> {
 		default:
 	}
 	return username;
+
+}
+
+/** Object that maps usernames in an uncanonical format to ones in the canonical format. */
+interface UsernameMap {
+	[username: string]: string;
+}
+/**
+ * Create a username mapping object via the API.
+ * @param usersArr
+ * @returns An object keyed by usernames that need to be mapped an valued by canonical usernames.
+ * Can be an empty object if no mapping is necessary.
+ */
+async function mapUsernames(usersArr: string[]): Promise<UsernameMap> {
+
+	let validIndex = usersArr.length;
+	if (!validIndex) return {};
+
+	const params: ApiParamsQueryUsers = {
+		action: 'query',
+		list: 'users',
+		ususers: usersArr,
+		formatversion: '2'
+	};
+	const response = await lib.massRequest(params, 'ususers');
+
+	const resUsers = response.reduce((acc: ApiResponseQueryListUsers[], res) => {
+		// Flat the response array
+		const users = res && res.query && res.query.users;
+		if (validIndex !== usersArr.length) {
+			// If validIndex has ever been updated, exit loop
+			return acc;
+		} else if (Array.isArray(users)) {
+			acc = acc.concat(users);
+		} else {
+			// If res.query.users isn't an array of objects, limit the usersArr index to the length of the current acc
+			validIndex = acc.length;
+		}
+		return acc;
+	}, []);
+	const ret: UsernameMap = {};
+	for (let i = 0; i < validIndex; i++) {
+		const resObj = resUsers[i];
+		const ufName = usersArr[i];
+		const fName = resObj.name;
+		if (!resObj.missing && ufName !== fName) {
+			ret[ufName] = fName;
+		}
+	}
+
+	return ret;
 
 }
 

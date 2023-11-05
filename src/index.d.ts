@@ -311,7 +311,7 @@ export interface ApiResponseQuery {
 	// tags?: ApiResponseQueryListTags;
 	// threads?: ApiResponseQueryListThreads;
 	usercontribs?: ApiResponseQueryListUsercontribs[];
-	// users?: ApiResponseQueryListUsers;
+	users?: ApiResponseQueryListUsers[];
 	// watchlist?: ApiResponseQueryListWatchlist;
 	// watchlistraw?: ApiResponseQueryListWatchlistraw;
 	// wblistentityusage?: ApiResponseQueryListWblistentityusage;
@@ -603,12 +603,47 @@ export interface ApiResponseQueryListUsercontribs {
 	sizediff: number;
 	tags: string[];
 }
-// export interface ApiResponseQueryListUsers {}
+export interface ApiResponseQueryListUsers {
+	/** May be `undefined` if the user doesn't exist. */
+	userid?: number;
+	name: string;
+	missing?: boolean;
+	editcount?: number;
+	registration?: string;
+	groups?: string[];
+	groupmemberships?: {
+		group: string;
+		expiry: string;
+	}[];
+	implicitgroups?: string[];
+	rights?: string[];
+	blockid?: number;
+	blockedby?: string;
+	blockedbyid?: number;
+	blockreason?: string;
+	blockedtimestamp?: string;
+	blockexpiry?: string;
+	blockpartial?: boolean;
+	blocknocreate?: boolean;
+	blockanononly?: boolean;
+	blockemail?: boolean;
+	blockowntalk?: boolean;
+	blockedtimestampformatted?: string;
+	emailable?: boolean;
+	gender?: string;
+	centralids?: {
+		CentralAuth: number;
+		local: number;
+	},
+	attachedlocal?: {
+		CentralAuth: boolean;
+		local: boolean;
+	}
+}
 // export interface ApiResponseQueryListWatchlist {}
 // export interface ApiResponseQueryListWatchlistraw {}
 // export interface ApiResponseQueryListWblistentityusage {}
 // export interface ApiResponseQueryListWikisets {}
-
 
 /**
  * API parameters

@@ -27,7 +27,6 @@ exports.markup = exports.markupANs = void 0;
 const server_1 = require("./server");
 const wikitext_1 = require("./wikitext");
 const lib = __importStar(require("./lib"));
-const string_1 = require("./string");
 class IDList {
     constructor() {
         this.list = {};
@@ -264,7 +263,7 @@ async function markup(pagetitle, checkGlobal) {
                 }
                 return sectionTitle; // Supposed never to be an empty string
             })(),
-            user: (0, string_1.ucFirst)(user.replace(/_/g, ' ')),
+            user: user.replace(/_/g, ' '),
             type: typeVal,
             logid,
             diffid,
@@ -345,6 +344,18 @@ async function markup(pagetitle, checkGlobal) {
     });
     if (!users.length && !ips.length)
         return (0, server_1.log)('Procedure cancelled: No UserANs can be marked up.');
+    // Validate usernames
+    // Note: When we canonicalize usernames, capitalizing their first letters isn't enough because there're cases in which
+    // the first letter isn't capitalized (e.g. [[User:გასპუერა]]; cf. "Გასპუერა"). Thus create a username mapping object
+    // here to format the usernames collected from UserANs.
+    const usernameMap = await mapUsernames(users);
+    if (Object.keys(usernameMap).length) {
+        UserAN.forEach(({ info }) => {
+            if (usernameMap[info.user]) {
+                info.user = usernameMap[info.user];
+            }
+        });
+    }
     // Check if the users and IPs in the arrays are locally blocked
     const [bkUsers, bkIps] = await Promise.all([queryBlockedUsers(users, pagetitle === ANS), queryBlockedIps(ips)]);
     const blockInfo = { ...bkUsers, ...bkIps };
@@ -765,6 +776,50 @@ async function scrapeUsernameFromLogid(logid) {
         default:
     }
     return username;
+}
+/**
+ * Create a username mapping object via the API.
+ * @param usersArr
+ * @returns An object keyed by usernames that need to be mapped an valued by canonical usernames.
+ * Can be an empty object if no mapping is necessary.
+ */
+async function mapUsernames(usersArr) {
+    let validIndex = usersArr.length;
+    if (!validIndex)
+        return {};
+    const params = {
+        action: 'query',
+        list: 'users',
+        ususers: usersArr,
+        formatversion: '2'
+    };
+    const response = await lib.massRequest(params, 'ususers');
+    const resUsers = response.reduce((acc, res) => {
+        // Flat the response array
+        const users = res && res.query && res.query.users;
+        if (validIndex !== usersArr.length) {
+            // If validIndex has ever been updated, exit loop
+            return acc;
+        }
+        else if (Array.isArray(users)) {
+            acc = acc.concat(users);
+        }
+        else {
+            // If res.query.users isn't an array of objects, limit the usersArr index to the length of the current acc
+            validIndex = acc.length;
+        }
+        return acc;
+    }, []);
+    const ret = {};
+    for (let i = 0; i < validIndex; i++) {
+        const resObj = resUsers[i];
+        const ufName = usersArr[i];
+        const fName = resObj.name;
+        if (!resObj.missing && ufName !== fName) {
+            ret[ufName] = fName;
+        }
+    }
+    return ret;
 }
 /** Get the local block statuses of registered users. */
 async function queryBlockedUsers(usersArr, isANS) {
