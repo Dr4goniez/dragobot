@@ -27,6 +27,7 @@ exports.markup = exports.markupANs = void 0;
 const server_1 = require("./server");
 const wikitext_1 = require("./wikitext");
 const lib = __importStar(require("./lib"));
+const string_1 = require("./string");
 class IDList {
     constructor() {
         this.list = {};
@@ -263,7 +264,7 @@ async function markup(pagetitle, checkGlobal) {
                 }
                 return sectionTitle; // Supposed never to be an empty string
             })(),
-            user: user.replace(/_/g, ' '),
+            user: ucfirst(user.replace(/_/g, ' ')),
             type: typeVal,
             logid,
             diffid,
@@ -344,18 +345,6 @@ async function markup(pagetitle, checkGlobal) {
     });
     if (!users.length && !ips.length)
         return (0, server_1.log)('Procedure cancelled: No UserANs can be marked up.');
-    // Validate usernames
-    // Note: When we canonicalize usernames, capitalizing their first letters isn't enough because there're cases in which
-    // the first letter isn't capitalized (e.g. [[User:გასპუერა]]; cf. "Გასპუერა"). Thus create a username mapping object
-    // here to format the usernames collected from UserANs.
-    const usernameMap = await mapUsernames(users);
-    if (Object.keys(usernameMap).length) {
-        UserAN.forEach(({ info }) => {
-            if (usernameMap[info.user]) {
-                info.user = usernameMap[info.user];
-            }
-        });
-    }
     // Check if the users and IPs in the arrays are locally blocked
     const [bkUsers, bkIps] = await Promise.all([queryBlockedUsers(users, pagetitle === ANS), queryBlockedIps(ips)]);
     const blockInfo = { ...bkUsers, ...bkIps };
@@ -682,6 +671,14 @@ async function markup(pagetitle, checkGlobal) {
     await lib.edit(params);
 }
 exports.markup = markup;
+/**
+ * Uppercase the first character if not a Gerogean letter.
+ * @param str
+ * @returns
+ */
+function ucfirst(str) {
+    return /^[\u10A0-\u10FF]/.test(str) ? str : (0, string_1.ucFirst)(str);
+}
 /** JSON timestamp passed to the API as a list=logevents query parameter (leend). Look only for log entries newer than this timestamp. */
 let lookedUntil = '';
 /** Query the API and update `LogIDList`. */
@@ -776,50 +773,6 @@ async function scrapeUsernameFromLogid(logid) {
         default:
     }
     return username;
-}
-/**
- * Create a username mapping object via the API.
- * @param usersArr
- * @returns An object keyed by usernames that need to be mapped an valued by canonical usernames.
- * Can be an empty object if no mapping is necessary.
- */
-async function mapUsernames(usersArr) {
-    let validIndex = usersArr.length;
-    if (!validIndex)
-        return {};
-    const params = {
-        action: 'query',
-        list: 'users',
-        ususers: usersArr,
-        formatversion: '2'
-    };
-    const response = await lib.massRequest(params, 'ususers');
-    const resUsers = response.reduce((acc, res) => {
-        // Flat the response array
-        const users = res && res.query && res.query.users;
-        if (validIndex !== usersArr.length) {
-            // If validIndex has ever been updated, exit loop
-            return acc;
-        }
-        else if (Array.isArray(users)) {
-            acc = acc.concat(users);
-        }
-        else {
-            // If res.query.users isn't an array of objects, limit the usersArr index to the length of the current acc
-            validIndex = acc.length;
-        }
-        return acc;
-    }, []);
-    const ret = {};
-    for (let i = 0; i < validIndex; i++) {
-        const resObj = resUsers[i];
-        const ufName = usersArr[i];
-        const fName = resObj.name;
-        if (!resObj.missing && ufName !== fName) {
-            ret[ufName] = fName;
-        }
-    }
-    return ret;
 }
 /** Get the local block statuses of registered users. */
 async function queryBlockedUsers(usersArr, isANS) {
@@ -991,10 +944,15 @@ async function queryLockedUsers(usersArr) {
     const response = await lib.massRequest(params, ['agufrom', 'aguto'], 1);
     const lockedDate = getBlockedDate();
     return response.reduce((acc, res, i) => {
-        const resLck = res && res.query && res.query.globalallusers;
-        if (!resLck || !resLck[0])
-            return acc;
         const username = usersArr[i];
+        const resLck = res && res.query && res.query.globalallusers;
+        if (!resLck) {
+            return acc;
+        }
+        else if (!resLck[0]) {
+            (0, server_1.log)('User:' + username + ' doesn\'t seem to exist.');
+            return acc;
+        }
         if (resLck[0].locked === '') {
             acc[username] = {
                 date: lockedDate,

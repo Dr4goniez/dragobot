@@ -5,12 +5,11 @@ import {
 	ApiResponse,
 	ApiParamsQueryLogEvents,
 	ApiResponseQueryListLogevents,
-	ApiParamsQueryUsers,
-	ApiResponseQueryListUsers,
 	ApiParamsEditPage,
 	ApiResponseQueryListBlocks,
 	ApiParamsQueryBlocks
 } from '.';
+import { ucFirst } from './string';
 
 /** Object keyed by IDs and valued by usernames. */
 interface IdObject {
@@ -282,7 +281,7 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 				}
 				return sectionTitle; // Supposed never to be an empty string
 			})(),
-			user: user.replace(/_/g, ' '),
+			user: ucfirst(user.replace(/_/g, ' ')),
 			type: typeVal,
 			logid,
 			diffid,
@@ -363,19 +362,6 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 	});
 	if (!users.length && !ips.length) return log('Procedure cancelled: No UserANs can be marked up.');
-
-	// Validate usernames
-	// Note: When we canonicalize usernames, capitalizing their first letters isn't enough because there're cases in which
-	// the first letter isn't capitalized (e.g. [[User:გასპუერა]]; cf. "Გასპუერა"). Thus create a username mapping object
-	// here to format the usernames collected from UserANs.
-	const usernameMap = await mapUsernames(users);
-	if (Object.keys(usernameMap).length) {
-		UserAN.forEach(({info}) => {
-			if (usernameMap[info.user]) {
-				info.user = usernameMap[info.user];
-			}
-		});
-	}
 
 	// Check if the users and IPs in the arrays are locally blocked
 	const [bkUsers, bkIps] = await Promise.all([queryBlockedUsers(users, pagetitle === ANS), queryBlockedIps(ips)]);
@@ -722,6 +708,15 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 
 }
 
+/**
+ * Uppercase the first character if not a Gerogean letter.
+ * @param str
+ * @returns
+ */
+function ucfirst(str: string): string {
+	return /^[\u10A0-\u10FF]/.test(str) ? str : ucFirst(str);
+}
+
 /** JSON timestamp passed to the API as a list=logevents query parameter (leend). Look only for log entries newer than this timestamp. */
 let lookedUntil = '';
 
@@ -826,57 +821,6 @@ async function scrapeUsernameFromLogid(logid: string): Promise<string|null> {
 		default:
 	}
 	return username;
-
-}
-
-/** Object that maps usernames in an uncanonical format to ones in the canonical format. */
-interface UsernameMap {
-	[username: string]: string;
-}
-/**
- * Create a username mapping object via the API.
- * @param usersArr
- * @returns An object keyed by usernames that need to be mapped an valued by canonical usernames.
- * Can be an empty object if no mapping is necessary.
- */
-async function mapUsernames(usersArr: string[]): Promise<UsernameMap> {
-
-	let validIndex = usersArr.length;
-	if (!validIndex) return {};
-
-	const params: ApiParamsQueryUsers = {
-		action: 'query',
-		list: 'users',
-		ususers: usersArr,
-		formatversion: '2'
-	};
-	const response = await lib.massRequest(params, 'ususers');
-
-	const resUsers = response.reduce((acc: ApiResponseQueryListUsers[], res) => {
-		// Flat the response array
-		const users = res && res.query && res.query.users;
-		if (validIndex !== usersArr.length) {
-			// If validIndex has ever been updated, exit loop
-			return acc;
-		} else if (Array.isArray(users)) {
-			acc = acc.concat(users);
-		} else {
-			// If res.query.users isn't an array of objects, limit the usersArr index to the length of the current acc
-			validIndex = acc.length;
-		}
-		return acc;
-	}, []);
-	const ret: UsernameMap = {};
-	for (let i = 0; i < validIndex; i++) {
-		const resObj = resUsers[i];
-		const ufName = usersArr[i];
-		const fName = resObj.name;
-		if (!resObj.missing && ufName !== fName) {
-			ret[ufName] = fName;
-		}
-	}
-
-	return ret;
 
 }
 
@@ -1070,9 +1014,14 @@ async function queryLockedUsers(usersArr: string[]): Promise<LockInfo> {
 
 	const lockedDate = getBlockedDate();
 	return response.reduce((acc: LockInfo, res, i) => {
-		const resLck = res && res.query && res.query.globalallusers;
-		if (!resLck || !resLck[0]) return acc;
 		const username = usersArr[i];
+		const resLck = res && res.query && res.query.globalallusers;
+		if (!resLck) {
+			return acc;
+		} else if (!resLck[0]) {
+			log('User:' + username + ' doesn\'t seem to exist.');
+			return acc;
+		}
 		if (resLck[0].locked === '') {
 			acc[username] = {
 				date: lockedDate,
