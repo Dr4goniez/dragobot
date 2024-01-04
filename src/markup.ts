@@ -176,7 +176,9 @@ export async function markup(pagetitle: string, checkGlobal: boolean): Promise<v
 		let typeKey = '';
 		let typeVal = '';
 		let hasEmptyManualStatusArg = false;
-		for (const {name, value} of Temp.args) {
+		for (let {name, value} of Temp.args) {
+			name = lib.clean(name);
+			value = lib.clean(value);
 			if (name === '2' && value) {
 				return acc;
 			} else if (name === 'bot') {

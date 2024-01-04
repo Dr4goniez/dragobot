@@ -31,6 +31,7 @@ export interface ApiResponse {
 	purge?: ApiResponsePurge[];
 	query?: ApiResponseQuery;
 	parse?: ApiResponseParse;
+	sitematrix?: ApiResponseSitematrix;
 }
 export interface ApiResponseError {
 	code: string;
@@ -223,7 +224,28 @@ export interface ApiResponsePurge {
 // export interface ApiResponseSetnotificationtimestamp {}
 // export interface ApiResponseSetpagelanguage {}
 // export interface ApiResponseShortenurl {}
-// export interface ApiResponseSitematrix {}
+interface ApiResponseSitematrixSite {
+	url: string;
+	dbname: string;
+	code: string;
+	lang?: string;
+	sitename: string;
+	closed?: boolean;
+	fishbowl?: boolean;
+	private?: boolean;
+}
+export type ApiResponseSitematrix = {
+	count: number;
+	specials: ApiResponseSitematrixSite[];
+} & {
+	[index: string]: {
+		code: string;
+		name: string;
+		site: ApiResponseSitematrixSite[];
+		dir: string;
+		localname: string;
+	};	
+};
 // export interface ApiResponseSpamblacklist {}
 // export interface ApiResponseStreamconfigs {}
 // export interface ApiResponseStrikevote {}
@@ -311,6 +333,7 @@ export interface ApiResponseQuery {
 	// tags?: ApiResponseQueryListTags;
 	// threads?: ApiResponseQueryListThreads;
 	usercontribs?: ApiResponseQueryListUsercontribs[];
+	usergroups?: ApiResponseMetaSiteinfoUsergroups[];
 	users?: ApiResponseQueryListUsers[];
 	// watchlist?: ApiResponseQueryListWatchlist;
 	// watchlistraw?: ApiResponseQueryListWatchlistraw;
@@ -644,6 +667,12 @@ export interface ApiResponseQueryListUsers {
 // export interface ApiResponseQueryListWatchlistraw {}
 // export interface ApiResponseQueryListWblistentityusage {}
 // export interface ApiResponseQueryListWikisets {}
+
+// ******************* Action: Query => Meta *******************
+export interface ApiResponseMetaSiteinfoUsergroups {
+	name: string;
+	rights: string[];
+}
 
 /**
  * API parameters

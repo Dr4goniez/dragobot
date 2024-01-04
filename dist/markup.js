@@ -153,7 +153,9 @@ async function markup(pagetitle, checkGlobal) {
         let typeKey = '';
         let typeVal = '';
         let hasEmptyManualStatusArg = false;
-        for (const { name, value } of Temp.args) {
+        for (let { name, value } of Temp.args) {
+            name = lib.clean(name);
+            value = lib.clean(value);
             if (name === '2' && value) {
                 return acc;
             }
