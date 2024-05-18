@@ -58,7 +58,9 @@ export async function removePp(botRunTs?: string): Promise<void> {
 	const transcludingPp = result.reduce((acc: string[], arr) => { // flat and remove duplicates
 		if (arr) {
 			arr.forEach((pagetitle) => {
-				if (!acc.includes(pagetitle)) acc.push(pagetitle);
+				if (!acc.includes(pagetitle) && !/^利用者:.+\.(js|css|json)$/.test(pagetitle)) {
+					acc.push(pagetitle);
+				}
 			});
 		}
 		return acc;
@@ -125,7 +127,7 @@ async function filterProtected(pagetitles: string[]): Promise<string[]|null> {
 		} else {
 			resPgs.forEach((obj) => {
 				const protectionArray = obj.protection || [];
-				if (obj.title && !titles.includes(obj.title) && !/^利用者:.+\.(js|css|json)$/.test(obj.title) && isProtected(protectionArray)) {
+				if (obj.title && !titles.includes(obj.title) && isProtected(protectionArray)) {
 					titles.push(obj.title);
 				}
 			});

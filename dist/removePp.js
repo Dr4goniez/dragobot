@@ -78,8 +78,9 @@ async function removePp(botRunTs) {
     const transcludingPp = result.reduce((acc, arr) => {
         if (arr) {
             arr.forEach((pagetitle) => {
-                if (!acc.includes(pagetitle))
+                if (!acc.includes(pagetitle) && !/^利用者:.+\.(js|css|json)$/.test(pagetitle)) {
                     acc.push(pagetitle);
+                }
             });
         }
         return acc;
@@ -145,7 +146,7 @@ async function filterProtected(pagetitles) {
         else {
             resPgs.forEach((obj) => {
                 const protectionArray = obj.protection || [];
-                if (obj.title && !titles.includes(obj.title) && !/^利用者:.+\.(js|css|json)$/.test(obj.title) && isProtected(protectionArray)) {
+                if (obj.title && !titles.includes(obj.title) && isProtected(protectionArray)) {
                     titles.push(obj.title);
                 }
             });
