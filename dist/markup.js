@@ -152,6 +152,7 @@ async function markup(pagetitle, checkGlobal) {
         let user = '';
         let typeKey = '';
         let typeVal = '';
+        let botTs = '';
         let hasEmptyManualStatusArg = false;
         for (let { name, value } of Temp.args) {
             name = lib.clean(name);
@@ -164,6 +165,10 @@ async function markup(pagetitle, checkGlobal) {
                     return acc;
                 }
                 else {
+                    let m;
+                    if ((m = value.match(/20\d{2}-(?:0[1-9]|1[0-2])-(?:[0-2]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\dZ?/))) {
+                        botTs = m[0];
+                    }
                     Temp.deleteArg(name);
                 }
             }
@@ -171,8 +176,8 @@ async function markup(pagetitle, checkGlobal) {
                 user = value;
             }
             else if (/^(t|[tT]ype)$/.test(name)) {
-                typeVal = value.toLowerCase();
                 typeKey = name;
+                typeVal = value.toLowerCase();
             }
             else if (/^(状態|s|[sS]tatus)$/.test(name)) {
                 hasEmptyManualStatusArg = !value;
@@ -192,8 +197,13 @@ async function markup(pagetitle, checkGlobal) {
         else if (lib.isIPv6Address(user, true)) {
             user = user.toUpperCase();
         }
+        const isIp = lib.isIPAddress(user, true);
         typeKey = typeKey || 't';
-        typeVal = typeVal || 'user2';
+        typeVal = typeVal || (isIp ? 'ip2' : 'user2');
+        if (!isIp && /[/@#<>[\]|{}:]|^(\d{1,3}\.){3}\d{1,3}$/.test(user)) {
+            // Ensure the username doesn't contain invalid characters
+            return acc;
+        }
         // Type-dependent modifications
         let modified = false;
         let logid = '';
@@ -202,7 +212,7 @@ async function markup(pagetitle, checkGlobal) {
             case 'user2':
             case 'unl':
             case 'usernolink':
-                if (lib.isIPAddress(user, true)) {
+                if (isIp) {
                     typeVal = 'ip2';
                     Temp.addArgs([{ name: typeKey, value: typeVal }]);
                     modified = true;
@@ -210,7 +220,7 @@ async function markup(pagetitle, checkGlobal) {
                 break;
             case 'ip2':
             case 'ipuser2':
-                if (!lib.isIPAddress(user, true)) {
+                if (!isIp) {
                     typeVal = 'user2';
                     Temp.addArgs([{ name: typeKey, value: typeVal }]);
                     modified = true;
@@ -223,15 +233,15 @@ async function markup(pagetitle, checkGlobal) {
                     user = LogIDList.evaluate(user) || '';
                 }
                 break;
-            case 'dif':
             case 'diff':
+            case 'diffid':
                 if (/^\d+$/.test(user)) {
                     diffid = user;
                     user = DiffIDList.evaluate(user) || '';
                 }
                 break;
             default: // 'none' or Invalid typeVal (the block status can't be checked)
-                if (lib.isIPAddress(user, true)) {
+                if (isIp) {
                     typeVal = 'ip2';
                     Temp.addArgs([{ name: typeKey, value: typeVal }]);
                     modified = true;
@@ -270,6 +280,7 @@ async function markup(pagetitle, checkGlobal) {
             type: typeVal,
             logid,
             diffid,
+            after: botTs,
             // The following gets a value if the user turns out to be blocked
             duration: '',
             date: '',
@@ -352,10 +363,42 @@ async function markup(pagetitle, checkGlobal) {
     const blockInfo = { ...bkUsers, ...bkIps };
     const toBeReblocked = UserAN.reduce((acc, { info }) => {
         // Process the return value and at the same time filter out users that need to be reblocked
-        const blck = blockInfo[info.user];
-        if (!blck)
+        let blck = blockInfo[info.user];
+        if (!blck) {
             return acc;
-        const newlyReported = lib.compareTimestamps(info.timestamp, blck.timestamp, 5 * 60 * 1000) >= 0;
+        }
+        else if (Array.isArray(blck)) { // IP
+            if (blck.length > 1) {
+                // Get the narrowest block applied after the report
+                let idx = null;
+                let narrowestSubnet;
+                for (let i = 0; i < blck.length; i++) {
+                    const { timestamp, user } = blck[i];
+                    const newlyReported = lib.compareTimestamps(info.timestamp, info.after || timestamp, 5 * 60 * 1000) >= 0;
+                    const m = user.match(/\/(\d{1,3})$/);
+                    const subnet = m ? parseInt(m[1]) : user.includes('.') ? 32 : 128;
+                    if (newlyReported) {
+                        if (!narrowestSubnet || narrowestSubnet < subnet) {
+                            idx = i;
+                            narrowestSubnet = subnet;
+                        }
+                    }
+                }
+                if (idx === null) {
+                    // None of the block logs is a new one
+                    acc.push({
+                        user: info.user,
+                        timestamp: info.after || info.timestamp
+                    });
+                    return acc;
+                }
+                blck = blck[idx];
+            }
+            else {
+                blck = blck[0]; // Note: Length is more than 0
+            }
+        }
+        const newlyReported = lib.compareTimestamps(info.timestamp, info.after || blck.timestamp, 5 * 60 * 1000) >= 0;
         if (newlyReported) {
             const isIp = lib.isIPAddress(info.user, true);
             const nousertalk = !blck.allowusertalk;
@@ -382,7 +425,7 @@ async function markup(pagetitle, checkGlobal) {
         else {
             acc.push({
                 user: info.user,
-                timestamp: info.timestamp
+                timestamp: info.after || info.timestamp
             });
         }
         return acc;
@@ -511,8 +554,8 @@ async function markup(pagetitle, checkGlobal) {
         const gUsers = [];
         const gIps = [];
         UserAN.forEach(({ info }) => {
-            const { user, date } = info;
-            if (date) { // Updated UserANs have a nonempty 'date' property
+            const { user, date, after } = info;
+            if (date || after) { // Ignore if locally blocked or has a |bot=TIMESTAMP parameter
                 return;
             }
             else if (lib.isIPAddress(user, true)) {
@@ -527,7 +570,7 @@ async function markup(pagetitle, checkGlobal) {
         const [gLkUsers, gBkIps] = await Promise.all([queryLockedUsers(gUsers), queryGloballyBlockedIps(gIps)]);
         if (Object.keys(gLkUsers).length || Object.keys(gBkIps).length) {
             UserAN.forEach(({ info }) => {
-                if (info.date)
+                if (info.date || info.after)
                     return;
                 const lockInfo = gLkUsers[info.user];
                 const gBlockInfo = gBkIps[info.user];
@@ -668,7 +711,7 @@ async function markup(pagetitle, checkGlobal) {
         starttimestamp: lr.curtimestamp,
     };
     if (modOnly) {
-        params.bot = true; // For some reason the edit is awalys marked as a bot edit if "bot: modOnly" is included in the params
+        params.bot = true;
     }
     await lib.edit(params);
 }
@@ -810,19 +853,16 @@ async function queryBlockedIps(ipsArr) {
         action: 'query',
         list: 'blocks',
         bkprop: 'user|timestamp|expiry|restrictions|flags',
-        bklimit: 1,
         bkip: ipsArr,
         formatversion: '2'
     };
     const response = await lib.massRequest(params, 'bkip', 1);
     return response.reduce((acc, res, i) => {
         const ip = ipsArr[i];
-        const resBlck = res && res.query && res.query.blocks || [];
-        const ret = resBlck.reduce((accBl, blck) => {
-            accBl[ip] = blck;
-            return accBl;
-        }, Object.create(null));
-        Object.assign(acc, ret);
+        const blck = res && res.query && res.query.blocks;
+        if (blck && blck.length) {
+            acc[ip] = blck;
+        }
         return acc;
     }, Object.create(null));
 }

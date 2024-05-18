@@ -446,11 +446,11 @@ export interface ApiResponseQueryListBlocks {
 	allowusertalk: boolean;
 	partial: boolean;
 	restrictions?: [] | {
-		pages?: Array<{
+		pages?: {
 			id: number;
 			ns: number;
 			title: string;
-		}>;
+		}[];
 		namespaces?: number[];
 		actions?: string[];
 	};

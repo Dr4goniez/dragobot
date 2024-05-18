@@ -292,76 +292,87 @@ exports.continuedRequest = continuedRequest;
  * an array can be passed to the second parameter).
  *
  * @param params The request parameters.
- * @param batchParam The name of the multi-value field (can be an array).
- * @param apilimit
- * Optional splicing number (default: `500/50`). The `**limit` parameter, if there is any, is automatically set to `max`
- * if this argument has the value of either `500` or `50`. It also accepts a unique value like `1`, in cases such as
- * {@link https://www.mediawiki.org/w/api.php?action=help&modules=query%2Bblocks |list=blocks} with a `bkip` parameter
- * (which only allows one IP to be specified).
+ * @param batchKeys The name of the multi-value field (can be an array).
+ * @param splicer How many elements of the multi-value field should be queried in one API request (default: `500/50`).
+ * For example:
+ * ```
+ * massRequest({
+ * 	action: 'query',
+ * 	titles: ['A', 'B', 'C', 'D', '...'],
+ * 	formatversion: '2'
+ * }, 'titles', 10);
+ * ```
+ * This divides the array in the `titles` field into 10 elements each.
  * @returns
  * Always an array: Elements are either `ApiResponse` (success) or `null` (failure). If the multi-value field is an empty array,
  * the return array will also be empty.
  */
-function massRequest(params, batchParams, apilimit = (0, mw_1.isBot)() ? 500 : 50) {
-    // Initialize variables
-    params = Object.assign({}, params);
-    const nonArrayBatchParams = [];
-    // Get the array to be used for the batch operation
-    const batchKeys = Array.isArray(batchParams) ? batchParams : [batchParams];
-    const batchArrays = Object.keys(params).reduce((acc, key) => {
-        if (batchKeys.includes(key)) {
+function massRequest(params, batchKeys, splicer) {
+    const apilimit = (0, mw_1.isBot)() ? 500 : 50;
+    if (splicer) {
+        if (splicer > apilimit || splicer < 0 || !Number.isInteger(splicer)) {
+            throw new Error('"splicer" must be a positive integer less than or equal to ' + apilimit + '.');
+        }
+    }
+    else {
+        if (splicer === 0) {
+            console.log('"splicer" has been substituted with ' + apilimit + ' because it cannot be 0.');
+        }
+        splicer = apilimit;
+    }
+    // Cast "batchKeys" to an array
+    batchKeys = Array.isArray(batchKeys) ? batchKeys : [batchKeys];
+    if (!batchKeys.length) {
+        throw new Error('An empty array has been passed to "batchKeys".');
+    }
+    // Get a copy of the multi-value field(s)
+    const batchValues = Object.keys(params).reduce((acc, key) => {
+        if (params[key] && batchKeys.includes(key)) {
             if (Array.isArray(params[key])) {
-                acc.push(params[key].slice());
+                if (acc) {
+                    if (!arraysEqual(acc, params[key], true)) {
+                        throw new Error('The arrays passed as multi-value fields must be indentical.');
+                    }
+                }
+                else {
+                    acc = params[key].slice();
+                }
             }
             else {
-                nonArrayBatchParams.push(key);
+                console.log(batchKeys);
+                throw new Error('The batch param(s) (' + batchKeys.join(', ') + ') must be arrays.');
             }
         }
-        else if (/limit$/.test(key) && (apilimit === 500 || apilimit === 50)) {
-            // If this is a '**limit' parameter and the value is the default one, set it to 'max'
-            params[key] = 'max';
-        }
         return acc;
-    }, []);
-    if (nonArrayBatchParams.length) {
-        throw new Error('The batch param(s) (' + nonArrayBatchParams.join(', ') + ') must be arrays.');
+    }, null);
+    if (!batchValues) {
+        throw new Error('No multi-value field found.');
     }
-    else if (!batchKeys.length) {
-        throw new Error('There is a problem with the value of the "batchParams" parameter.');
-    }
-    else if (!batchArrays.length) {
-        throw new Error('The passed API params do not contain arrays for the batch operation.');
-    }
-    else if (batchArrays.length > 1 && !batchArrays.slice(1).every((arr) => arraysEqual(batchArrays[0], arr))) {
-        throw new Error('The arrays passed for the batch operation must all be non-distinct with each other.');
-    }
-    // Final check
-    const batchArray = batchArrays[0];
-    if (!batchArray.length) {
+    else if (!batchValues.length) {
         console.log('An empty array has been passed for the batch operation.');
         return Promise.resolve([]);
     }
-    // Send API requests
+    // Create an array of API params
+    const batchParams = [];
+    while (batchValues.length) {
+        const batchArrayStr = batchValues.splice(0, splicer).join('|');
+        batchParams.push(Object.assign({}, params, batchKeys.reduce((acc, key) => {
+            acc[key] = batchArrayStr;
+            return acc;
+        }, Object.create(null))));
+    }
+    // Send API requests and return the responses
     const mw = (0, mw_1.getMw)();
-    const req = (reqParams) => {
-        return mw.request(reqParams)
+    const promisifiedResult = batchParams.reduce((acc, obj) => {
+        acc.push(mw.request(obj)
             .then((res) => res || null)
             .catch((err) => {
             (0, server_1.log)(err && err.info || 'mw.request reached the catch block.');
             return null;
-        });
-    };
-    const result = [];
-    while (batchArray.length !== 0) {
-        const batchArrayStr = batchArray.splice(0, apilimit).join('|');
-        Object.assign(// Overwrite the batch parameters with a stringified batch array 
-        params, batchKeys.reduce((acc, key) => {
-            acc[key] = batchArrayStr;
-            return acc;
-        }, Object.create(null)));
-        result.push(req(params));
-    }
-    return Promise.all(result);
+        }));
+        return acc;
+    }, []);
+    return Promise.all(promisifiedResult);
 }
 exports.massRequest = massRequest;
 // ****************************************** SYNCHRONOUS FUNCTIONS ******************************************
