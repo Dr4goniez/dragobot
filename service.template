@@ -1,2 +1,2 @@
 backend: kubernetes
-type: node16
+type: node18

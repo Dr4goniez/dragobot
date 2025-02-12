@@ -1,0 +1,9 @@
+# This will be at $HOME/service.template, not in the root directory of this repo
+service.template
+
+# User information
+src/my.ts
+dist/my.js
+
+# Test or draft modules
+src/test.ts
