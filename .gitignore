@@ -1,6 +1,9 @@
 # This will be at $HOME/service.template, not in the root directory of this repo
 service.template
 
+# Log outputs
+logs
+
 # User information
 src/my.ts
 dist/my.js

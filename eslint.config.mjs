@@ -7,4 +7,23 @@ export default [
   {languageOptions: { globals: globals.browser }},
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    rules: {
+      // semi
+      "semi": "off",
+      "@typescript-eslint/semi": "warn",
+      // no-unused-vars
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+            "argsIgnorePattern": "^_",
+            "varsIgnorePattern": "^_",
+            "caughtErrorsIgnorePattern": "^_"
+        }
+      ],
+      // no-explicit-any
+      "@typescript-eslint/no-explicit-any": "off",
+    }
+  }
 ];
