@@ -15,12 +15,51 @@ export class WikitextE {
 	 */
 	private _tags: Tag[];
 
-	constructor(content: string) {
+	/**
+	 * @param content A wikitext content.
+	 * @param options Options for the initialization of the instance.
+	 */
+	constructor(content: string, options: WikitextOptions = {}) {
+
 		this._content = content;
 
 		// Parse the wikitext for HTML tags as soon as the instance is initialized,
 		// because they are necessary for other parsing operations
 		this._tags = WikitextE.parseTags(content);
+
+		// Initialize the names of tags in which elements shouldn't be parsed
+		const defaultSkipTags =
+			options.overwriteSkipTags ?
+			[] :
+			['!--', 'nowiki', 'pre', 'syntaxhighlight', 'source', 'math'];
+		if (options.skipTags) {
+			defaultSkipTags.push(
+				...options.skipTags.reduce((acc: string[], el: unknown) => {
+					if (typeof el === 'string') {
+						acc.push(el.toLowerCase());
+					}
+					return acc;
+				}, [])
+			);
+		}
+		this.skipTags = [...new Set(defaultSkipTags)];
+
+	}
+
+	/**
+	 * Remove unicode bidirectional characters and trim a string.
+	 *
+	 * "Unicode bidirectional characters" are characters that can slip into cut-and-pasted texts,
+	 * represented as red dots in WikiEditor.
+	 * 
+	 * @param str Input string.
+	 * @param trim Whether to trim the string. Defaults to `true`.
+	 * @returns
+	 */
+	static clean(str: string, trim = true): string {
+		// The regex is from MediaWikiTitleCodec::splitTitleString in MediaWiki core
+		str = str.replace(/[\u200E\u200F\u202A-\u202E]+/g, '');
+		return trim ? str.trim() : str;
 	}
 
 	/**
@@ -38,6 +77,55 @@ export class WikitextE {
 			Object.getPrototypeOf(obj),
 			Object.getOwnPropertyDescriptors(obj)
 		));
+	}
+
+	/**
+	 * List of valid HTML tag names that can be used in wikitext.
+	 * All tag names are in lowercase.
+	 */
+	private static readonly _validTags = [
+		/**
+		 * Standard HTML tags
+		 * @see https://www.mediawiki.org/wiki/Help:HTML_in_wikitext
+		 */
+		'abbr', 'b', 'bdi', 'bdo', 'big', 'blockquote', 'br', 'caption', 'cite', 'code', 'data', 'dd', 'del',
+		'dfn', 'div', 'dl', 'dt', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'ins', 'kbd', 'li',
+		'link', 'mark', 'meta', 'ol', 'p', 'pre', 'q', 'rp', 'rt', 'ruby', 's', 'samp', 'small', 'span',
+		'strong', 'sub', 'sup', 'table', 'td', 'th', 'time', 'tr', 'u', 'ul', 'var', 'wbr',
+		// Deprecated HTML tags
+		'center', 'font', 'rb', 'rtc', 'strike', 'tt',
+		/**
+		 * MediaWiki parser extension tags
+		 * @see https://www.mediawiki.org/wiki/Parser_extension_tags
+		 */
+		'categorytree', 'ce', 'chem', 'charinsert', 'gallery', 'graph', 'hiero', 'imagemap', 'indicator',
+		'inputbox', 'langconvert', 'mapframe', 'maplink', 'math', 'nowiki', 'poem', /*'pre',*/ 'ref', 'references',
+		'score', 'section', 'source', 'templatedata', 'timeline',
+		// Other MediaWiki tags, added by extensions
+		'dynamicpagelist', 'languages', 'rss', 'talkpage', 'thread', 'html',
+		// Special MediaWiki inclusion/exclusion tags
+		'includeonly', 'noinclude', 'onlyinclude',
+		// Tags from Extension:Translate
+		'translate', 'tvar',
+		// Comment tag
+		'!--'
+	];
+
+	/**
+	 * Returns a list of valid HTML tag names that can be used in wikitext.
+	 * @returns Array of tag names (all elements are in lowercase).
+	 */
+	static get validTags(): string[] {
+		return WikitextE._validTags.slice();
+	}
+
+	/**
+	 * Check whether a given tag name is valid in wikitext.
+	 * @param tagName The tag name to check.
+	 * @returns
+	 */
+	static isValidTag(tagName: string): boolean {
+		return WikitextE._validTags.includes(String(tagName).toLowerCase());
 	}
 
 	/**
@@ -335,6 +423,227 @@ export class WikitextE {
 
 	}
 
+	/**
+	 * The names of tags in which elements shouldn't be parsed.
+	 * 
+	 * The default values are `!--`, `nowiki`, `pre`, `syntaxhighlight`, `source`, and `math`.
+	 */
+	private skipTags: string[];
+
+	/**
+	 * Add tags in which elements shouldn't be parsed, if the tags are not already registered.
+	 * @param skipTags Array of tag names to add.
+	 * @returns The current WikitextE instance.
+	 */
+	addSkipTags(skipTags: string[]): WikitextE {
+		skipTags.forEach((el: unknown) => {
+			if (typeof el === 'string' && !skipTags.includes((el = el.toLowerCase()))) {
+				this.skipTags.push(el as string);
+			}
+		});
+		return this;
+	}
+
+	/**
+	 * Set tags in which elements shouldn't be parsed, overwriting any existing settings.
+	 * @param skipTags Array of tag names to set.
+	 * @returns The current WikitextE instance.
+	 */
+	setSkipTags(skipTags: string[]): WikitextE {
+		this.skipTags = skipTags.reduce((acc: string[], el: unknown) => {
+			if (typeof el === 'string') {
+				acc.push(el.toLowerCase());
+			}
+			return acc;
+		}, []);
+		return this;
+	}
+
+	/**
+	 * Remove tags from the list of tags in which elements shouldn't be parsed.
+	 * @param skipTags Array of tag names to remove.
+	 * @returns The current WikitextE instance.
+	 */
+	removeSkipTags(skipTags: string[]): WikitextE {
+		const rSkipTags = new RegExp(`^(?:${skipTags.join('|')})$`);
+		this.skipTags = this.skipTags.filter((el) => rSkipTags.test(el));
+		return this;
+	}
+
+	/**
+	 * Get a copy of the names of currently registered tags in which elements shouldn't be parsed.
+	 * @returns An array of the current tag names.
+	 */
+	getSkipTags(): string[] {
+		return [...this.skipTags];
+	}
+
+	/**
+	 * Generate a function that evaluates whether a string starting at an index and ending at another
+	 * is inside a tag in which that string shouldn't be parsed.
+	 * @returns A function that checks whether a given range is inside any tag to skip parsing.
+	 */
+	private getSkipPredicate(): (startIndex: number, endIndex: number) => boolean {
+
+		const rSkipTags = new RegExp(`^(?:${this.skipTags.join('|')})$`, 'i');
+
+		// Create an array to store the start and end indices of tags to skip
+		const indexMap = this._tags.reduce((acc: number[][], tagObj) => {
+			// If the tag is in the skip list and doesn't overlap with existing ranges, add its range
+			if (rSkipTags.test(tagObj.name)) {
+				// Check if the current range is already covered by an existing range
+				const isCovered = acc.some(([startIndex, endIndex]) => startIndex < tagObj.startIndex && tagObj.endIndex < endIndex);
+				if (!isCovered) {
+					acc.push([tagObj.startIndex, tagObj.endIndex]);
+				}
+			}
+			return acc;
+		}, []);
+
+		// Return a predicate function that checks if a given range is inside any of the skip tag ranges
+		return (startIndex: number, endIndex: number) => {
+			return indexMap.some(([skipStartIndex, skipEndIndex]) => skipStartIndex < startIndex && endIndex < skipEndIndex);
+		};
+
+	}
+
+	/**
+	 * Regular expressions to parse `==heading==`s.
+	 *
+	 * Notes on the wiki markup of headings:
+	 * * `== 1 ===`: `<h2>1 =</h2>` (left equals: 2, right equals: 3)
+	 * * `=== 1 ==`: `<h2>= 1</h2>` (left equals: 3, right equals: 2)
+	 * * `== 1 ==\S+`: Not recognized as the beginning of a section (but see below)
+	 * * `== 1 ==<!--string-->`: `<h2>1</h2>`
+	 * * `======= 1 =======`: `<h6>= 1 =</h6>` (left equals: 7, right equals: 7)
+	 *
+	 * Capture groups:
+	 * * `$1`: Left equals
+	 * * `$2`: Heading text
+	 * * `$3`: Right equals
+	 * * `$4`: Remaining characters
+	 *
+	 * In `$4`, the only characters that can appear are:
+	 * * `[\t\n\u0020\u00a0]` (i.e. tab, new line, space, and non-breaking space)
+	 *
+	 * Note that this is not the same as the JS `\s`, which is equivalent to
+	 * `[\t\n\v\f\r\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]`.
+	 */
+	private static readonly sectionRegex = {
+		heading: /^(=+)(.+?)(=+)([^\n]*)\n?$/gm,
+		whitespace: /[\t\u0020\u00a0]+/g
+	};
+
+	/**
+	 * Parse sections in the wikitext.
+	 * @returns Array of parsed sections.
+	 */
+	parseSections(): Section[] {
+
+		const isInSkipRange = this.getSkipPredicate();
+
+		// Extract HTML-style headings (h1–h6)
+		// TODO: Should we deal with cases like "this <span>is</span> a heading" and "this [[is]] a heading"?
+		const headings = this._tags.reduce((acc: Heading[], tagObj) => {
+			const m = /^h([1-6])$/.exec(tagObj.name);
+			if (m && !isInSkipRange(tagObj.startIndex, tagObj.endIndex)) {
+				acc.push({
+					text: tagObj.text,
+					title: WikitextE.clean(removeComments(tagObj.content!)),
+					level: parseInt(m[1]),
+					index: tagObj.startIndex
+				});
+			}
+			return acc;
+		}, []);
+
+		// Parse wikitext-style headings (==heading==)
+		const wikitext = this.content;
+		let m;
+		while ((m = WikitextE.sectionRegex.heading.exec(wikitext))) {
+
+			// If `$4` isn't empty or the heading is within a skip range, ignore it
+			const m4 = removeComments(m[4]).replace(WikitextE.sectionRegex.whitespace, '');
+			if (m4 || isInSkipRange(m.index, m.index + m[0].length)) {
+				continue;
+			}
+
+			// Determine heading level (up to 6)
+			const level = Math.min(6, m[1].length, m[3].length);
+			const overflowLeft = Math.max(0, m[1].length - level);
+			const overflowRight = Math.max(0, m[3].length - level);
+			const title = '='.repeat(overflowLeft) + m[2] + '='.repeat(overflowRight);
+
+			headings.push({
+				text: m[0].trim(),
+				title: WikitextE.clean(removeComments(title)),
+				level,
+				index: m.index
+			});
+
+		}
+
+		// Sort headings by index and add the top section
+		headings.sort((a, b) => a.index - b.index);
+		headings.unshift({text: '', title: 'top', level: 1, index: 0}); // Top section
+
+		// Parse sections from the headings
+		const sections: Section[] = headings.map(({text, title, level, index}, i, arr) => {
+			const boundaryIdx = i === 0
+				? (arr.length > 1 ? 1 : -1) // If top section, next heading or no boundary
+				: arr.findIndex((obj, j) => j > i && obj.level <= level); // Find the next non-subsection
+
+			const content = wikitext.slice(
+				index,
+				boundaryIdx !== -1 ? arr[boundaryIdx].index : wikitext.length
+			);
+
+			return {
+				heading: text,
+				title,
+				level,
+				index: i,
+				startIndex: index,
+				endIndex: index + content.length,
+				content
+			};
+		});
+
+		return sections;
+
+	}
+
+}
+
+// Interfaces for constructor
+
+/**
+ * Options to initialize a {@link WikitextE} instance.
+ */
+export interface WikitextOptions {
+	/**
+	 * The names of HTML tags in which elements shouldn't be parsed.
+	 *
+	 * For example:
+	 *
+	 * `blah blah <!-- {{Template}} --> {{Template}} blah blah`
+	 *
+	 * In many cases, one would not want to parse the occurrence of `{{Template}}` in the comment tag.
+	 * Specify such tags to obtain the desired parsing results.
+	 *
+	 * The default tags in which elements aren't parsed are:
+	 * * `!--`, `nowiki`, `pre`, `syntaxhighlight`, `source`, and `math`.
+	 *
+	 * The tag names passed to this property will be merged into the default tags (unless {@link overwriteSkipTags})
+	 * is specified as `true`.
+	 */
+	skipTags?: string[];
+	/**
+	 * Whether to overwrite the default skip tags. If `true`, the array of strings passed to {@link skipTags}
+	 * will solely be used as the tags in which elements shouldn't be parsed (i.e. no merging with the default
+	 * tags).
+	 */
+	overwriteSkipTags?: boolean;
 }
 
 // Interfaces and private members for "parseTags"
@@ -454,3 +763,69 @@ export interface ParseTagsConfig {
  * @see WikitextE.modifyTags
  */
 export type TagModificationPredicate = (tags: Tag[]) => (string | null)[];
+
+// Interfaces and private members for "parseSections"
+
+function removeComments(str: string): string {
+	return str.replace(/<!--.*?-->/g, '');
+}
+
+interface Heading {
+	/**
+	 * The entire line of the heading, starting with `=` and ending with the right-most `=`.
+	 * Any leading/trailing whitespace characters are trimmed.
+	 */
+	text: string;
+	/**
+	 * The inner text of the heading (i.e., the content between the equal signs).
+	 * This could be different from the result of `action=parse` if it contains HTML tags or templates.
+	 */
+	title: string;
+	/**
+	 * The level of the heading, based on the number of `=` symbols.
+	 * For example, `==` is level 2, `===` is level 3, etc.
+	 */
+	level: number;
+	/**
+	 * The index (position) to the start of the heading in the wikitext.
+	 * This is the position of the first character of the heading line in the original text.
+	 */
+	index: number;
+}
+
+/**
+ * Object that holds information about a section, parsed from wikitext.
+ */
+export interface Section {
+	/**
+	 * `==heading==` or the outerHTML of a heading element. Any leading/trailing `\s`s are trimmed.
+	 * For the top section, the value is empty.
+	 */
+	heading: string;
+	/**
+	 * The title of the section. Could be different from the result of `action=parse` if it contains HTML tags or templates.
+	 * For the top section, the value is `top`.
+	 */
+	title: string;
+	/**
+	 * The level of the section (1 to 6). For the top section, the value is `1`.
+	 */
+	level: number;
+	/**
+	 * The index number of the section. This is the same as the `section` parameter of {@link https://www.mediawiki.org/wiki/API:Edit | the edit API}.
+	 * For the top section, the value is `0`.
+	 */
+	index: number;
+	/**
+	 * The index to the start of the section in the wikitext.
+	 */
+	startIndex: number;
+	/**
+	 * The index up to, but not including, the end of the section in the wikitext.
+	 */
+	endIndex: number;
+	/**
+	 * The content of the section including the heading.
+	 */
+	content: string;
+}
