@@ -51,7 +51,7 @@ export class WikitextE {
 	 *
 	 * "Unicode bidirectional characters" are characters that can slip into cut-and-pasted texts,
 	 * represented as red dots in WikiEditor.
-	 * 
+	 *
 	 * @param str Input string.
 	 * @param trim Whether to trim the string. Defaults to `true`.
 	 * @returns
@@ -222,8 +222,8 @@ export class WikitextE {
 					parsed.push(
 						createVoidTagObject(nodeName, m[0], i, startTags.length, false)
 					);
-				} else if (startTags.length) {
-					// If there's no start tags stored, skip this end tag
+				} else if (startTags.find(({name}) => name === nodeName)) {
+					// If there's no matching start tags stored, skip this end tag
 
 					let closedTagCnt = 0;
 
@@ -425,7 +425,7 @@ export class WikitextE {
 
 	/**
 	 * The names of tags in which elements shouldn't be parsed.
-	 * 
+	 *
 	 * The default values are `!--`, `nowiki`, `pre`, `syntaxhighlight`, `source`, and `math`.
 	 */
 	private skipTags: string[];
