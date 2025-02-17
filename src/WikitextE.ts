@@ -485,7 +485,7 @@ export class WikitextE {
 	 */
 	private getSkipPredicate(): (startIndex: number, endIndex: number) => boolean {
 
-		const rSkipTags = new RegExp(`^(?:${this.skipTags.join('|')})$`, 'i');
+		const rSkipTags = new RegExp(`^(?:${this.skipTags.join('|')})$`);
 
 		// Create an array to store the start and end indices of tags to skip
 		const indexMap = this._tags.reduce((acc: number[][], tagObj) => {
@@ -673,7 +673,7 @@ export class WikitextE {
 				}
 			}
 
-			if (isValid && !isInSkipRange(match.index, regex.lastIndex)) {
+			if (isValid) {
 
 				const param: Parameter = {
 					name: paramName,
@@ -681,7 +681,8 @@ export class WikitextE {
 					text: paramText,
 					startIndex: match.index,
 					endIndex: regex.lastIndex,
-					nestLevel
+					nestLevel,
+					skip: isInSkipRange(match.index, regex.lastIndex)
 				};
 				if (!config.parameterPredicate || !config.parameterPredicate({...param})) {
 					params.push(param);
@@ -699,6 +700,85 @@ export class WikitextE {
 		}
 
 		return params;
+
+	}
+
+	/**
+	 * Parse `[[wikilink]]`s in the wikitext.
+	 * @returns Array of parsed wikilinks.
+	 */
+	parseWikilinks(): Wikilink[] {
+
+		const isInSkipRange = this.getSkipPredicate();
+		const regex = /\[{2}([^\]|]+)\|?([^\]]*)\]{2}/g; // $1: target, $2: displayed text
+		const wikitext = this.content;
+		const links: Wikilink[] = [];
+
+		let match: RegExpExecArray | null;
+		while ((match = regex.exec(wikitext))) {
+			// TODO: Canonicalize the page name
+			const target = WikitextE.clean(match[1]);
+			const startIndex = match.index;
+			const endIndex = startIndex + match[0].length;
+			links.push({
+				target,
+				// TODO: [[File:]] links can contain multiple right operands
+				// TODO: The right operand can contain {{template}}s and {{{parameters}}}
+				display: WikitextE.clean(match[2]) || target,
+				text: match[0],
+				piped: !!match[2],
+				startIndex,
+				endIndex,
+				skip: isInSkipRange(startIndex, endIndex)
+			});
+		}
+
+		return links;
+
+	}
+
+	/**
+	 * Generates a mapping from the start index of each parsed element to its text content and type.
+	 *
+	 * The mapping includes:
+	 * * Skip tags (e.g., `<nowiki>`, `<!-- -->`)
+	 * * Parameters (`{{{parameter}}}`)
+	 * * Wikilinks (`[[wikilink]]`)
+	 *
+	 * @returns An object mapping start indices to their corresponding text content and type.
+	 */
+	private getIndexMap(): IndexMap {
+
+		const indexMap: IndexMap = Object.create(null);
+
+		// Process skipTags
+		const rSkipTags = new RegExp(`^(?:${this.skipTags.join('|')})$`);
+		this._tags.forEach(({name, text, startIndex}) => {
+			if (rSkipTags.test(name)) {
+				indexMap[startIndex] = {
+					text,
+					type: 'tag'
+				};
+			}
+		});
+
+		// Process {{{parameter}}}s
+		this.parseParameters().forEach(({text, startIndex}) => {
+			indexMap[startIndex] = {
+				text,
+				type: 'parameter'
+			};
+		});
+
+		// Process [[wikilink]]s
+		this.parseWikilinks().forEach(({text, startIndex}) => {
+			indexMap[startIndex] = {
+				text,
+				type: 'wikilink'
+			};
+		});
+
+		return indexMap;
 
 	}
 
@@ -955,6 +1035,10 @@ interface Parameter {
 	 * * Increments with deeper nesting.
 	 */
 	nestLevel: number;
+	/**
+	 * Whether the parameter appears inside an HTML tag specified in {@link WikitextOptions.skipTags}.
+	 */
+	skip: boolean;
 }
 
 /**
@@ -984,3 +1068,43 @@ interface ParseParametersConfig {
 	 */
 	parameterPredicate?: (parameter: Parameter) => boolean;
 }
+
+// Interfaces and private members for "parseWikilinks"
+
+/**
+ * Object that holds information about a `[[wikilink]]`, parsed from wikitext.
+ */
+export interface Wikilink {
+	/**
+	 * The target page name of the wikilink (the part before the `|`, if present).
+	 */
+	target: string;
+	/**
+	 * The displayed text of the wikilink (the part after `|`, or the target if omitted).
+	 */
+	display: string;
+	/**
+	 * The full wikitext representation of the wikilink.
+	 */
+	text: string;
+	/**
+	 * Whether the wikilink contains a pipe (`|`) separator.
+	 */
+	piped: boolean;
+	/**
+	 * The starting index of the wikilink in the wikitext.
+	 */
+	startIndex: number;
+	/**
+	 * The ending index of the wikilink in the wikitext (exclusive).
+	 */
+	endIndex: number;
+	/**
+	 * Whether the wikilink appears inside an HTML tag specified in {@link WikitextOptions.skipTags}.
+	 */
+	skip: boolean;
+}
+
+// Interfaces and private members for "parseTemplates"
+
+type IndexMap = Record<number, {text: string; type: 'tag' | 'parameter' | 'wikilink';}>;
