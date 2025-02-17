@@ -613,6 +613,95 @@ export class WikitextE {
 
 	}
 
+	/**
+	 * Parse `{{{parameter}}}` expressions in the wikitext.
+	 * @param config Configuration options for parameter parsing.
+	 * @returns Array of parsed parameters.
+	 */
+	parseParameters(config: ParseParametersConfig = {recursive: true}): Parameter[] {
+
+		const isInSkipRange = this.getSkipPredicate();
+		const params: Parameter[] = [];
+		const regex = /\{{3}(?!{)([^|}]*)\|?([^}]*)\}{3}/g; // $1: name, $2: value
+		const wikitext = this.content;
+		let nestLevel = 0;
+
+		let match: RegExpExecArray | null;
+		while ((match = regex.exec(wikitext))) {
+
+			// Skip parameters that don't satisfy the namePredicate
+			const paramName = match[1].trim();
+			if (typeof config.namePredicate === 'function' && !config.namePredicate(paramName)) {
+				continue;
+			}
+			let paramValue = match[2];
+			let paramText = match[0];
+
+			/**
+			 * Parameters can contain nested templates (e.g., `{{{1|{{{page|{{PAGENAME}}}}}}}}`).
+			 * In such cases, `exec` initially captures an incomplete parameter like `{{{1|{{{page|{{PAGENAME}}}`.
+			 */
+			const leftBraceCnt = (paramText.match(/\{{2,}/g) || []).join('').length;
+			let rightBraceCnt = (paramText.match(/\}{2,}/g) || []).join('').length;
+			let isValid = true;
+
+			// If the number of opening and closing braces is unbalanced
+			if (leftBraceCnt > rightBraceCnt) {
+				isValid = false;
+				const rightBraceStartIndex = match.index + paramText.length - 3; // Get the end index of `{{{1|{{{page|{{PAGENAME` in `wikitext`
+				rightBraceCnt -= 3;
+
+				// Find the correct closing braces
+				for (let pos = rightBraceStartIndex; pos < wikitext.length; pos++) {
+					const closingMatch = wikitext.slice(pos).match(/^\}{2,}/);
+					if (closingMatch) {
+						const closingBraces = closingMatch[0].length;
+						if (leftBraceCnt <= rightBraceCnt + closingBraces) {
+							// If the right braces close all the left braces
+							const lastIndex = pos + (leftBraceCnt - rightBraceCnt);
+							paramText = wikitext.slice(match.index, lastIndex); // Get the correct parameter
+							paramValue += paramText.slice(rightBraceStartIndex - lastIndex).replace(/\}{3}$/, '');
+							isValid = true;
+							regex.lastIndex = lastIndex; // Update search position
+							break;
+						} else {
+							// If not, continue searching
+							pos += closingBraces - 1;
+							rightBraceCnt += closingBraces;
+						}
+					}
+				}
+			}
+
+			if (isValid && !isInSkipRange(match.index, regex.lastIndex)) {
+
+				const param: Parameter = {
+					name: paramName,
+					value: paramValue.trim(),
+					text: paramText,
+					startIndex: match.index,
+					endIndex: regex.lastIndex,
+					nestLevel
+				};
+				if (!config.parameterPredicate || !config.parameterPredicate({...param})) {
+					params.push(param);
+				}
+
+				// Handle nested parameters
+				if (config.recursive && paramText.slice(3).includes('{{{')) {
+					regex.lastIndex = match.index + 3;
+					nestLevel++;
+				} else {
+					nestLevel = 0;
+				}
+			}
+
+		}
+
+		return params;
+
+	}
+
 }
 
 // Interfaces for constructor
@@ -742,19 +831,23 @@ function createVoidTagObject(nodeName: string, startTag: string, startIndex: num
 }
 
 /**
- * Parsing config for {@link WikitextE.parseTags}.
+ * Configuration options for {@link WikitextE.parseTags}.
  */
 export interface ParseTagsConfig {
 	/**
-	 * Only parse tags whose names match this predicate.
+	 * A predicate function to filter tags by name.
+	 * Only tags whose names satisfy this function will be parsed.
+	 *
 	 * @param name The name of the tag.
-	 * @returns A boolean indicating whether the tag name matches the predicate.
+	 * @returns `true` if the tag should be parsed, otherwise `false`.
 	 */
 	namePredicate?: (name: string) => boolean;
 	/**
-	 * Only parse tags that match this predicate.
+	 * A predicate function to filter parsed tags.
+	 * Only tags that satisfy this function will be included in the results.
+	 *
 	 * @param tag The tag object.
-	 * @returns A boolean indicating whether the tag matches the predicate.
+	 * @returns `true` if the tag should be included, otherwise `false`.
 	 */
 	tagPredicate?: (tag: Tag) => boolean;
 }
@@ -828,4 +921,66 @@ export interface Section {
 	 * The content of the section including the heading.
 	 */
 	content: string;
+}
+
+// Interfaces and private members for "parseParameters"
+
+/**
+ * Object that holds information about a `{{{parameter}}}`, parsed from wikitext.
+ */
+interface Parameter {
+	/**
+	 * The parameter name (i.e. the left operand of `{{{name|value}}}`).
+	 */
+	name: string;
+	/**
+	 * The parameter value (i.e., the right operand of `{{{name|value}}}`).
+	 */
+	value: string;
+	/**
+	 * The full wikitext representation of the parameter.
+	 */
+	text: string;
+	/**
+	 * The starting index of the parameter in the wikitext.
+	 */
+	startIndex: number;
+	/**
+	 * The ending index of the parameter in the wikitext (exclusive).
+	 */
+	endIndex: number;
+	/**
+	 * The nesting level of the parameter.
+	 * * `0` for parameters that are not nested inside another parameter.
+	 * * Increments with deeper nesting.
+	 */
+	nestLevel: number;
+}
+
+/**
+ * Configuration options for {@link WikitextE.parseParameters}.
+ */
+interface ParseParametersConfig {
+	/**
+	 * Whether to parse `{{{parameter}}}` expressions inside other `{{{parameter}}}` expressions.
+	 *
+	 * Default: `true`
+	 */
+	recursive?: boolean;
+	/**
+	 * A predicate function to filter parameters by name.
+	 * Only parameters whose names satisfy this function will be parsed.
+	 *
+	 * @param name The name of the parameter.
+	 * @returns `true` if the parameter should be parsed, otherwise `false`.
+	 */
+	namePredicate?: (name: string) => boolean;
+	/**
+	 * A predicate function to filter parsed parameters.
+	 * Only parameters that satisfy this function will be included in the results.
+	 *
+	 * @param parameter The parameter object.
+	 * @returns `true` if the parameter should be included, otherwise `false`.
+	 */
+	parameterPredicate?: (parameter: Parameter) => boolean;
 }
