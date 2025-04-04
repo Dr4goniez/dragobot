@@ -5,8 +5,8 @@ service.template
 logs
 
 # User information
-src/my.ts
-dist/my.js
+src/myinfo.ts
+dist/myinfo.js
 
 # Test or draft modules
 src/test.ts
