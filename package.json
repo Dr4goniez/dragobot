@@ -29,6 +29,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "ip-wiki": "^1.0.2",
     "mwbot-ts": "github:Dr4goniez/mwbot-ts#release"
   }
 }
