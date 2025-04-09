@@ -2,6 +2,8 @@ import { Mwbot, MwbotInitOptions } from 'mwbot-ts';
 import { myinfo } from './myinfo';
 import { VERSION } from './version';
 
+export const Util = Mwbot.Util;
+
 let mwbot: Mwbot;
 
 /**
