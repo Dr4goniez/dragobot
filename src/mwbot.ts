@@ -15,7 +15,7 @@ let mwbot: Mwbot;
 export async function init(user: keyof typeof creds): Promise<Mwbot> {
 	const initOptions: MwbotInitOptions = {
 		apiUrl: 'https://ja.wikipedia.org/w/api.php',
-		userAgent: `dragobot/${VERSION} (https://github.com/Dr4goniez/dragobot/tree/main)`,
+		userAgent: `dragobot/${VERSION} (https://github.com/Dr4goniez/dragobot)`,
 		...creds[user]
 	};
 	mwbot = await new Mwbot(initOptions).init();
