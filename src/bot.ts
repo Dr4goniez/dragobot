@@ -1,5 +1,6 @@
 import type { Mwbot } from 'mwbot-ts';
 import { init } from './mwbot';
+import { markupANs } from './markup';
 
 init('drakobot').then((mwbot) => {
 
@@ -24,12 +25,12 @@ init('drakobot').then((mwbot) => {
 		// Check local block statuses?
 		const checkBlocks = checkGlobal || await newBlocksPresent(mwbot, lastRunDate);
 
-		// // ------------------------------ markup ------------------------------
-		// if (checkBlocks) {
-		// 	await markupANs(checkGlobal);
-		// } else {
-		// 	console.log('Markup cancelled: No new blocks found.');
-		// }
+		// ------------------------------ markup ------------------------------
+		if (checkBlocks) {
+			await markupANs(checkGlobal);
+		} else {
+			console.log('Markup cancelled: No new blocks were found.');
+		}
 
 		// // ------------------------------ updateRFB ------------------------------
 		// if (checkRFB) {
