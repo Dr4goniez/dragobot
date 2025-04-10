@@ -809,17 +809,16 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
  */
 interface BlockInfo {
 	/**
-	 * The domain of the (b)lock. When marking up a UserAN, this text leads the template message,
-	 * as in .
+	 * The domain of the (b)lock. When marking up a UserAN, this text leads the template message.
 	 */
 	domain: '' | '部分ブロック' | 'サイト全体' | '部分ブロック条件変更' | 'グローバルロック' | 'グローバルブロック';
 	/**
-	 * A relative duration of the (global) block, if the user is blocked. For locked users,
-	 * this property is never updated because global locks don't have the concept of duration.
+	 * A relative duration of the (global) block, set if the user is blocked. For locked users,
+	 * this property is never set because global locks don't have the concept of duration.
 	 */
 	duration: string;
 	/**
-	 * Flags of the block, e.g., `'nousertalk'` and `'noemail'`.
+	 * Flags of the block (e.g., `'nousertalk'`, `'noemail'`) flattened to one string.
 	 */
 	flags: string;
 	/**
@@ -842,9 +841,10 @@ interface TemplateInfo extends BlockInfo {
 	logid: string;
 	diffid: string;
 	/**
-	 * The reference date for the report. The report should only be closed if the reportee
-	 * was blocked *after* this date. If the report date is selected, it is extended by 5 minutes
-	 * to account for blocks applied within 5 minutes of the report submission.
+	 * The reference date for the report, initialized either from the report's timestamp or a `bot=`
+	 * parameter timestamp. The report should only be closed if the reportee was blocked *after* this date.
+	 * If initialized from the report date, it is extended by 5 minutes to account for blocks applied within
+	 * 5 minutes of the report submission.
 	 */
 	refDate: Date;
 	/**
@@ -953,7 +953,7 @@ async function updateDiffids(): Promise<void> {
 /**
  * Attempts to convert log IDs that couldn't be converted via a `list=logevents` request
  * to usernames by scraping `[[Special:Log/newusers]]` for each remaining unprocessed log ID.
- * When scraping is done, fetched usernames are matched with their IDs.
+ * When scraping is done, the fetched usernames are matched with their IDs.
  *
  * @returns *This function never rejects*.
  */
@@ -1105,7 +1105,7 @@ async function queryBlockedUsers(users: string[], ips: string[], isANS: boolean)
  * Performs a `list=blocks` API request to check the local block statuses of **IP users** including
  * range blocks. This function modifies the `info` object in place.
  *
- * This function does not check and `ips` for its length. It should be verified to be non-empty
+ * This function does not check `ips` for its length. It should be verified to be non-empty
  * before passing to this function.
  *
  * @param info
@@ -1331,11 +1331,9 @@ async function checkReblocks(reblockMap: ReblockMap): Promise<ReblockInfo | null
 	const users = Object.keys(reblockMap);
 
 	const response = await getMwbot().massRequest({
-		action: 'query',
 		list: 'logevents',
 		letype: 'block',
-		letitle: users.map((username) => `利用者:${username}`),
-		formatversion: '2'
+		letitle: users.map((username) => `利用者:${username}`)
 	}, 'letitle', 1);
 
 	const ret: ReblockInfo = Object.create(null);
@@ -1435,21 +1433,22 @@ function restrictionsDiffer(
 
 	if (typeof pages1 !== typeof pages2 || (pages1 && pages2 && !Util.arraysEqual(
 		pages1.map(p => p.page_title),
-		pages2.map(p => p.page_title)
+		pages2.map(p => p.page_title),
+		true
 	))) {
 		return true;
 	}
 
 	if (
 		typeof namespaces1 !== typeof namespaces2 ||
-		(namespaces1 && namespaces2 && !Util.arraysEqual(namespaces1, namespaces2))
+		(namespaces1 && namespaces2 && !Util.arraysEqual(namespaces1, namespaces2, true))
 	) {
 		return true;
 	}
 
 	if (
 		typeof actions1 !== typeof actions2 ||
-		(actions1 && actions2 && !Util.arraysEqual(actions1, actions2))
+		(actions1 && actions2 && !Util.arraysEqual(actions1, actions2, true))
 	) {
 		return true;
 	}
@@ -1469,13 +1468,11 @@ function restrictionsDiffer(
 async function queryLockedUsers(users: string[]): Promise<string[]> {
 
 	const params = {
-		action: 'query' as const,
 		list: 'globalallusers',
 		agufrom: users,
 		aguto: users,
 		aguprop: 'lockinfo',
-		agulimit: 1,
-		formatversion: '2' as const
+		agulimit: 1
 	};
 	const response = await getMwbot().massRequest(params, ['agufrom', 'aguto'], 1);
 
@@ -1541,12 +1538,10 @@ interface GlobalBlockInfoMap {
 async function queryGloballyBlockedUsers(users: string[], ips: string[], isANS: boolean): Promise<GlobalBlockInfoMap> {
 
 	const params = {
-		action: 'query' as const,
 		list: 'globalblocks',
 		bgtargets: users.concat(ips),
 		bgprop: 'target|timestamp|expiry',
-		bglimit: 'max',
-		formatversion: '2' as const
+		bglimit: 'max'
 	};
 
 	const response = await getMwbot().massRequest(params, 'bgtargets');
@@ -1575,10 +1570,10 @@ async function queryGloballyBlockedUsers(users: string[], ips: string[], isANS: 
 }
 
 /**
- * Performs `globallist=blocks` API requests to check the global block statuses of **IP users** including
+ * Performs `list=globalblocks` API requests to check the global block statuses of **IP users** including
  * range blocks. This function modifies the `info` object in place.
  *
- * This function does not check and `ips` for its length. It should be verified to be non-empty
+ * This function does not check `ips` for its length. It should be verified to be non-empty
  * before passing to this function.
  *
  * @param info
@@ -1588,12 +1583,10 @@ async function queryGloballyBlockedUsers(users: string[], ips: string[], isANS: 
 async function queryGloballyBlockedIps(info: GlobalBlockInfoMap, ips: string[]): Promise<void> {
 
 	const params = {
-		action: 'query' as const,
 		list: 'globalblocks',
 		bgip: ips,
 		bgprop: 'target|timestamp|expiry',
-		bglimit: 'max',
-		formatversion: '2' as const
+		bglimit: 'max'
 	};
 
 	const response = await getMwbot().massRequest(params, 'bgip', 1);
@@ -1628,16 +1621,16 @@ async function queryGloballyBlockedIps(info: GlobalBlockInfoMap, ips: string[]):
  */
 function generateSummaryUserLink(info: TemplateInfo): string {
 	const status = info.reblocked || info.domain + info.duration;
-	const user = info.user instanceof IP ? info.user.abbreviate() : info.user;
+	const username = info.user instanceof IP ? info.user.abbreviate() : info.user;
 	if (/^(user2|unl|usernolink)$/.test(info.type)) {
-		const maxLetterCnt = containsJapaneseCharacter(user) ? 10 : 20;
-		if (user.length > maxLetterCnt) {
-			return `${user.substring(0, maxLetterCnt)}.. (${status})`;
+		const maxLetterCnt = containsJapaneseCharacter(username) ? 10 : 20;
+		if (username.length > maxLetterCnt) {
+			return `${username.substring(0, maxLetterCnt)}.. (${status})`;
 		} else {
-			return `[[特別:投稿記録/${user}|${user}]] (${status})`;
+			return `[[特別:投稿記録/${username}|${username}]] (${status})`;
 		}
 	} else if (/^ip(user)?2$/.test(info.type)) {
-		return `[[特別:投稿記録/${user}|${user}]] (${status})`;
+		return `[[特別:投稿記録/${username}|${username}]] (${status})`;
 	} else if (/^log(id)?$/.test(info.type)) {
 		return `[[特別:転送/logid/${info.logid}|Logid/${info.logid}]] (${status})`;
 	} else if (/^diff(id)?$/.test(info.type)) {
