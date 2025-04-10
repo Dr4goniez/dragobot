@@ -223,7 +223,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 			let typeKey = '';
 			let typeVal = '';
 			let bot: Date | null = null;
-			let hasEmptyManualStatusArg = false;
+			let hasEmptyStatusParam = false;
 			let modified = false;
 			for (let {key, value} of Object.values(temp.params)) {
 				key = mwbot.Title.clean(key);
@@ -251,7 +251,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 					typeVal = value.toLowerCase();
 					len++;
 				} else if (/^(状態|s|[sS]tatus)$/.test(key)) {
-					hasEmptyManualStatusArg = !value;
+					hasEmptyStatusParam = !value;
 					len++;
 				} else {
 					// Don't increment "len" for unsupported keys
@@ -262,8 +262,8 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 
 			const isOpen = ( // Any of the 4 "open" combinations in the list above
 				len === 1 && user ||
-				len === 2 && user && (typeKey || hasEmptyManualStatusArg) ||
-				len === 3 && user && typeKey && hasEmptyManualStatusArg
+				len === 2 && user && (typeKey || hasEmptyStatusParam) ||
+				len === 3 && user && typeKey && hasEmptyStatusParam
 			);
 			if (!isOpen) { // This condition includes "!user"
 				// This disregards the value of `modified`, but on the premise that the bot runs continuously,
@@ -357,10 +357,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 					return new Date(reportTime5MinExtended);
 				})(),
 				hasBotTimestamp: !!bot,
-				section: {
-					title: section.title,
-					index: section.index
-				},
+				sectionTitle: section.title,
 				// Properties to be added after block status check
 				domain: '',
 				duration: '',
@@ -380,7 +377,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		await Promise.all([updateLogids(), updateDiffids()]);
 		await processRemainingLogids();
 
-		// Sort registered users and IPs
+		// Sort registered and IP users
 		const users: string[] = [];
 		const ips: string[] = [];
 		Object.entries(templateMap).forEach(([key, obj]) => {
@@ -414,10 +411,8 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				if (!ips.includes(ip)) {
 					ips.push(ip);
 				}
-			} else {
-				if (!users.includes(user)) {
-					users.push(user);
-				}
+			} else if (!users.includes(user)) {
+				users.push(user);
 			}
 
 		});
@@ -434,7 +429,6 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 			}
 			return acc;
 		}, []);
-		// eslint-disable-next-line no-constant-condition
 		if (remainingIps.length) {
 			await queryBlockedIps(blockInfo, remainingIps);
 		}
@@ -606,10 +600,8 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 					if (!gIps.includes(ip)) {
 						gIps.push(ip);
 					}
-				} else {
-					if (!gUsers.includes(user)) {
-						gUsers.push(user);
-					}
+				} else if (!gUsers.includes(user)) {
+					gUsers.push(user);
 				}
 			});
 			if (!gUsers.length && !gIps.length) {
@@ -680,7 +672,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 					})();
 
 					temp.domain = 'グローバルブロック';
-					temp.duration = bitLen + (gblock.expiry === 'infinity' ? 'infinity' : getBlockDuration(gblockDate, gblock.expiry));
+					temp.duration = bitLen + (gblock.expiry === 'infinity' ? '無期限' : getBlockDuration(gblockDate, gblock.expiry));
 					temp.date = formatDateToMDinGMT9(gblockDate);
 
 				}
@@ -702,8 +694,9 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				return;
 			}
 
-			// Register the title of the section this template is in
-			const sectionTitle = obj.section.title;
+			// Register the title of the section this template is in, in either case of `{modified: true}` or `{date: 'M/D'}`
+			// The array will be left empty if we can't find any template object with a non-empty `date` property
+			const sectionTitle = obj.sectionTitle;
 			if (!summaryMap.has(sectionTitle)) {
 				summaryMap.set(sectionTitle, []);
 			}
@@ -751,29 +744,37 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 			summary = 'Bot: UserANの修正';
 		} else {
 			summary += summaryMap.size === 1
+				// If editing a single section, the section link should come first
 				? `/*${summaryMap.keys().next().value}*/ Bot:`
+				// If not, place `Bot:` at the beginning because another section links will be added later
 				: `Bot: /*${summaryMap.keys().next().value}*/`;
 			let i = -1;
-			for (const [title, links] of summaryMap) {
+			outer: for (const [title, links] of summaryMap) {
 				i++;
 				if (i === 0) {
+					// For the first section, only append the first link because we already processed `title` for this section
 					summary += ' ' + links[0];
 				} else {
+					// For second and subsequent sections, process both `title` and `link[0]`
+					// The reason for processing `link[0]` earlier is because we don't want the summary to end with a section link
 					const appendant = ` /*${title}*/ ${links[0]}`;
-					if (summary.length + appendant.length <= 497) { // Prevent the summary from exceeding the max word count
+					if (summary.length + appendant.length <= 497) {
+						// If the appendance doesn't cause an overflow in terms of word count limit, just do the appendance
 						summary += appendant;
 					} else {
+						// If an overflow is expected, append "etc." instead and quit
 						summary += ' ほか'; // 3 letters; hence 497 above
 						break;
 					}
 				}
-				for (let j = 1; j < links.length - 1; j++) {
+				// Append the remaining user links for this section title
+				for (let j = 1; j < links.length; j++) {
 					const appendant = (summary.endsWith(']') ? ', ' : ' ') + links[j];
 					if (summary.length + appendant.length <= 497) {
 						summary += appendant;
 					} else {
 						summary += ' ほか';
-						break;
+						break outer;
 					}
 				}
 			}
@@ -793,11 +794,11 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 
 		console.log(`Editing ${page}...`);
 		return {
-			section: sectionIndex,
+			section: sectionIndex, // `mwbot-ts` automatically removes `false` and `undefined` parameters to the API
 			text: newContent,
 			summary,
 			minor: true,
-			bot: modOnly
+			bot: modOnly // Same here; see also https://www.mediawiki.org/wiki/API:Data_formats#Boolean_parameters
 		};
 	};
 
@@ -850,10 +851,7 @@ interface TemplateInfo extends BlockInfo {
 	 * Whether this UserAN has a `bot=TIMESTAMP` parameter.
 	 */
 	hasBotTimestamp: boolean;
-	section: {
-		title: string;
-		index: number;
-	};
+	sectionTitle: string;
 }
 
 let leend = '';
