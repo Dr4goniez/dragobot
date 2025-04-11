@@ -1,20 +1,26 @@
 import type { Mwbot } from 'mwbot-ts';
 import { init } from './mwbot';
 import { markupANs } from './markup';
+import { removePp } from './pp';
 
 init('drakobot').then((mwbot) => {
 
 	let runCount = 0;
-	let lastRunDate: Date | null;
+	let lastRunDate: Date | null = null;
 
 	// Define the process to repeat
 	const bot = async () => {
 
 		const date = new Date();
+		const nextRun = date.getTime() + 10 * 60 * 1000;
 		console.log(`Current time: ${date.toISOString()}`);
 
 		// Check global block/lock statuses every 6 runs (1 hour)
 		const checkGlobal = runCount % 6 === 0;
+
+		// Check local block statuses?
+		const checkBlocks = checkGlobal || await newBlocksPresent(mwbot, lastRunDate);
+		lastRunDate = date;
 
 		// Check RFB-related pages if the month is transitioning
 		const checkRFB = isLastDayBetween1430And1440UTC();
@@ -22,14 +28,11 @@ init('drakobot').then((mwbot) => {
 		// Check inappropriate protection templates every 3 runs (30 minutes)
 		const checkProtectionTemplates = runCount % 3 === 0;
 
-		// Check local block statuses?
-		const checkBlocks = checkGlobal || await newBlocksPresent(mwbot, lastRunDate);
-
 		// ------------------------------ markup ------------------------------
 		if (checkBlocks) {
 			await markupANs(checkGlobal);
 		} else {
-			console.log('Markup cancelled: No new blocks were found.');
+			console.log('Markup cancelled: No new blocks found.');
 		}
 
 		// // ------------------------------ updateRFB ------------------------------
@@ -38,17 +41,16 @@ init('drakobot').then((mwbot) => {
 		// }
 
 		// // ------------------------------ removePp ------------------------------
-		// if (checkProtectionTemplates) {
-		// 	await removePp(lastRunDate);
-		// }
+		if (checkProtectionTemplates) {
+			await removePp(nextRun);
+		}
 
 		runCount++;
-		lastRunDate = date;
 
 	};
 
 	bot();
-	setInterval(bot, 10 *60 * 1000); // Run the bot every 10 minutes
+	setInterval(bot, 10 * 60 * 1000); // Run the bot every 10 minutes
 
 });
 
@@ -95,7 +97,7 @@ async function newBlocksPresent(mwbot: Mwbot, lastRunDate: Date | null): Promise
 
 		const lastRunTime = lastRunDate.getTime();
 		for (const {automatic, timestamp} of resBlocks) {
-			if (!automatic && timestamp && new Date(timestamp).getTime() >= lastRunTime) {
+			if (!automatic && timestamp && Date.parse(timestamp) >= lastRunTime) {
 				return true;
 			}
 		}
