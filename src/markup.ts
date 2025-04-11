@@ -785,12 +785,12 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		// If the modified templates are confined to a single section, limit the edit scope to that section
 		// This may radically reduce server load, especially helpful for large pages
 		let section;
-		let sectionIndex: string | undefined = undefined;
+		let sectionIndex: number | undefined = undefined;
 		if (
 			summaryMap.size === 1 &&
 			(section = wikitext.parseSections().find(({title}) => title === summaryMap.keys().next().value))
 		) {
-			sectionIndex = section.index.toString();
+			sectionIndex = section.index;
 			newContent = section.text;
 		}
 
