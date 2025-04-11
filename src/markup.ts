@@ -741,28 +741,29 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		let summary = '';
 		const modOnly = Array.from(summaryMap.values()).every((links) => links.length === 0);
 		if (modOnly) {
+			// If no user links are set, it's a modification-only edit
 			summary = 'Bot: UserANの修正';
 		} else {
 			summary += summaryMap.size === 1
-				// If editing a single section, the section link should come first
+				// If editing a single section, place the section link first
 				? `/*${summaryMap.keys().next().value}*/ Bot:`
-				// If not, place `Bot:` at the beginning because another section links will be added later
+				// If editing multiple sections, place "Bot:" first since additional section links will follow
 				: `Bot: /*${summaryMap.keys().next().value}*/`;
 			let i = -1;
 			outer: for (const [title, links] of summaryMap) {
 				i++;
 				if (i === 0) {
-					// For the first section, only append the first link because we already processed `title` for this section
+					// For the first section, only append the first link — section title already added
 					summary += ' ' + links[0];
 				} else {
-					// For second and subsequent sections, process both `title` and `link[0]`
+					// For subsequent sections, append both the section title and the first link
 					// The reason for processing `link[0]` earlier is because we don't want the summary to end with a section link
 					const appendant = ` /*${title}*/ ${links[0]}`;
 					if (summary.length + appendant.length <= 497) {
-						// If the appendance doesn't cause an overflow in terms of word count limit, just do the appendance
+						// Append if it doesn't exceed the summary character limit
 						summary += appendant;
 					} else {
-						// If an overflow is expected, append "etc." instead and quit
+						// Otherwise, truncate with "etc." and exit
 						summary += ' ほか'; // 3 letters; hence 497 above
 						break;
 					}
@@ -1032,7 +1033,24 @@ type ApiResponseQueryListBlocksVerifiedProps =
 	| 'restrictions';
 
 /**
- * Utility type that makes a subset of properties in a type required.
+ * Utility type that makes a subset of properties in an object type required. Use this when certain properties
+ * in a generally optional object type are known to be present.
+ *
+ * For example, the `linkshere` property in the response from
+ * {@link https://en.wikipedia.org/w/api.php?action=query&formatversion=2&titles=Main_page&prop=linkshere&lhprop= | titles=Main_page&prop=linkshere&lhprop=}
+ * will be an array of empty objects because `lhprop=` is left empty. However, specifying
+ * {@link https://en.wikipedia.org/w/api.php?action=query&formatversion=2&titles=Main_page&prop=linkshere&lhprop=pageid | lhprop=pageid}
+ * guarantees that each object will contain a `pageid` property. In such cases, you can do:
+ *
+ * ```ts
+ * import { ApiResponseQueryPagesPropLinkshere } from 'mwbot-ts';
+ * type ApiResponseQueryPagesPropLinkshereVerified = PartiallyRequired<ApiResponseQueryPagesPropLinkshere, 'pageid'>;
+ * ```
+ *
+ * This creates a type where the `pageid` property is required, without modifying the rest of the type.
+ *
+ * @template T The base object type.
+ * @template K The keys of `T` to make required.
  */
 type PartiallyRequired<T extends Record<string, any>, K extends keyof T> = Required<Pick<T, K>> & Omit<T, K>;
 
