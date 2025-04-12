@@ -1,3 +1,16 @@
+/**
+ * This module is used to close {{UserAN}} templates on administrators' noticeboards
+ * when the reported users are locally blocked, globally locked, or globally blocked.
+ *
+ * The basic parameters of the template are:
+ * - {{UserAN|type=USER_TYPE|1=USERNAME|2=BLOCK_STATUS}}.
+ *
+ * If a non-empty `2=` parameter is present, the template is marked with ✓ and considered closed.
+ *
+ * This module parses {{UserAN}} templates on the specified pages, identifies the reported users,
+ * and, if administrators have taken action against them, sets the `2=` parameter to close the template.
+ */
+
 import {
 	Mwbot,
 	MwbotError,
