@@ -6,6 +6,7 @@ import type { Mwbot } from 'mwbot-ts';
 import { init } from './mwbot';
 import { markupANs } from './markup';
 import { removePp } from './pp';
+import { updateRFB } from './rfb';
 
 init('drakobot').then((mwbot) => {
 
@@ -39,12 +40,12 @@ init('drakobot').then((mwbot) => {
 			console.log('Markup cancelled: No new blocks found.');
 		}
 
-		// // ------------------------------ updateRFB ------------------------------
-		// if (checkRFB) {
-		// 	await updateRFB();
-		// }
+		// ------------------------------ updateRFB ------------------------------
+		if (checkRFB) {
+			await updateRFB();
+		}
 
-		// // ------------------------------ removePp ------------------------------
+		// ------------------------------ removePp ------------------------------
 		if (checkProtectionTemplates) {
 			await removePp(nextRun);
 		}

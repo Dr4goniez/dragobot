@@ -12,9 +12,9 @@ let mwbot: Mwbot;
  * @param user The user account to use.
  * @returns A Promise resolving to an Mwbot instance.
  */
-export async function init(user: keyof typeof creds): Promise<Mwbot> {
+export async function init(user: keyof typeof creds, apiUrl?: string): Promise<Mwbot> {
 	const initOptions: MwbotInitOptions = {
-		apiUrl: 'https://ja.wikipedia.org/w/api.php',
+		apiUrl: apiUrl || 'https://ja.wikipedia.org/w/api.php',
 		userAgent: `dragobot/${VERSION} (https://github.com/Dr4goniez/dragobot)`,
 		...creds[user]
 	};
