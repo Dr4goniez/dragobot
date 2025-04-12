@@ -1,3 +1,7 @@
+/**
+ * This module provides an entry point to the bot application.
+ */
+
 import type { Mwbot } from 'mwbot-ts';
 import { init } from './mwbot';
 import { markupANs } from './markup';

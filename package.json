@@ -2,10 +2,10 @@
   "name": "dragobot",
   "version": "7.0.0",
   "description": "A Wikipedia bot.",
-  "main": "dist/bot.js",
+  "main": "dist/entry.js",
   "scripts": {
-    "start": "node -e \"const date = new Date().toISOString().replace(/\\.\\d+Z$/, '').replace(/[-T:]/g, ''); require('child_process').execSync(`node dist/bot.js > logs/${date}.txt 2>&1`);\"",
-    "start-node": "ts-node src/bot.ts",
+    "start": "node -e \"const date = new Date().toISOString().replace(/\\.\\d+Z$/, '').replace(/[-T:]/g, ''); require('child_process').execSync(`node dist/entry.js > logs/${date}.txt 2>&1`);\"",
+    "start-node": "ts-node src/entry.ts",
     "test": "ts-node src/test.ts",
     "test-log": "node -e \"const date = new Date().toISOString().replace(/\\.\\d+Z$/, '').replace(/[-T:]/g, ''); require('child_process').execSync(`ts-node src/test.ts > logs/${date}_test.txt 2>&1`);\"",
     "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
