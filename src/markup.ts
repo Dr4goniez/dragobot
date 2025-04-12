@@ -12,7 +12,7 @@ import {
 } from 'mwbot-ts';
 import { getMwbot, Util } from './mwbot';
 import { IP } from 'ip-wiki';
-import { scrapeWebpage } from './lib';
+import { filterSet, scrapeWebpage } from './lib';
 
 /**
  * A class to manage the process of converting IDs into usernames.
@@ -379,8 +379,8 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		await processRemainingLogids();
 
 		// Sort registered and IP users
-		const users: string[] = [];
-		const ips: string[] = [];
+		const users = new Set<string>();
+		const ips = new Set<string>();
 		Object.entries(templateMap).forEach(([key, obj]) => {
 
 			// Process converted IDs
@@ -408,29 +408,21 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 			if (!user) {
 				delete templateMap[key];
 			} else if (user instanceof IP) {
-				const ip = user.sanitize(true);
-				if (!ips.includes(ip)) {
-					ips.push(ip);
-				}
-			} else if (!users.includes(user)) {
-				users.push(user);
+				ips.add(user.sanitize(true));
+			} else {
+				users.add(user);
 			}
 
 		});
-		if (!users.length && !ips.length) {
+		if (!users.size && !ips.size) {
 			console.log('Markup cancelled: No UserANs can be closed.');
 			return null;
 		}
 
 		// Check if the users and IPs in the Sets are locally blocked
 		const blockInfo = await queryBlockedUsers(users, ips, page === ANS);
-		const remainingIps = ips.reduce((acc: string[], ip) => {
-			if (!(ip in blockInfo) && !acc.includes(ip)) {
-				acc.push(ip);
-			}
-			return acc;
-		}, []);
-		if (remainingIps.length) {
+		const remainingIps = filterSet(ips, (ip) => !(ip in blockInfo));
+		if (remainingIps.size) {
 			await queryBlockedIps(blockInfo, remainingIps);
 		}
 
@@ -589,29 +581,26 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 			}
 
 			// Only check users that aren't locally blocked
-			let gUsers: string[] = [];
-			let gIps: string[] = [];
+			let gUsers = new Set<string>();
+			let gIps = new Set<string>();
 			Object.values(templateMap).forEach(({user, date, hasBotTimestamp}) => {
 				if (date || hasBotTimestamp) {
 					// Ignore if locally blocked or has a |bot=TIMESTAMP parameter
 					return;
 				}
 				if (user instanceof IP) {
-					const ip = user.sanitize(true);
-					if (!gIps.includes(ip)) {
-						gIps.push(ip);
-					}
-				} else if (!gUsers.includes(user)) {
-					gUsers.push(user);
+					gIps.add(user.sanitize(true));
+				} else {
+					gUsers.add(user);
 				}
 			});
-			if (!gUsers.length && !gIps.length) {
+			if (!gUsers.size && !gIps.size) {
 				break;
 			}
 
 			// Check for global locks
-			let lockedUsers: string[];
-			if (gUsers.length && (lockedUsers = await queryLockedUsers(gUsers)).length) {
+			let lockedUsers: Set<string>;
+			if (gUsers.size && (lockedUsers = await queryLockedUsers(gUsers)).size) {
 				const lockDate = formatDateToMDinGMT9(new Date());
 				lockedUsers.forEach((username) => {
 					const key = Object.entries(templateMap).find(([_, obj]) => obj.user instanceof IP ? obj.user.equals(username) : obj.user === username)?.[0];
@@ -623,16 +612,16 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 					temp.domain = 'グローバルロック';
 					temp.date = lockDate;
 				});
-				gUsers = gUsers.filter((user) => !lockedUsers.includes(user));
-				if (!gUsers.length && !gIps.length) {
+				gUsers = filterSet(gUsers, (username) => !lockedUsers.has(username));
+				if (!gUsers.size && !gIps.size) {
 					break;
 				}
 			}
 
 			// Check for global blocks
 			const gblockInfo = await queryGloballyBlockedUsers(gUsers, gIps, page === ANS);
-			gIps = gIps.filter((ip) => !(ip in gblockInfo));
-			if (gIps.length) {
+			gIps = filterSet(gIps, (ip) => !(ip in gblockInfo));
+			if (gIps.size) {
 				await queryGloballyBlockedIps(gblockInfo, gIps);
 			}
 			if (Util.isEmptyObject(gblockInfo)) {
@@ -1065,13 +1054,13 @@ interface BlockInfoMap {
  * @param isANS
  * @returns
  */
-async function queryBlockedUsers(users: string[], ips: string[], isANS: boolean): Promise<BlockInfoMap> {
+async function queryBlockedUsers(users: Set<string>, ips: Set<string>, isANS: boolean): Promise<BlockInfoMap> {
 
 	const params = {
 		list: 'blocks',
 		bkprop: 'user|timestamp|expiry|restrictions|flags',
 		bklimit: 'max',
-		bkusers: users.concat(ips)
+		bkusers: [...users, ...ips]
 	};
 	const response = await getMwbot().massRequest(params, 'bkusers');
 
@@ -1088,7 +1077,7 @@ async function queryBlockedUsers(users: string[], ips: string[], isANS: boolean)
 			if (
 				!block.automatic && block.user &&
 				// On WP:AN/S, registered users should be marked up only if they are indef'd
-				(!isANS || /* isANS but isIp */ ips.includes(block.user) || /* isUser and indef'd */ block.expiry === 'infinity')
+				(!isANS || /* isANS but isIp */ ips.has(block.user) || /* isUser and indef'd */ block.expiry === 'infinity')
 			) {
 				acc[block.user] = block as ApiResponseQueryListBlocksVerified;
 			}
@@ -1109,18 +1098,19 @@ async function queryBlockedUsers(users: string[], ips: string[], isANS: boolean)
  * @param ips
  * @returns
  */
-async function queryBlockedIps(info: BlockInfoMap, ips: string[]): Promise<void> {
+async function queryBlockedIps(info: BlockInfoMap, ips: Set<string>): Promise<void> {
 
 	const params = {
 		list: 'blocks',
 		bkprop: 'user|timestamp|expiry|restrictions|flags',
 		bklimit: 'max',
-		bkip: ips
+		bkip: [...ips]
 	};
 	const response = await getMwbot().massRequest(params, 'bkip', 1);
 
-	for (let i = 0; i < response.length; i++) {
-		const res = response[i];
+	const ipIter = ips.values();
+	for (const res of response) {
+		const ip = ipIter.next().value as string;
 		if (res instanceof Error) {
 			console.error(res);
 			continue;
@@ -1132,9 +1122,9 @@ async function queryBlockedIps(info: BlockInfoMap, ips: string[]): Promise<void>
 		const blockInfo = resBlocks.filter((obj) => !obj.automatic && obj.user) as ApiResponseQueryListBlocksVerified[];
 		// IPs can have multiple blocks
 		if (blockInfo.length === 1) {
-			info[ips[i]] = blockInfo[0]; // Register an object
+			info[ip] = blockInfo[0]; // Register an object
 		} else if (blockInfo.length > 1) {
-			info[ips[i]] = blockInfo; // Register an array of objects
+			info[ip] = blockInfo; // Register an array of objects
 		}
 	}
 
@@ -1462,18 +1452,19 @@ function restrictionsDiffer(
  * @param users
  * @returns *This function never rejects*.
  */
-async function queryLockedUsers(users: string[]): Promise<string[]> {
+async function queryLockedUsers(users: Set<string>): Promise<Set<string>> {
 
+	const usersArr = [...users];
 	const params = {
 		list: 'globalallusers',
-		agufrom: users,
-		aguto: users,
+		agufrom: usersArr,
+		aguto: usersArr,
 		aguprop: 'lockinfo',
 		agulimit: 1
 	};
 	const response = await getMwbot().massRequest(params, ['agufrom', 'aguto'], 1);
 
-	return response.reduce((acc: string[], res, i) => {
+	return response.reduce((acc, res, i) => {
 		if (res instanceof Error) {
 			console.error(res);
 			return acc;
@@ -1482,16 +1473,16 @@ async function queryLockedUsers(users: string[]): Promise<string[]> {
 		if (!resAgusers) {
 			return acc;
 		}
-		const username = users[i];
+		const username = usersArr[i];
 		if (!resAgusers[0]) {
 			console.warn(`User:${username} doesn't appear to exist.`);
 			return acc;
 		}
 		if (resAgusers[0].locked === '') {
-			acc.push(username);
+			acc.add(username);
 		}
 		return acc;
-	}, []);
+	}, new Set<string>());
 
 }
 
@@ -1532,11 +1523,11 @@ interface GlobalBlockInfoMap {
  * @param isANS
  * @returns
  */
-async function queryGloballyBlockedUsers(users: string[], ips: string[], isANS: boolean): Promise<GlobalBlockInfoMap> {
+async function queryGloballyBlockedUsers(users: Set<string>, ips: Set<string>, isANS: boolean): Promise<GlobalBlockInfoMap> {
 
 	const params = {
 		list: 'globalblocks',
-		bgtargets: users.concat(ips),
+		bgtargets: [...users, ...ips],
 		bgprop: 'target|timestamp|expiry',
 		bglimit: 'max'
 	};
@@ -1556,7 +1547,7 @@ async function queryGloballyBlockedUsers(users: string[], ips: string[], isANS: 
 			if (gblock.automatic || !gblock.target || !gblock.timestamp || !gblock.expiry) {
 				continue;
 			}
-			if (isANS && users.includes(gblock.target) && gblock.expiry !== 'infinity') {
+			if (isANS && users.has(gblock.target) && gblock.expiry !== 'infinity') {
 				continue;
 			}
 			acc[gblock.target] = gblock as ApiResponseQueryListGlobalblocksVerified;
@@ -1577,19 +1568,20 @@ async function queryGloballyBlockedUsers(users: string[], ips: string[], isANS: 
  * @param ips
  * @returns
  */
-async function queryGloballyBlockedIps(info: GlobalBlockInfoMap, ips: string[]): Promise<void> {
+async function queryGloballyBlockedIps(info: GlobalBlockInfoMap, ips: Set<string>): Promise<void> {
 
 	const params = {
 		list: 'globalblocks',
-		bgip: ips,
+		bgip: [...ips],
 		bgprop: 'target|timestamp|expiry',
 		bglimit: 'max'
 	};
 
 	const response = await getMwbot().massRequest(params, 'bgip', 1);
 
-	for (let i = 0; i < response.length; i++) {
-		const res = response[i];
+	const ipsIter = ips.values();
+	for (const res of response) {
+		const ip = ipsIter.next().value as string;
 		if (res instanceof Error) {
 			console.error(res);
 			continue;
@@ -1602,9 +1594,9 @@ async function queryGloballyBlockedIps(info: GlobalBlockInfoMap, ips: string[]):
 			!automatic && target && timestamp && expiry
 		) as ApiResponseQueryListGlobalblocksVerified[];
 		if (gblockInfo.length === 1) {
-			info[ips[i]] = gblockInfo[0];
+			info[ip] = gblockInfo[0];
 		} else if (gblockInfo.length > 1) {
-			info[ips[i]] = gblockInfo;
+			info[ip] = gblockInfo;
 		}
 	}
 

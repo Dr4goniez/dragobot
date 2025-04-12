@@ -4,6 +4,7 @@
 
 import { ApiEditPageParams, ApiResponse, ApiResponseQueryPagesPropInfoProtection, MwbotError, Wikitext } from 'mwbot-ts';
 import { getMwbot, Util } from './mwbot';
+import { filterSet } from './lib';
 
 const ppTitles = [
 	// Note: Spaces must be replaced with underscores
@@ -71,7 +72,7 @@ export async function removePp(quitBefore: number): Promise<void> {
 	console.log('Checking for {{pp}} templates to remove from pages...');
 
 	const transclusions = await getPpTransclusions();
-	if (!transclusions.length) {
+	if (!transclusions.size) {
 		return found(0);
 	}
 
@@ -80,9 +81,9 @@ export async function removePp(quitBefore: number): Promise<void> {
 		return console.log('Check cancelled: Failed to filter protected pages.');
 	}
 
-	const unprotectedPages = transclusions.filter((page) => !protectedPages.includes(page));
-	found(unprotectedPages.length);
-	if (!unprotectedPages.length) {
+	const unprotectedPages = filterSet(transclusions, (page) => !protectedPages.has(page));
+	found(unprotectedPages.size);
+	if (!unprotectedPages.size) {
 		return;
 	}
 
@@ -113,7 +114,7 @@ export async function removePp(quitBefore: number): Promise<void> {
  *
  * *This function never rejects*.
  */
-async function getPpTransclusions(): Promise<string[]> {
+async function getPpTransclusions(): Promise<Set<string>> {
 
 	const mwbot = getMwbot();
 
@@ -144,7 +145,7 @@ async function getPpTransclusions(): Promise<string[]> {
 			for (const {ns, title} of transcludedin) {
 				if (
 					typeof ns !== 'number' || !title ||
-					excludeNamespaces.has(ns) || excludeTitles.has(title) ||
+					excludeNamespaces.has(ns) || excludeTitles.has(title) || rPpSubpages.test(title) ||
 					// Avoid potential script pages in a subject namespace
 					(ns % 2 === 0 && /\.(js|css|json)$/.test(title))
 				) {
@@ -156,7 +157,7 @@ async function getPpTransclusions(): Promise<string[]> {
 	}
 
 	// Remove subpages of pp templates and return the result
-	return Array.from(ret).filter((page) => !rPpSubpages.test(page));
+	return ret;
 
 }
 
@@ -181,10 +182,10 @@ function found(count: number): void {
  *
  * *This function never rejects.*
  */
-async function filterProtected(pages: string[]): Promise<string[] | null> {
+async function filterProtected(pages: Set<string>): Promise<Set<string> | null> {
 
 	const response = await getMwbot().massRequest({
-		titles: pages,
+		titles: [...pages],
 		prop: 'info',
 		inprop: 'protection'
 	}, 'titles');
@@ -213,7 +214,7 @@ async function filterProtected(pages: string[]): Promise<string[] | null> {
 		}
 	}
 
-	return [...ret];
+	return ret;
 
 }
 
