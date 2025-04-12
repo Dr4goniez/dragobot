@@ -125,7 +125,6 @@ async function getPpTransclusions(): Promise<Set<string>> {
 				titles: temp,
 				prop: 'transcludedin',
 				tiprop: 'title',
-				tishow: '!redirect',
 				tilimit: 'max'
 			}, Infinity, true)
 		);
