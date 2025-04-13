@@ -725,15 +725,10 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 
 		// Prepare the edit
 		const oldContent = wikitext.content;
-		let newContent = wikitext.modifyTemplates((temps) => {
-			return temps.reduce((acc: (string | null)[], _, i) => {
-				acc.push(
-					templateMap[i]
-					? templateMap[i].temp.stringify({suppressKeys: ['2']})
-					: null
-				);
-				return acc;
-			}, []);
+		let newContent = wikitext.modifyTemplates((_, i) => {
+			return templateMap[i]
+				? templateMap[i].temp.stringify({suppressKeys: ['2']})
+				: null;
 		});
 		if (oldContent === newContent) {
 			console.log('Markup cancelled: Same content.');

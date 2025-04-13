@@ -242,16 +242,12 @@ function createTransformationPredicate(page: string) {
 
 		// Remove `pp` templates from the content
 		const oldContent = wikitext.content;
-		let newContent = wikitext.modifyTemplates((temps) => {
-			return temps.reduce((acc: (string | null)[], temp) => {
-				const isPp =
-					!temp.skip &&
-					mwbot.Template.is(temp, 'ParsedTemplate') &&
-					!temp.title.isExternal() &&
-					pp.has(temp.title.getPrefixedDb());
-				acc.push(isPp ? '' : null);
-				return acc;
-			}, []);
+		let newContent = wikitext.modifyTemplates((temp) => {
+			const isPp =
+				!temp.skip &&
+				mwbot.Template.is(temp, 'ParsedTemplate') &&
+				!temp.title.isExternal() && pp.has(temp.title.getPrefixedDb());
+			return isPp ? '' : null;
 		});
 		if (oldContent === newContent) {
 			console.log('Edit cancelled: No {{pp}} templates found in the page.');
@@ -261,12 +257,9 @@ function createTransformationPredicate(page: string) {
 		}
 
 		// If there are any empty <noinclude> tags left in the page, remove them as well
-		newContent = wikitext.modifyTags((tags) => {
-			return tags.reduce((acc: (string | null)[], {name, selfClosing, unclosed, content, skip}) => {
-				const isEmptyNoinclude = name === 'noinclude' && !selfClosing && !unclosed && !content?.trim() && !skip;
-				acc.push(isEmptyNoinclude ? '' : null);
-				return acc;
-			}, []);
+		newContent = wikitext.modifyTags(({name, selfClosing, unclosed, content, skip}) => {
+			const isEmptyNoinclude = name === 'noinclude' && !selfClosing && !unclosed && !content?.trim() && !skip;
+			return isEmptyNoinclude ? '' : null;
 		});
 
 		return {

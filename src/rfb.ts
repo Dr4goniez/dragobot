@@ -153,23 +153,22 @@ function addSubpageLinkToTemplate(dates: DateMap, debuggingMode: boolean) {
 	return mwbot.edit(title, (wikitext) => {
 
 		// Add a link targeting the next month's subpage
+		let linkAdded = false;
+		const curLinkTitle = new mwbot.Title(createSubpageTitle(current.year, current.month));
 		const yearLabel = next.month === 1 ? `${next.year}年 ` : '';
 		const newLink = new mwbot.Wikilink(createSubpageTitle(next.year, next.month), `${next.month}月`);
+
 		const oldContent = wikitext.content;
-		const newContent = wikitext.modifyWikilinks((links) => {
-			let linkAdded = false;
-			const curLinkTitle = new mwbot.Title(createSubpageTitle(current.year, current.month));
-			return links.map((lk) => {
-				const isCurMonthLink =
-					!linkAdded && !lk.skip &&
-					mwbot.Wikilink.is(lk, 'ParsedWikilink') && lk.title.equals(curLinkTitle);
-				if (isCurMonthLink) {
-					linkAdded = true;
-					return lk.text + ' - ' + yearLabel + newLink.stringify();
-				} else {
-					return null;
-				}
-			});
+		const newContent = wikitext.modifyWikilinks((link) => {
+			const isCurMonthLink =
+				!linkAdded && !link.skip &&
+				mwbot.Wikilink.is(link, 'ParsedWikilink') && link.title.equals(curLinkTitle);
+			if (isCurMonthLink) {
+				linkAdded = true;
+				return link.text + ' - ' + yearLabel + newLink.stringify();
+			} else {
+				return null;
+			}
 		});
 
 		if (oldContent === newContent) {
@@ -206,28 +205,23 @@ async function addSubpageLinkToWikipedia(dates: DateMap, debuggingMode: boolean)
 	return mwbot.edit(title, (wikitext) => {
 
 		// Add a link targeting the current month's subpage
-		const yearLabel = month === 1 ? `${year}年 ` : '';
-		const newLink = new mwbot.Wikilink(createSubpageTitle(year, month), `${month}月`);
-		const oldContent = wikitext.content;
-		let newContent = wikitext.modifyWikilinks((links) => {
-			let linkAdded = false;
-			const rPrefixedTitle = /^Wikipedia:投稿ブロック依頼_20\d{2}年(?:1[0-2]|[1-9])月$/;
-			return links.reduceRight((acc: (string | null)[], lk) => {
-				const isPrevMonthLink =
-					!linkAdded && mwbot.Wikilink.is(lk, 'ParsedWikilink') &&
-					rPrefixedTitle.test(lk.title.getPrefixedDb());
-				if (isPrevMonthLink) {
-					linkAdded = true;
-					acc.unshift(lk.text + ' - ' + yearLabel + newLink.stringify());
-				} else {
-					acc.unshift(null);
-				}
-				return acc;
-			}, []);
-		});
+		const rPrefixedTitle = /^Wikipedia:投稿ブロック依頼_20\d{2}年(?:1[0-2]|[1-9])月$/;
+		const lastIndex = wikitext.parseWikilinks().reduce((acc, link, i) => {
+			if (!link.skip && mwbot.Wikilink.is(link, 'ParsedWikilink') && rPrefixedTitle.test(link.title.getPrefixedDb())) {
+				acc = i;
+			}
+			return acc;
+		}, -1);
 
-		// If no insertion point could have been retrieved, rebuild the entire page
-		if (oldContent === newContent) {
+		let newContent;
+		const newLink = new mwbot.Wikilink(createSubpageTitle(year, month), `${month}月`);
+		if (lastIndex !== -1) {
+			const yearLabel = month === 1 ? `${year}年 ` : '';
+			newContent = wikitext.modifyWikilinks((link, i) => {
+				return i === lastIndex ? link.text + ' - ' + yearLabel + newLink.stringify() : null;
+			});
+		} else {
+			// If no insertion point could have been retrieved, rebuild the entire page
 			const lines = [
 				'{{投稿ブロック依頼|}}',
 				'== 依頼 ==',
@@ -300,22 +294,21 @@ function updateArchiveTemplate(dates: DateMap, debuggingMode: boolean) {
 	return mwbot.edit(title, (wikitext) => {
 
 		// Add a link targeting the current year's subpage
+		let linkAdded = false;
+		const curYearTitle = new mwbot.Title(createSubpageTitle(current.year));
 		const newLink = new mwbot.Wikilink(createSubpageTitle(next.year), `${next.year}年`);
+
 		const oldContent = wikitext.content;
-		const newContent = wikitext.modifyWikilinks((links) => {
-			let linkAdded = false;
-			const curYearTitle = new mwbot.Title(createSubpageTitle(current.year));
-			return links.map((lk) => {
-				const isCurYearLink =
-					!linkAdded && mwbot.Wikilink.is(lk, 'ParsedWikilink') &&
-					lk.title.equals(curYearTitle);
-				if (isCurYearLink) {
-					linkAdded = true;
-					return lk.text + ' - ' + newLink.stringify();
-				} else {
-					return null;
-				}
-			});
+		const newContent = wikitext.modifyWikilinks((link) => {
+			const isCurYearLink =
+				!linkAdded && !link.skip &&
+				mwbot.Wikilink.is(link, 'ParsedWikilink') && link.title.equals(curYearTitle);
+			if (isCurYearLink) {
+				linkAdded = true;
+				return link.text + ' - ' + newLink.stringify();
+			} else {
+				return null;
+			}
 		});
 
 		if (oldContent === newContent) {
