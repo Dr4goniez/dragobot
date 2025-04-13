@@ -736,39 +736,30 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		}
 
 		// Generate summary
-		let summary = '';
+		let summary = 'Bot:';
 		const modOnly = Array.from(summaryMap.values()).every((links) => links.length === 0);
 		if (modOnly) {
 			// If no user links are set, it's a modification-only edit
-			summary = 'Bot: UserANの修正';
+			summary = ' UserANの修正';
 		} else {
-			summary += summaryMap.size === 1
-				// If editing a single section, place the section link first
-				? `/*${summaryMap.keys().next().value}*/ Bot:`
-				// If editing multiple sections, place "Bot:" first since additional section links will follow
-				: `Bot: /*${summaryMap.keys().next().value}*/`;
-			let i = -1;
 			outer: for (const [title, links] of summaryMap) {
-				i++;
-				if (i === 0) {
-					// For the first section, only append the first link — section title already added
-					summary += ' ' + links[0];
+				if (!links.length) {
+					continue;
+				}
+				// Append both the section title and the first link
+				// The reason for processing `link[0]` earlier is because we don't want the summary to end with a section link
+				const appendant = ` /*${title}*/ ${links[0]}`;
+				if (summary.length + appendant.length <= 497) {
+					// Append if it doesn't exceed the summary character limit
+					summary += appendant;
 				} else {
-					// For subsequent sections, append both the section title and the first link
-					// The reason for processing `link[0]` earlier is because we don't want the summary to end with a section link
-					const appendant = ` /*${title}*/ ${links[0]}`;
-					if (summary.length + appendant.length <= 497) {
-						// Append if it doesn't exceed the summary character limit
-						summary += appendant;
-					} else {
-						// Otherwise, truncate with "etc." and exit
-						summary += ' ほか'; // 3 letters; hence 497 above
-						break;
-					}
+					// Otherwise, truncate with "etc." and exit
+					summary += ' ほか'; // 3 letters; hence 497 above
+					break;
 				}
 				// Append the remaining user links for this section title
-				for (let j = 1; j < links.length; j++) {
-					const appendant = (summary.endsWith(']') ? ', ' : ' ') + links[j];
+				for (let i = 1; i < links.length; i++) {
+					const appendant = (summary.endsWith(']]') ? ', ' : ' ') + links[i];
 					if (summary.length + appendant.length <= 497) {
 						summary += appendant;
 					} else {
