@@ -383,7 +383,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 			return acc;
 		}, Object.create(null));
 		if (Util.isEmptyObject(templateMap)) {
-			console.log('Markup cancelled: No open UserANs were found.');
+			console.log('Markup cancelled: No open UserANs found.');
 			return null;
 		}
 

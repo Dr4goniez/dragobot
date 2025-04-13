@@ -101,7 +101,7 @@ export async function removePp(quitBefore: number): Promise<void> {
 				console.log('Edit failed.');
 			}
 		} else {
-			console.log('Edit complete.');
+			console.log('Edit done.');
 		}
 	}
 
