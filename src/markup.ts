@@ -316,14 +316,14 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 					break;
 				case 'log':
 				case 'logid':
-					if (/^\d+$/.test(user)) {
+					if (/^\d+$/.test(user)) { // This condition includes "!ip"
 						logid = user;
 						user = logidList.evaluate(user) || '';
 					}
 					break;
 				case 'diff':
 				case 'diffid':
-					if (/^\d+$/.test(user)) {
+					if (/^\d+$/.test(user)) { // This condition includes "!ip"
 						diffid = user;
 						user = diffidList.evaluate(user) || '';
 					}
@@ -337,7 +337,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 						user = '';
 					}
 			}
-			if (!user && !logid && !diffid) {
+			if (!user && !ip && !logid && !diffid) {
 				// One of these must be present to check block status
 				return acc;
 			}
