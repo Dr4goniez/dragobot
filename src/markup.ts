@@ -740,7 +740,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		const modOnly = Array.from(summaryMap.values()).every((links) => links.length === 0);
 		if (modOnly) {
 			// If no user links are set, it's a modification-only edit
-			summary = ' UserANの修正';
+			summary += ' UserANの修正';
 		} else {
 			outer: for (const [title, links] of summaryMap) {
 				if (!links.length) {
