@@ -64,6 +64,6 @@ const initOptions: MwbotInitOptions = {
 	...creds['foo']
 };
 
-new Mwbot(initOptions).init().then((mwbot) => {
+Mwbot.init(initOptions).then((mwbot) => {
 	// Use the initialized Mwbot instance...
 });

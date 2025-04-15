@@ -18,7 +18,7 @@ export async function init(user: keyof typeof creds, apiUrl?: string): Promise<M
 		userAgent: `dragobot/${VERSION} (https://github.com/Dr4goniez/dragobot)`,
 		...creds[user]
 	};
-	mwbot = await new Mwbot(initOptions).init();
+	mwbot = await Mwbot.init(initOptions);
 	return mwbot;
 }
 
