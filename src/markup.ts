@@ -751,6 +751,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				const appendant = ` /*${title}*/ ${links[0]}`;
 				if (summary.length + appendant.length <= 497) {
 					// Append if it doesn't exceed the summary character limit
+					// See https://gerrit.wikimedia.org/g/mediawiki/core/+/ce711e0bb1b615c1cfc959524f11a9344b79f1ea/includes/CommentStore/CommentStore.php#53
 					summary += appendant;
 				} else {
 					// Otherwise, truncate with "etc." and exit
