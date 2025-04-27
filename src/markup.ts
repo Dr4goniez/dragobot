@@ -363,13 +363,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				type: typeVal,
 				logid,
 				diffid,
-				refDate: (() => {
-					const reportTime5MinExtended = report.getTime() + 5 * 60 * 1000;
-					if (bot && bot.getTime() > reportTime5MinExtended) {
-						return bot;
-					}
-					return new Date(reportTime5MinExtended);
-				})(),
+				refDate: bot ?? new Date(report.getTime() + 5 * 60 * 1000),
 				hasBotTimestamp: !!bot,
 				sectionTitle: section.title,
 				// Properties to be added after block status check
