@@ -109,7 +109,7 @@ async function newBlocksPresent(mwbot: Mwbot, lastRunDate: Date | null): Promise
 		return false;
 
 	}).catch((err) => {
-		console.error(err);
+		console.dir(err, {depth: null, maxArrayLength: null});
 		return true;
 	});
 }
