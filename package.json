@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node -e \"const date = new Date().toISOString().replace(/\\.\\d+Z$/, '').replace(/[-T:]/g, ''); require('child_process').execSync(`node dist/entry.js > logs/${date}.txt 2>&1`);\"",
     "start-node": "ts-node src/entry.ts",
+    "start-node-log": "node -e \"const date = new Date().toISOString().replace(/\\.\\d+Z$/, '').replace(/[-T:]/g, ''); require('child_process').execSync(`ts-node src/entry.ts > logs/${date}.txt 2>&1`);\"",
     "test": "ts-node src/test.ts",
     "test-log": "node -e \"const date = new Date().toISOString().replace(/\\.\\d+Z$/, '').replace(/[-T:]/g, ''); require('child_process').execSync(`ts-node src/test.ts > logs/${date}_test.txt 2>&1`);\"",
     "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
