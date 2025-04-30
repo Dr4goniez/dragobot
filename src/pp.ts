@@ -208,7 +208,8 @@ async function filterProtected(pages: Set<string>): Promise<Set<string> | null> 
 				continue;
 			}
 			if (isProtected(protection, now)) {
-				ret.add(title);
+				// The `title` property may be missing only if invalid page/revision IDs are passed
+				ret.add(title as string);
 			}
 		}
 	}
