@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/Dr4goniez/dragobot#readme",
   "devDependencies": {
+    "@types/node": "^22.15.3",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.1",
