@@ -32,6 +32,6 @@
   },
   "dependencies": {
     "cheerio": "^1.0.0-rc.12",
-    "mwbot-ts": "github:Dr4goniez/mwbot-ts#release"
+    "mwbot-ts": "github:Dr4goniez/mwbot-ts"
   }
 }
