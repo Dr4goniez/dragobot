@@ -2,7 +2,7 @@
  * This module serves to remove `{{pp}}` templates from unprotected pages.
  */
 
-import { ApiEditPageParams, ApiResponse, ApiResponseQueryPagesPropInfoProtection, MwbotError, Wikitext } from 'mwbot-ts';
+import { ApiParamsActionEdit, ApiResponse, ApiResponseQueryPagesPropInfoProtection, MwbotError, Wikitext } from 'mwbot-ts';
 import { getMwbot, Util } from './mwbot';
 import { filterSet } from './lib';
 
@@ -237,7 +237,7 @@ function isProtected(protectionArray: ApiResponseQueryPagesPropInfoProtection[],
  * @returns A transformation predicate.
  */
 function createTransformationPredicate(page: string) {
-	return (wikitext: Wikitext): ApiEditPageParams | null => {
+	return (wikitext: Wikitext): ApiParamsActionEdit | null => {
 
 		const mwbot = getMwbot();
 

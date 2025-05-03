@@ -16,7 +16,7 @@ import {
 	MwbotError,
 	Wikitext,
 	ParsedTemplate,
-	ApiEditPageParams,
+	ApiParamsActionEdit,
 	PartiallyRequired,
 	ApiResponse,
 	ApiResponseQueryListBlocks,
@@ -176,7 +176,7 @@ export async function markupPage(page: string, checkGlobal: boolean): Promise<bo
  */
 function createTransformationPredicate(page: string, checkGlobal: boolean) {
 
-	return async (wikitext: Wikitext): Promise<ApiEditPageParams | null> => {
+	return async (wikitext: Wikitext): Promise<ApiParamsActionEdit | null> => {
 
 		const mwbot = getMwbot();
 
