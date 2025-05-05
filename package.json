@@ -3,12 +3,11 @@
   "version": "7.0.1",
   "description": "A Wikipedia bot.",
   "scripts": {
-    "start": "node startup.mjs",
-    "start-log": "node logger.mjs src/entry.ts _node",
+    "start": "node logger.mjs dist/entry.js",
+    "start-dev": "node logger.mjs src/entry.ts _node",
     "test": "ts-node src/test.ts",
     "test-log": "node logger.mjs src/test.ts _test",
-    "prebuild": "node generate-version.mjs",
-    "build": "npm run prebuild && tsc -p ."
+    "build": "node generate-version.mjs && tsc -p ."
   },
   "repository": {
     "type": "git",

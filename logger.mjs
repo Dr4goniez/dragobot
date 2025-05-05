@@ -43,7 +43,7 @@ const __dirname = dirname(__filename);
 const [,, scriptPath, logSuffix = ''] = process.argv;
 
 if (!scriptPath) {
-	console.error('Usage: node logger.js <scriptPath> [logSuffix]');
+	console.error('Usage: node logger.mjs <scriptPath> [logSuffix]');
 	process.exit(1);
 }
 
