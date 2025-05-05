@@ -2,6 +2,9 @@
  * This module provides an entry point to the bot application.
  */
 
+// For Toolforge: Ensure the long-running bot never exits
+setInterval(() => {}, 1000 * 59);
+
 import { createWriteStream, existsSync, mkdirSync } from 'fs';
 import { Console } from 'console';
 import { resolve } from 'path';

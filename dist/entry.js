@@ -3,6 +3,8 @@
  * This module provides an entry point to the bot application.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+// For Toolforge: Ensure the long-running bot never exits
+setInterval(() => { }, 1000 * 59);
 const fs_1 = require("fs");
 const console_1 = require("console");
 const path_1 = require("path");
