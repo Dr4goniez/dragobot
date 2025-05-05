@@ -155,7 +155,6 @@ async function getPpTransclusions(): Promise<Set<string>> {
 		});
 	}
 
-	// Remove subpages of pp templates and return the result
 	return ret;
 
 }

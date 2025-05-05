@@ -18,6 +18,7 @@ import {
 	ParsedTemplate,
 	ApiParamsActionEdit,
 	PartiallyRequired,
+	MultiValue,
 	ApiResponse,
 	ApiResponseQueryListBlocks,
 	ApiResponseQueryListLogevents,
@@ -1032,7 +1033,7 @@ type ApiResponseQueryListBlocksVerified = PartiallyRequired<
  * the value is an array of such objects.
  */
 interface BlockInfoMap {
-	[username: string]: ApiResponseQueryListBlocksVerified | ApiResponseQueryListBlocksVerified[];
+	[username: string]: MultiValue<ApiResponseQueryListBlocksVerified>;
 }
 
 /**

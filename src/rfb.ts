@@ -9,7 +9,6 @@ import { getMwbot } from './mwbot';
 /**
  * Performs monthly/yearly updates of RFB-related pages.
  *
- * When calling this function, the caller module must verify that
  * This function must be run before the new month starts, because its functionality
  * depends on the calculations of the current month and the next month.
  *
@@ -63,7 +62,7 @@ export async function updateRFB(debuggingMode = false): Promise<void> {
 		createYearlySubpage,
 		updateArchiveTemplate
 	];
-	for (const request of funcs.values()) {
+	for (const request of funcs) {
 		if (request === createYearlySubpage && dates.next.month !== 1) {
 			return;
 		}
