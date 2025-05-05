@@ -30,16 +30,14 @@
  *   - Errors thrown by the target script will be captured in the log file.
  */
 
-import { execSync } from 'node:child_process';
-import { mkdirSync, existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { mkdirSync, existsSync, createWriteStream } from 'node:fs';
 import { resolve, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Get __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Parse command line arguments
 const [,, scriptPath, logSuffix = ''] = process.argv;
 
 if (!scriptPath) {
@@ -47,7 +45,6 @@ if (!scriptPath) {
 	process.exit(1);
 }
 
-// Create timestamp like YYYYMMDDHHMMSS
 const date = new Date().toISOString()
 	.replace(/\.\d+Z$/, '')
 	.replace(/[-T:]/g, '');
@@ -57,9 +54,15 @@ if (!existsSync(logDir)) mkdirSync(logDir);
 
 const logFile = join(logDir, `${date}${logSuffix}.txt`);
 const ext = extname(scriptPath);
-
-// Choose ts-node or node
 const runner = ext === '.ts' ? 'ts-node' : 'node';
-const command = `${runner} ${scriptPath} > "${logFile}" 2>&1`;
 
-execSync(command, {stdio: 'inherit'});
+const outStream = createWriteStream(logFile, { flags: 'a' });
+const child = spawn(runner, [scriptPath]);
+
+child.stdout.pipe(outStream);
+child.stderr.pipe(outStream);
+
+child.on('close', (code) => {
+	console.log(`Process exited with code ${code}`);
+	process.exit(code);
+});
