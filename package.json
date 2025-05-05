@@ -2,11 +2,9 @@
   "name": "dragobot",
   "version": "7.0.1",
   "description": "A Wikipedia bot.",
-  "main": "dist/entry.js",
   "scripts": {
-    "start": "node logger.mjs dist/entry.js",
-    "start-node": "ts-node src/entry.ts",
-    "start-node-log": "node logger.mjs src/entry.ts _node",
+    "start": "npm ci && npm run build && node logger.mjs dist/entry.js",
+    "start-log": "node logger.mjs src/entry.ts _node",
     "test": "ts-node src/test.ts",
     "test-log": "node logger.mjs src/test.ts _test",
     "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
