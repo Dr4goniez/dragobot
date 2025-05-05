@@ -2,13 +2,12 @@
  * This module provides an entry point to the bot application.
  */
 
-import type { Mwbot } from 'mwbot-ts';
-import { init } from './mwbot';
+import { getMwbot, init } from './mwbot';
 import { markupANs } from './markup';
 import { removePp } from './pp';
 import { updateRFB } from './rfb';
 
-init('drakobot').then((mwbot) => {
+init('dragobot').then(() => {
 
 	let runCount = 0;
 	let lastRunDate: Date | null = null;
@@ -20,15 +19,16 @@ init('drakobot').then((mwbot) => {
 		const nextRun = date.getTime() + 10 * 60 * 1000;
 		console.log(`Current time: ${date.toISOString()}`);
 
+		// Check RFB-related pages if the month is transitioning
+		// Note: This should be done before any time-consuming processes
+		const checkRFB = isLastDayBetween1430And1440UTC(date);
+
 		// Check global block/lock statuses every 6 runs (1 hour)
 		const checkGlobal = runCount % 6 === 0;
 
 		// Check local block statuses?
-		const checkBlocks = checkGlobal || await newBlocksPresent(mwbot, lastRunDate);
+		const checkBlocks = checkGlobal || await newBlocksPresent(lastRunDate);
 		lastRunDate = date;
-
-		// Check RFB-related pages if the month is transitioning
-		const checkRFB = isLastDayBetween1430And1440UTC();
 
 		// Check inappropriate protection templates every 3 runs (30 minutes)
 		const checkProtectionTemplates = runCount % 3 === 0;
@@ -62,8 +62,7 @@ init('drakobot').then((mwbot) => {
 /**
  * Checks if the current time is the last day of the month between 14:30 and 14:40 UTC.
  */
-function isLastDayBetween1430And1440UTC(): boolean {
-	const now = new Date();
+function isLastDayBetween1430And1440UTC(now: Date): boolean {
 	const utcHours = now.getUTCHours();
 	const utcMinutes = now.getUTCMinutes();
 
@@ -81,12 +80,12 @@ function isLastDayBetween1430And1440UTC(): boolean {
  * Checks whether new blocks (excluding automatic ones) have been applied since the last run.
  * Always returns true on the first run or if an error occurs.
  */
-async function newBlocksPresent(mwbot: Mwbot, lastRunDate: Date | null): Promise<boolean> {
+async function newBlocksPresent(lastRunDate: Date | null): Promise<boolean> {
 	if (lastRunDate === null) {
 		// Always check on the first run
 		return true;
 	}
-	return mwbot.get({
+	return getMwbot().get({
 		list: 'blocks',
 		bkstart: lastRunDate.toUTCString(),
 		bkdir: 'newer',
