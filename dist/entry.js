@@ -3,8 +3,6 @@
  * This module provides an entry point to the bot application.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-// For Toolforge: Ensure the long-running bot never exits
-setInterval(() => { }, 1000 * 59);
 const fs_1 = require("fs");
 const console_1 = require("console");
 const path_1 = require("path");
@@ -19,10 +17,12 @@ const logStream = (0, fs_1.createWriteStream)(logFile, { flags: 'a' });
 const logger = new console_1.Console({ stdout: logStream, stderr: logStream });
 console.log = logger.log.bind(logger);
 console.error = logger.error.bind(logger);
+const server_1 = require("./server");
 const mwbot_1 = require("./mwbot");
 const markup_1 = require("./markup");
 const pp_1 = require("./pp");
 const rfb_1 = require("./rfb");
+(0, server_1.createServer)();
 (0, mwbot_1.init)('dragobot').then(() => {
     let runCount = 0;
     let lastRunDate = null;
@@ -60,6 +60,8 @@ const rfb_1 = require("./rfb");
     };
     bot();
     setInterval(bot, 10 * 60 * 1000); // Run the bot every 10 minutes
+}).catch((err) => {
+    console.dir(err, { depth: 3 });
 });
 /**
  * Checks if the current time is the last day of the month between 14:30 and 14:40 UTC.
