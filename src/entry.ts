@@ -2,9 +2,6 @@
  * This module provides an entry point to the bot application.
  */
 
-// For Toolforge: Ensure the long-running bot never exits
-setInterval(() => {}, 1000 * 59);
-
 import { createWriteStream, existsSync, mkdirSync } from 'fs';
 import { Console } from 'console';
 import { resolve } from 'path';
@@ -22,11 +19,13 @@ const logger = new Console({stdout: logStream, stderr: logStream});
 console.log = logger.log.bind(logger);
 console.error = logger.error.bind(logger);
 
+import { createServer } from './server';
 import { getMwbot, init } from './mwbot';
 import { markupANs } from './markup';
 import { removePp } from './pp';
 import { updateRFB } from './rfb';
 
+createServer();
 init('dragobot').then(() => {
 
 	let runCount = 0;
@@ -77,6 +76,8 @@ init('dragobot').then(() => {
 	bot();
 	setInterval(bot, 10 * 60 * 1000); // Run the bot every 10 minutes
 
+}).catch((err) => {
+	console.dir(err, {depth: 3});
 });
 
 /**

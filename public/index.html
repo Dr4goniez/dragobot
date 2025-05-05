@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>DragoBot Status</title>
+	<style>
+	body {
+		background-color: black;
+		color: white;
+		font-family: system-ui, sans-serif;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		height: 100vh;
+		margin: 0;
+		text-align: center;
+	}
+	.primary {
+		font-size: 300%;
+	}
+	a {
+		color: #00ccff;
+		text-decoration: none;
+	}
+	a:hover {
+		text-decoration: underline;
+	}
+	.timestamp {
+		margin-top: 1rem;
+		font-size: 0.9rem;
+		color: #cccccc;
+	}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="primary">
+			<p>
+				<a href="https://ja.wikipedia.org/wiki/%E5%88%A9%E7%94%A8%E8%80%85:DragoBot" target="_blank" rel="noopener noreferrer">DragoBot</a> is running! 💀
+			</p>
+		</div>
+		<div class="secondary">
+			<p>
+				Operated by <a href="https://meta.wikimedia.org/wiki/User:Dragoniez" target="_blank" rel="noopener noreferrer">Dragoniez</a>
+			</p>
+			<p>
+				<a href="https://github.com/Dr4goniez/dragobot" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
+			</p>
+			<div class="timestamp">
+				Last updated: <span id="time"></span>
+			</div>
+		</div>
+	</div>
+	<script>
+	document.getElementById('time').textContent = new Date().toLocaleString();
+	</script>
+</body>
+</html>
