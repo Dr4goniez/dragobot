@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/Dr4goniez/dragobot#readme",
   "devDependencies": {
+    "@types/express": "^5.0.1",
     "@types/node": "^22.15.3",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
@@ -29,6 +30,7 @@
   },
   "dependencies": {
     "cheerio": "^1.0.0-rc.12",
+    "express": "^5.1.0",
     "mwbot-ts": "^1.0.1"
   }
 }
