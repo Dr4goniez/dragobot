@@ -12,7 +12,7 @@ try {
 	if (!existsSync('dist/entry.js')) {
 		throw new Error('dist/entry.js not found. Build may have failed.');
 	}
-	execSync('node logger.mjs src/entry.ts _node', {stdio: 'inherit'});
+	execSync('node logger.mjs dist/entry.js', {stdio: 'inherit'});
 } catch (err) {
 	console.error('Startup failed:', err);
 	process.exit(1); // Exit gracefully; don't crash the pod repeatedly
