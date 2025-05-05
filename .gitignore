@@ -1,5 +1,6 @@
-# This will be at $HOME/service.template, not in the root directory of this repo
-service.template
+# Untracked directories
+node_modules
+dist
 
 # Log outputs
 logs
