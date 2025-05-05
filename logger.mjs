@@ -57,12 +57,16 @@ const ext = extname(scriptPath);
 const runner = ext === '.ts' ? 'ts-node' : 'node';
 
 const outStream = createWriteStream(logFile, { flags: 'a' });
-const child = spawn(runner, [scriptPath]);
 
-child.stdout.pipe(outStream);
-child.stderr.pipe(outStream);
-
-child.on('close', (code) => {
-	console.log(`Process exited with code ${code}`);
-	process.exit(code);
+// Spawn the child process in detached mode so it runs independently
+const child = spawn(runner, [scriptPath], {
+	detached: true,
+	stdio: ['ignore', outStream, outStream],
 });
+
+// Allow the parent to exit while the child keeps running
+child.unref();
+
+// Exit immediately; the child will continue logging independently
+console.log(`Started ${runner} ${scriptPath} in detached mode`);
+process.exit(0);
