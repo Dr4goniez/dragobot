@@ -1,12 +1,12 @@
-# Untracked file and directories
-node_modules
-dist
+# Untracked files and directories
+node_modules/
+dist/
 service.template
 
-# Log outputs
-logs
+# Log output
+logs/
 
-# User information
+# User credentials
 src/creds.ts
 dist/creds.js
 

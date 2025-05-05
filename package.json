@@ -7,7 +7,7 @@
     "start-log": "node logger.mjs src/entry.ts _node",
     "test": "ts-node src/test.ts",
     "test-log": "node logger.mjs src/test.ts _test",
-    "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
+    "prebuild": "node generate-version.mjs",
     "build": "npm run prebuild && tsc -p ."
   },
   "repository": {
