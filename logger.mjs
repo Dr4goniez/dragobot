@@ -30,14 +30,16 @@
  *   - Errors thrown by the target script will be captured in the log file.
  */
 
-import { spawn } from 'node:child_process';
-import { mkdirSync, existsSync, createWriteStream } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Get __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Parse command line arguments
 const [,, scriptPath, logSuffix = ''] = process.argv;
 
 if (!scriptPath) {
@@ -45,28 +47,15 @@ if (!scriptPath) {
 	process.exit(1);
 }
 
-const date = new Date().toISOString()
-	.replace(/\.\d+Z$/, '')
-	.replace(/[-T:]/g, '');
-
 const logDir = resolve(__dirname, './logs');
 if (!existsSync(logDir)) mkdirSync(logDir);
 
-const logFile = join(logDir, `${date}${logSuffix}.txt`);
+const timestamp = new Date().toISOString().replace(/:\./g, '_');
+const logFile = join(logDir, `${timestamp}${logSuffix}.txt`);
 const ext = extname(scriptPath);
+
+// Choose ts-node or node
 const runner = ext === '.ts' ? 'ts-node' : 'node';
+const command = `${runner} ${scriptPath} > "${logFile}" 2>&1`;
 
-const outStream = createWriteStream(logFile, { flags: 'a' });
-
-// Spawn the child process in detached mode so it runs independently
-const child = spawn(runner, [scriptPath], {
-	detached: true,
-	stdio: ['ignore', outStream, outStream],
-});
-
-// Allow the parent to exit while the child keeps running
-child.unref();
-
-// Exit immediately; the child will continue logging independently
-console.log(`Started ${runner} ${scriptPath} in detached mode`);
-process.exit(0);
+execSync(command, {stdio: 'inherit'});
