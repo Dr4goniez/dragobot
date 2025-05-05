@@ -97,7 +97,7 @@ export async function removePp(quitBefore: number): Promise<void> {
 		const result = await mwbot.edit(page, createTransformationPredicate(page)).catch((err: MwbotError) => err);
 		if (result instanceof MwbotError) {
 			if (result.code !== 'aborted') {
-				console.dir(result, {depth: null, maxArrayLength: null});
+				console.dir(result, {depth: 3});
 				console.log('Edit failed.');
 			}
 		} else {
@@ -193,7 +193,7 @@ async function filterProtected(pages: Set<string>): Promise<Set<string> | null> 
 	const ret = new Set<string>();
 	for (const res of response) {
 		if (res instanceof Error) {
-			console.dir(res, {depth: null, maxArrayLength: null});
+			console.dir(res, {depth: 3});
 			return null;
 		}
 		const resPages = res.query?.pages;

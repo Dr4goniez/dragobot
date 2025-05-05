@@ -157,7 +157,7 @@ export async function markupPage(page: string, checkGlobal: boolean): Promise<bo
 	const res = await getMwbot().edit(page, createTransformationPredicate(page, checkGlobal)).catch((err: MwbotError) => err);
 	if (res instanceof Error) {
 		if (res.code !== 'aborted') {
-			console.dir(res, {depth: null, maxArrayLength: null});
+			console.dir(res, {depth: 3});
 			return null;
 		}
 		return false;
@@ -865,7 +865,7 @@ async function updateLogids(): Promise<void> {
 	// With `apihighlimits`, the API returns 5000 entries. So there isn't much need to use continuedRequest() here
 	// const response = await getMwbot().continuedRequest(params, void 0, true);
 	const response = await getMwbot().get(params).catch((err) => {
-		console.dir(err, {depth: null, maxArrayLength: null});
+		console.dir(err, {depth: 3});
 		return {} as ApiResponse;
 	});
 	const resLogevents = response.query?.logevents;
@@ -909,7 +909,7 @@ async function updateDiffids(): Promise<void> {
 
 	for (const res of response) {
 		if (res instanceof Error) {
-			console.dir(res, {depth: null, maxArrayLength: null});
+			console.dir(res, {depth: 3});
 			continue;
 		}
 		const resPages = res.query?.pages;
@@ -1060,7 +1060,7 @@ async function queryBlockedUsers(users: Set<string>, ips: Set<string>, isANS: bo
 
 	return response.reduce((acc: BlockInfoMap, res) => {
 		if (res instanceof Error) {
-			console.dir(res, {depth: null, maxArrayLength: null});
+			console.dir(res, {depth: 3});
 			return acc;
 		}
 		const resBlocks = res.query?.blocks;
@@ -1106,7 +1106,7 @@ async function queryBlockedIps(info: BlockInfoMap, ips: Set<string>): Promise<vo
 	for (const res of response) {
 		const ip = ipIter.next().value as string;
 		if (res instanceof Error) {
-			console.dir(res, {depth: null, maxArrayLength: null});
+			console.dir(res, {depth: 3});
 			continue;
 		}
 		const resBlocks = res.query?.blocks;
@@ -1322,7 +1322,7 @@ async function checkReblocks(reblockMap: ReblockMap): Promise<ReblockInfo | null
 
 		const res = response[i];
 		if (res instanceof Error) {
-			console.dir(res, {depth: null, maxArrayLength: null});
+			console.dir(res, {depth: 3});
 			continue;
 		}
 		const resLogevents = res.query?.logevents;
@@ -1460,7 +1460,7 @@ async function queryLockedUsers(users: Set<string>): Promise<Set<string>> {
 
 	return response.reduce((acc, res, i) => {
 		if (res instanceof Error) {
-			console.dir(res, {depth: null, maxArrayLength: null});
+			console.dir(res, {depth: 3});
 			return acc;
 		}
 		const resAgusers = res.query?.globalallusers;
@@ -1530,7 +1530,7 @@ async function queryGloballyBlockedUsers(users: Set<string>, ips: Set<string>, i
 
 	return response.reduce((acc: GlobalBlockInfoMap, res) => {
 		if (res instanceof Error) {
-			console.dir(res, {depth: null, maxArrayLength: null});
+			console.dir(res, {depth: 3});
 			return acc;
 		}
 		const resGblocks = res.query?.globalblocks;
@@ -1577,7 +1577,7 @@ async function queryGloballyBlockedIps(info: GlobalBlockInfoMap, ips: Set<string
 	for (const res of response) {
 		const ip = ipsIter.next().value as string;
 		if (res instanceof Error) {
-			console.dir(res, {depth: null, maxArrayLength: null});
+			console.dir(res, {depth: 3});
 			continue;
 		}
 		const resGblocks = res.query?.globalblocks;

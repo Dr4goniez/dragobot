@@ -70,7 +70,7 @@ export async function updateRFB(debuggingMode = false): Promise<void> {
 		const result = await request(dates, debuggingMode).catch((err: MwbotError) => err);
 		if (result instanceof MwbotError) {
 			if (result.code !== 'aborted') {
-				console.dir(result, {depth: null, maxArrayLength: null});
+				console.dir(result, {depth: 3});
 				console.log('Edit failed.');
 			}
 		} else {

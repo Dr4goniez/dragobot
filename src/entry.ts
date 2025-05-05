@@ -108,7 +108,7 @@ async function newBlocksPresent(lastRunDate: Date | null): Promise<boolean> {
 		return false;
 
 	}).catch((err) => {
-		console.dir(err, {depth: null, maxArrayLength: null});
+		console.dir(err, {depth: 3});
 		return true;
 	});
 }
