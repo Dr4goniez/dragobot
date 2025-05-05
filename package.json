@@ -3,7 +3,7 @@
   "version": "7.0.1",
   "description": "A Wikipedia bot.",
   "scripts": {
-    "start": "npm ci && npm run build && node logger.mjs dist/entry.js",
+    "start": "node startup.mjs",
     "start-log": "node logger.mjs src/entry.ts _node",
     "test": "ts-node src/test.ts",
     "test-log": "node logger.mjs src/test.ts _test",
