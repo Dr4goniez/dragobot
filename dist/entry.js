@@ -3,6 +3,20 @@
  * This module provides an entry point to the bot application.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+const fs_1 = require("fs");
+const console_1 = require("console");
+const path_1 = require("path");
+// This works in CommonJS
+const logDir = (0, path_1.resolve)(__dirname, './../logs');
+if (!(0, fs_1.existsSync)(logDir))
+    (0, fs_1.mkdirSync)(logDir, { recursive: true });
+const ts = new Date().toISOString().replace(/[:.]/g, '_');
+const logFile = (0, path_1.resolve)(logDir, `${ts}.txt`);
+const logStream = (0, fs_1.createWriteStream)(logFile, { flags: 'a' });
+// Redirect console.log and console.error
+const logger = new console_1.Console({ stdout: logStream, stderr: logStream });
+console.log = logger.log.bind(logger);
+console.error = logger.error.bind(logger);
 const mwbot_1 = require("./mwbot");
 const markup_1 = require("./markup");
 const pp_1 = require("./pp");
