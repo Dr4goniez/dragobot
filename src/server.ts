@@ -1,3 +1,12 @@
+/**
+ * @module
+ *
+ * Node.js tools hosted on Toolforge must serve a landing page over HTTP;
+ * otherwise, the process receives a SIGTERM and is terminated.
+ *
+ * This module starts a server that serves `public/index.html`.
+ */
+
 import express from 'express';
 import path from 'path';
 
