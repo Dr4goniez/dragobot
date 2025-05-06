@@ -1,7 +1,7 @@
 {
   "name": "dragobot",
-  "version": "7.0.1",
-  "description": "A Wikipedia bot.",
+  "version": "7.1.0",
+  "description": "A Node.js bot running on the Japanese Wikipedia.",
   "scripts": {
     "start": "node logger.mjs dist/entry.js",
     "start-ts": "node logger.mjs src/entry.ts _ts",
