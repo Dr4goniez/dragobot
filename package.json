@@ -3,8 +3,8 @@
   "version": "7.0.1",
   "description": "A Wikipedia bot.",
   "scripts": {
-    "start": "node dist/entry.js",
-    "start-ts": "ts-node src/entry.ts",
+    "start": "node logger.mjs dist/entry.js",
+    "start-ts": "node logger.mjs src/entry.ts _ts",
     "test": "ts-node src/test.ts",
     "test-log": "node logger.mjs src/test.ts _test",
     "build": "node generate-version.mjs && tsc -p ."

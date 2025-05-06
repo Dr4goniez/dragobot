@@ -2,22 +2,22 @@
  * This module provides an entry point to the bot application.
  */
 
-import { createWriteStream, existsSync, mkdirSync } from 'fs';
-import { Console } from 'console';
-import { resolve } from 'path';
+// import { createWriteStream, existsSync, mkdirSync } from 'fs';
+// import { Console } from 'console';
+// import { resolve } from 'path';
 
-// This works in CommonJS
-const logDir = resolve(__dirname, './../logs');
-if (!existsSync(logDir)) mkdirSync(logDir, {recursive: true});
+// // This works in CommonJS
+// const logDir = resolve(__dirname, './../logs');
+// if (!existsSync(logDir)) mkdirSync(logDir, {recursive: true});
 
-const ts = new Date().toISOString().replace(/[:.]/g, '_');
-const logFile = resolve(logDir, `${ts}.txt`);
-const logStream = createWriteStream(logFile, {flags: 'a'});
+// const ts = new Date().toISOString().replace(/[:.]/g, '_');
+// const logFile = resolve(logDir, `${ts}.txt`);
+// const logStream = createWriteStream(logFile, {flags: 'a'});
 
-// Redirect console.log and console.error
-const logger = new Console({stdout: logStream, stderr: logStream});
-console.log = logger.log.bind(logger);
-console.error = logger.error.bind(logger);
+// // Redirect console.log and console.error
+// const logger = new Console({stdout: logStream, stderr: logStream});
+// console.log = logger.log.bind(logger);
+// console.error = logger.error.bind(logger);
 
 import { createServer } from './server';
 import { getMwbot, init } from './mwbot';
