@@ -10,17 +10,16 @@
 import express from 'express';
 import path from 'path';
 
-const root = path.resolve(__dirname, '../public');
+const app = express();
 
-export function createServer(): void {
-	const app = express();
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, '../public'));
 
-	// Serve static files (like index.html)
-	app.use(express.static(root));
+const startedAt = new Date();
 
-	// Fallback (in case someone accesses '/')
+export function createServer() {
 	app.get('/', (_, res) => {
-		res.sendFile(path.join(root, 'index.html'));
+		res.render('index', {startedAt});
 	});
 
 	// Use Toolforge's PORT or default to 8080
