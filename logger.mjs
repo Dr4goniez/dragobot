@@ -50,7 +50,7 @@ if (!scriptPath) {
 const logDir = resolve(__dirname, './logs');
 if (!existsSync(logDir)) mkdirSync(logDir);
 
-const timestamp = new Date().toISOString().replace(/:\./g, '_');
+const timestamp = new Date().toISOString().replace(/[:.]/g, '_');
 const logFile = join(logDir, `${timestamp}${logSuffix}.txt`);
 const ext = extname(scriptPath);
 
