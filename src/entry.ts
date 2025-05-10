@@ -8,7 +8,7 @@ import { markupANs } from './markup';
 import { removePp } from './pp';
 import { updateRFB } from './rfb';
 
-createServer();
+const server = createServer();
 init('dragobot').then(() => {
 
 	let runCount = 0;
@@ -61,6 +61,12 @@ init('dragobot').then(() => {
 
 }).catch((err) => {
 	console.dir(err, {depth: 3});
+
+	// If the initialization failed, simulate a crash so Toolforge restarts the webservice
+	server.close(() => {
+		console.log('Server closed due to initialization failure.');
+		process.kill(process.pid, 'SIGTERM');
+	});	
 });
 
 /**

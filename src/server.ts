@@ -9,6 +9,7 @@
 
 import express from 'express';
 import path from 'path';
+import { Server } from 'http';
 
 const app = express();
 
@@ -17,14 +18,14 @@ app.set('views', path.join(__dirname, '../public'));
 
 const startedAt = new Date();
 
-export function createServer() {
+export function createServer(): Server {
 	app.get('/', (_, res) => {
 		res.render('index', {startedAt});
 	});
 
 	// Use Toolforge's PORT or default to 8080
 	const port = parseInt(process.env.PORT ?? '8080', 10);
-	app.listen(port, () => {
+	return app.listen(port, () => {
 		console.log(`The server has started on port ${port}.`);
 	});
 }
