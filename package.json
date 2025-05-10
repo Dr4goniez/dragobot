@@ -3,7 +3,7 @@
   "version": "7.1.0",
   "description": "A Node.js bot running on the Japanese Wikipedia.",
   "scripts": {
-    "start": "node logger.mjs dist/entry.js",
+    "start": "npm ci && npm build && node logger.mjs dist/entry.js",
     "start-ts": "node logger.mjs src/entry.ts _ts",
     "test": "ts-node src/test.ts",
     "test-log": "node logger.mjs src/test.ts _test",

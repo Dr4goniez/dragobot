@@ -1,5 +1,7 @@
 # Untracked files and directories
 service.template
+node_modules/
+dist/
 
 # Log output
 logs/
