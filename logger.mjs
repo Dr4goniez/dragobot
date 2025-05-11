@@ -19,7 +19,7 @@
  *   logSuffix   - Optional suffix to append to the log filename (e.g., '_test')
  *
  * Output:
- *   A file will be created in ./logs/, such as: logs/20250501163045_test.txt
+ *   A file will be created in ./logs/, such as: logs/2025-05-01T16_30_45_000Z_test.txt
  *
  * Requirements:
  *   - For `.ts` files, `ts-node` must be available in the current environment.
