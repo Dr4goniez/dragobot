@@ -49,7 +49,7 @@ export async function updateRFB(debuggingMode = false): Promise<void> {
 		};
 	};
 	const dates: DateMap = {
-		current: {year: currentYear, month: currentMonth},
+		current: { year: currentYear, month: currentMonth },
 		next: shiftMonth(1),
 	};
 
@@ -69,7 +69,7 @@ export async function updateRFB(debuggingMode = false): Promise<void> {
 		const result = await request(dates, debuggingMode).catch((err: MwbotError) => err);
 		if (result instanceof MwbotError) {
 			if (result.code !== 'aborted') {
-				console.dir(result, {depth: 3});
+				console.dir(result, { depth: 3 });
 				console.log('Edit failed.');
 			}
 		} else {
@@ -145,7 +145,7 @@ function createSubpageTitle(year: number, month?: number): string {
 function addSubpageLinkToTemplate(dates: DateMap, debuggingMode: boolean) {
 
 	const mwbot = getMwbot();
-	const {next, current} = dates;
+	const { next, current } = dates;
 
 	const title = prefix(debuggingMode) + 'Template:投稿ブロック依頼';
 	console.log(`Updating ${title}...`);
@@ -197,7 +197,7 @@ function addSubpageLinkToTemplate(dates: DateMap, debuggingMode: boolean) {
 async function addSubpageLinkToWikipedia(dates: DateMap, debuggingMode: boolean) {
 
 	const mwbot = getMwbot();
-	const {year, month} = dates.current;
+	const { year, month } = dates.current;
 
 	const title = prefix(debuggingMode) + 'Wikipedia:投稿ブロック依頼';
 	console.log(`Updating ${title}...`);
@@ -286,7 +286,7 @@ function createYearlySubpage(dates: DateMap, debuggingMode: boolean) {
 function updateArchiveTemplate(dates: DateMap, debuggingMode: boolean) {
 
 	const mwbot = getMwbot();
-	const {current, next} = dates;
+	const { current, next } = dates;
 
 	const title = prefix(debuggingMode) + `Template:投稿ブロック依頼過去ログ`;
 	console.log(`Updating ${title}...`);

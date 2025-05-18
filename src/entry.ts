@@ -60,7 +60,7 @@ init('dragobot').then(() => {
 	setInterval(bot, 10 * 60 * 1000); // Run the bot every 10 minutes
 
 }).catch((err) => {
-	console.dir(err, {depth: 3});
+	console.dir(err, { depth: 3 });
 
 	// If the initialization failed, simulate a crash so Toolforge restarts the webservice
 	server.close(() => {
@@ -110,7 +110,7 @@ async function newBlocksPresent(lastRunDate: Date | null): Promise<boolean> {
 		}
 
 		const lastRunTime = lastRunDate.getTime();
-		for (const {automatic, timestamp} of resBlocks) {
+		for (const { automatic, timestamp } of resBlocks) {
 			if (!automatic && timestamp && Date.parse(timestamp) >= lastRunTime) {
 				return true;
 			}
@@ -118,7 +118,7 @@ async function newBlocksPresent(lastRunDate: Date | null): Promise<boolean> {
 		return false;
 
 	}).catch((err) => {
-		console.dir(err, {depth: 3});
+		console.dir(err, { depth: 3 });
 		return true;
 	});
 }

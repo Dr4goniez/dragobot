@@ -58,4 +58,4 @@ const ext = extname(scriptPath);
 const runner = ext === '.ts' ? 'ts-node' : 'node';
 const command = `${runner} ${scriptPath} > "${logFile}" 2>&1`;
 
-execSync(command, {stdio: 'inherit'});
+execSync(command, { stdio: 'inherit' });

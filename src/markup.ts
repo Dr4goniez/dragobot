@@ -91,7 +91,7 @@ class IDList {
 			if (!username) {
 				throw new TypeError(`Expected a string for "username", but got ${typeof username}.`);
 			}
-			list = {[idOrList]: username};
+			list = { [idOrList]: username };
 		}
 		Object.entries(list).forEach(([id, user]) => {
 			if (!this.isUnprocessable(id)) {
@@ -158,7 +158,7 @@ export async function markupPage(page: string, checkGlobal: boolean): Promise<bo
 	const res = await getMwbot().edit(page, createTransformationPredicate(page, checkGlobal)).catch((err: MwbotError) => err);
 	if (res instanceof Error) {
 		if (res.code !== 'aborted') {
-			console.dir(res, {depth: 3});
+			console.dir(res, { depth: 3 });
 			return null;
 		}
 		return false;
@@ -240,7 +240,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 			let bot: Date | null = null;
 			let hasEmptyStatusParam = false;
 			let modified = false;
-			for (let {key, value} of Object.values(temp.params)) {
+			for (let { key, value } of Object.values(temp.params)) {
 				key = mwbot.Title.clean(key);
 				value = mwbot.Title.clean(value);
 				if (key === '2') {
@@ -302,7 +302,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				case 'unl':
 				case 'usernolink':
 					if (ip) {
-						temp.insertParam(typeKey, 'ip2', true, {before: '1'});
+						temp.insertParam(typeKey, 'ip2', true, { before: '1' });
 						typeVal = 'ip2';
 						modified = true;
 					}
@@ -331,7 +331,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 					break;
 				default: // 'none' or Invalid typeVal (the block status can't be checked)
 					if (ip) {
-						temp.insertParam(typeKey, 'ip2', true, {before: '1'});
+						temp.insertParam(typeKey, 'ip2', true, { before: '1' });
 						typeVal = 'ip2';
 						modified = true;
 					} else {
@@ -392,7 +392,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		Object.entries(templateMap).forEach(([key, obj]) => {
 
 			// Process converted IDs
-			const {logid, diffid} = obj;
+			const { logid, diffid } = obj;
 			if (!obj.user) {
 				if (logid) {
 					const username = logidList.evaluate(logid);
@@ -591,7 +591,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 			// Only check users that aren't locally blocked
 			let gUsers = new Set<string>();
 			let gIps = new Set<string>();
-			Object.values(templateMap).forEach(({user, date, hasBotTimestamp}) => {
+			Object.values(templateMap).forEach(({ user, date, hasBotTimestamp }) => {
 				if (date || hasBotTimestamp) {
 					// Ignore if locally blocked or has a |bot=TIMESTAMP parameter
 					return;
@@ -692,7 +692,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				return;
 			}
 
-			// Register the title of the section this template is in, in either case of `{modified: true}` or `{date: 'M/D'}`
+			// Register the title of the section this template is in, in either case of `{ modified: true }` or `{ date: 'M/D' }`
 			// The array will be left empty if we can't find any template object with a non-empty `date` property
 			const sectionTitle = obj.sectionTitle;
 			if (!summaryMap.has(sectionTitle)) {
@@ -722,7 +722,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		const oldContent = wikitext.content;
 		let newContent = wikitext.modifyTemplates((_, i) => {
 			return templateMap[i]
-				? templateMap[i].temp.stringify({suppressKeys: ['2']})
+				? templateMap[i].temp.stringify({ suppressKeys: ['2'] })
 				: null;
 		});
 		if (oldContent === newContent) {
@@ -772,7 +772,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		let sectionIndex: number | undefined = undefined;
 		if (
 			summaryMap.size === 1 &&
-			(section = wikitext.parseSections().find(({title}) => title === summaryMap.keys().next().value))
+			(section = wikitext.parseSections().find(({ title }) => title === summaryMap.keys().next().value))
 		) {
 			sectionIndex = section.index;
 			newContent = section.text;
@@ -860,13 +860,13 @@ async function updateLogids(): Promise<void> {
 		lelimit: 'max'
 	};
 	if (leend) {
-		Object.assign(params, {leend});
+		Object.assign(params, { leend });
 	}
 
 	// With `apihighlimits`, the API returns 5000 entries. So there isn't much need to use continuedRequest() here
 	// const response = await getMwbot().continuedRequest(params, void 0, true);
 	const response = await getMwbot().get(params).catch((err) => {
-		console.dir(err, {depth: 3});
+		console.dir(err, { depth: 3 });
 		return {} as ApiResponse;
 	});
 	const resLogevents = response.query?.logevents;
@@ -874,7 +874,7 @@ async function updateLogids(): Promise<void> {
 		return;
 	}
 	let ts = '';
-	for (const {timestamp, logid, title} of resLogevents) {
+	for (const { timestamp, logid, title } of resLogevents) {
 		if (!ts && timestamp) {
 			ts = timestamp;
 		}
@@ -910,16 +910,16 @@ async function updateDiffids(): Promise<void> {
 
 	for (const res of response) {
 		if (res instanceof Error) {
-			console.dir(res, {depth: 3});
+			console.dir(res, { depth: 3 });
 			continue;
 		}
 		const resPages = res.query?.pages;
 		if (resPages) {
-			for (const {revisions} of resPages) {
+			for (const { revisions } of resPages) {
 				if (!revisions) {
 					continue;
 				}
-				for (const {revid, user} of revisions) {
+				for (const { revid, user } of revisions) {
 					if (typeof revid === 'number' && user) {
 						diffidList.register(String(revid), user);
 					}
@@ -1061,7 +1061,7 @@ async function queryBlockedUsers(users: Set<string>, ips: Set<string>, isANS: bo
 
 	return response.reduce((acc: BlockInfoMap, res) => {
 		if (res instanceof Error) {
-			console.dir(res, {depth: 3});
+			console.dir(res, { depth: 3 });
 			return acc;
 		}
 		const resBlocks = res.query?.blocks;
@@ -1107,7 +1107,7 @@ async function queryBlockedIps(info: BlockInfoMap, ips: Set<string>): Promise<vo
 	for (const res of response) {
 		const ip = ipIter.next().value as string;
 		if (res instanceof Error) {
-			console.dir(res, {depth: 3});
+			console.dir(res, { depth: 3 });
 			continue;
 		}
 		const resBlocks = res.query?.blocks;
@@ -1195,13 +1195,13 @@ function getBlockDuration(
 		append: boolean;
 	}
 	const units: UnitMap[] = [
-		{key: 'year', label: '年', promote: Infinity, append: false},
-		{key: 'month', label: 'か月', promote: 12, append: true},
-		{key: 'week', label: '週間', promote: 4, append: true},
-		{key: 'day', label: '日', promote: 7, append: false},
-		{key: 'hour', label: '時間', promote: 24, append: true},
-		{key: 'minute', label: '分', promote: 60, append: true},
-		{key: 'second', label: '秒', promote: 60, append: true},
+		{ key: 'year', label: '年', promote: Infinity, append: false },
+		{ key: 'month', label: 'か月', promote: 12, append: true },
+		{ key: 'week', label: '週間', promote: 4, append: true },
+		{ key: 'day', label: '日', promote: 7, append: false },
+		{ key: 'hour', label: '時間', promote: 24, append: true },
+		{ key: 'minute', label: '分', promote: 60, append: true },
+		{ key: 'second', label: '秒', promote: 60, append: true },
 	];
 
 	let remainingMs = diffMs;
@@ -1209,7 +1209,7 @@ function getBlockDuration(
 	let breakIn: number | null = null;
 
 	for (let i = 0; i < units.length; i++) {
-		const {key, label, promote, append} = units[i];
+		const { key, label, promote, append } = units[i];
 		let value = Math.floor(remainingMs / MS[key]);
 		if (value > 0) {
 
@@ -1323,7 +1323,7 @@ async function checkReblocks(reblockMap: ReblockMap): Promise<ReblockInfo | null
 
 		const res = response[i];
 		if (res instanceof Error) {
-			console.dir(res, {depth: 3});
+			console.dir(res, { depth: 3 });
 			continue;
 		}
 		const resLogevents = res.query?.logevents;
@@ -1341,7 +1341,7 @@ async function checkReblocks(reblockMap: ReblockMap): Promise<ReblockInfo | null
 		for (const obj of resLogevents) {
 			// Ensure existence of some properties
 			// No need to look at unblock logs (and see if there's a newer block log) beucase we know the user is currently blocked
-			const {action, timestamp, params} = obj;
+			const { action, timestamp, params } = obj;
 			if (!action || !['block', 'reblock'].includes(action) || !timestamp || !params) {
 				continue;
 			}
@@ -1410,8 +1410,8 @@ function restrictionsDiffer(
 	if (!rest1 && !rest2) return false;
 
 	// At this point, both are defined
-	const {pages: pages1, namespaces: namespaces1, actions: actions1} = rest1!;
-	const {pages: pages2, namespaces: namespaces2, actions: actions2} = rest2!;
+	const { pages: pages1, namespaces: namespaces1, actions: actions1 } = rest1!;
+	const { pages: pages2, namespaces: namespaces2, actions: actions2 } = rest2!;
 
 	if (typeof pages1 !== typeof pages2 || (pages1 && pages2 && !Util.arraysEqual(
 		pages1.map(p => p.page_title),
@@ -1461,7 +1461,7 @@ async function queryLockedUsers(users: Set<string>): Promise<Set<string>> {
 
 	return response.reduce((acc, res, i) => {
 		if (res instanceof Error) {
-			console.dir(res, {depth: 3});
+			console.dir(res, { depth: 3 });
 			return acc;
 		}
 		const resAgusers = res.query?.globalallusers;
@@ -1531,7 +1531,7 @@ async function queryGloballyBlockedUsers(users: Set<string>, ips: Set<string>, i
 
 	return response.reduce((acc: GlobalBlockInfoMap, res) => {
 		if (res instanceof Error) {
-			console.dir(res, {depth: 3});
+			console.dir(res, { depth: 3 });
 			return acc;
 		}
 		const resGblocks = res.query?.globalblocks;
@@ -1578,14 +1578,14 @@ async function queryGloballyBlockedIps(info: GlobalBlockInfoMap, ips: Set<string
 	for (const res of response) {
 		const ip = ipsIter.next().value as string;
 		if (res instanceof Error) {
-			console.dir(res, {depth: 3});
+			console.dir(res, { depth: 3 });
 			continue;
 		}
 		const resGblocks = res.query?.globalblocks;
 		if (!resGblocks || !resGblocks.length) {
 			continue;
 		}
-		const gblockInfo = resGblocks.filter(({automatic, target, timestamp, expiry}) =>
+		const gblockInfo = resGblocks.filter(({ automatic, target, timestamp, expiry }) =>
 			!automatic && target && timestamp && expiry
 		) as ApiResponseQueryListGlobalblocksVerified[];
 		if (gblockInfo.length === 1) {

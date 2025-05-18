@@ -14,7 +14,7 @@ type Apps = 'foo' | 'bar' | 'baz' | 'anon';
  * Credential store for all applications.
  * Replace the placeholder values with actual credentials when used in a real project.
  */
-export const creds: Record<Apps, {credentials: Credentials}> = {
+export const creds: Record<Apps, { credentials: Credentials }> = {
 	foo: {
 		/**
 		 * OAuth 2.0 authentication

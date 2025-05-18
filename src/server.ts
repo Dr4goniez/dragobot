@@ -20,7 +20,7 @@ const startedAt = new Date();
 
 export function createServer(): Server {
 	app.get('/', (_, res) => {
-		res.render('index', {startedAt});
+		res.render('index', { startedAt });
 	});
 
 	// Use Toolforge's PORT or default to 8080

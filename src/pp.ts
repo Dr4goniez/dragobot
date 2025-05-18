@@ -97,7 +97,7 @@ export async function removePp(quitBefore: number): Promise<void> {
 		const result = await mwbot.edit(page, createTransformationPredicate(page)).catch((err: MwbotError) => err);
 		if (result instanceof MwbotError) {
 			if (result.code !== 'aborted') {
-				console.dir(result, {depth: 3});
+				console.dir(result, { depth: 3 });
 				console.log('Edit failed.');
 			}
 		} else {
@@ -172,14 +172,14 @@ async function filterProtected(pages: Set<string>): Promise<Set<string> | null> 
 	const ret = new Set<string>();
 	for (const res of response) {
 		if (res instanceof Error) {
-			console.dir(res, {depth: 3});
+			console.dir(res, { depth: 3 });
 			return null;
 		}
 		const resPages = res.query?.pages;
 		if (!resPages) {
 			return null;
 		}
-		for (const {title, protection} of resPages) {
+		for (const { title, protection } of resPages) {
 			if (!protection) {
 				return null;
 			}
@@ -206,7 +206,7 @@ async function filterProtected(pages: Set<string>): Promise<Set<string> | null> 
  * @returns
  */
 function isProtected(protectionArray: ApiResponseQueryPagesPropInfoProtection[], now: number): boolean {
-	return protectionArray.some(({expiry}) => /^in/.test(expiry) || Date.parse(expiry) > now);
+	return protectionArray.some(({ expiry }) => /^in/.test(expiry) || Date.parse(expiry) > now);
 }
 
 /**
@@ -237,7 +237,7 @@ function createTransformationPredicate(page: string) {
 		}
 
 		// If there are any empty <noinclude> tags left in the page, remove them as well
-		newContent = wikitext.modifyTags(({name, selfClosing, unclosed, content, skip}) => {
+		newContent = wikitext.modifyTags(({ name, selfClosing, unclosed, content, skip }) => {
 			const isEmptyNoinclude = name === 'noinclude' && !selfClosing && !unclosed && !content?.trim() && !skip;
 			return isEmptyNoinclude ? '' : null;
 		});
