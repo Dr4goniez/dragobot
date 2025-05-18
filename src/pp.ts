@@ -2,7 +2,7 @@
  * This module serves to remove `{{pp}}` templates from unprotected pages.
  */
 
-import { ApiParamsActionEdit, ApiResponse, ApiResponseQueryPagesPropInfoProtection, MwbotError, Wikitext } from 'mwbot-ts';
+import { ApiParamsActionEdit, ApiResponseQueryPagesPropInfoProtection, MwbotError, Wikitext } from 'mwbot-ts';
 import { getMwbot, Util } from './mwbot';
 import { filterSet } from './lib';
 
@@ -115,48 +115,28 @@ export async function removePp(quitBefore: number): Promise<void> {
  * *This function never rejects*.
  */
 async function getPpTransclusions(): Promise<Set<string>> {
-
-	const mwbot = getMwbot();
-
-	const batches: Array<Promise<ApiResponse>> = [];
-	for (const temp of pp) {
-		batches.push(
-			mwbot.continuedRequest({
-				titles: temp,
-				prop: 'transcludedin',
-				tiprop: 'title',
-				tilimit: 'max'
-			}, Infinity, true)
-		);
-	}
-
-	const responses = await Promise.all(batches);
 	const ret = new Set<string>();
-	for (const res of responses) {
-		const resPages = res.query?.pages;
-		if (!resPages) {
-			continue;
-		}
-		resPages.forEach(({transcludedin}) => {
-			if (!transcludedin) {
+	const transclusions = await getMwbot().getTransclusions([...pp], { tiprop: 'title' }).catch((err) => {
+		console.dir(err, { depth: 3 });
+		return null;
+	});
+	if (transclusions === null) {
+		return ret;
+	}
+	Object.values(transclusions).forEach((arr) => {
+		arr.forEach(({ ns, title }) => {
+			if (
+				typeof ns !== 'number' || !title ||
+				excludeNamespaces.has(ns) || excludeTitles.has(title) || rPpSubpages.test(title) ||
+				// Avoid potential script pages in a subject namespace
+				(ns % 2 === 0 && /\.(js|css|json)$/.test(title))
+			) {
 				return;
 			}
-			for (const {ns, title} of transcludedin) {
-				if (
-					typeof ns !== 'number' || !title ||
-					excludeNamespaces.has(ns) || excludeTitles.has(title) || rPpSubpages.test(title) ||
-					// Avoid potential script pages in a subject namespace
-					(ns % 2 === 0 && /\.(js|css|json)$/.test(title))
-				) {
-					continue;
-				}
-				ret.add(title);
-			}
+			ret.add(title);
 		});
-	}
-
+	});
 	return ret;
-
 }
 
 /**
