@@ -853,10 +853,13 @@ interface TemplateInfo extends BlockInfo {
  * Supported eras: 令和, 平成, 昭和
  *
  * Note:
- * For Japanese formats that omit seconds, one minute is added to the resulting `Date`.
- * This is to ensure correct comparison logic: e.g., when checking if a block was applied
- * *after* the given time. Without this, the bot would mistakenly treat a block applied
- * at the exact time as earlier, due to the absence of seconds in the source string.
+ * For Japanese formats that omit seconds, the resulting `Date` sets seconds to 59.
+ * This is necessary to ensure correct comparison behavior in edge cases such as:
+ *   "Was the block applied after the given time?"
+ * If the stored timestamp is `10:01:00` and the block was applied at `10:01:30`,
+ * comparing strictly with `10:01:00` would return `true` even though both refer
+ * to the same intended minute. By setting seconds to 59, we ensure the full minute
+ * is encompassed, minimizing false positives in "after" comparisons.
  *
  * @param str The timestamp string to parse.
  * @returns A `Date` object in UTC time, or `null` if parsing fails.
@@ -888,12 +891,9 @@ function convertTimestampToDateUTC(str: string): Date | null {
 			Number(month) - 1,
 			Number(day),
 			Number(hour),
-			Number(minute)
+			Number(minute),
+			59 // Set seconds to 59 to fully capture the minute range for accurate "after" comparisons
 		));
-		// Increment 1 minute since the second is truncated
-		// This Date object is used to verify if "the block was applied after this date", so without this
-		// the bot would wrongly mark up for the block applied at the specified date
-		ret.setUTCMinutes(ret.getUTCMinutes() + 1);
 
 	} else if ((m = rTimestamp.japaneseEra.exec(str))) {
 		const { era, eraYear, month, day, hour, minute } = m.groups!;
@@ -904,10 +904,9 @@ function convertTimestampToDateUTC(str: string): Date | null {
 			Number(month) - 1,
 			Number(day),
 			Number(hour),
-			Number(minute)
+			Number(minute),
+			59 // Same rationale as above
 		));
-		// Same rationale as above
-		ret.setUTCMinutes(ret.getUTCMinutes() + 1);
 	}
 
 	return ret;
