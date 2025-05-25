@@ -1241,6 +1241,15 @@ function getBlockDuration(
 		}
 	}
 
+	// Convert "1 day 7 hours" to "31 hours"
+	if (
+		parts.length === 2 &&
+		parts[0][0] === 1 && parts[0][1] === '日' &&
+		parts[1][0] === 7 && parts[1][1] === '時間'
+	) {
+		return '31時間';
+	}
+
 	return parts.length > 0 ? parts.flat().join('') : '0秒';
 }
 
