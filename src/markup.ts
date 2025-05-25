@@ -131,6 +131,10 @@ const diffidList = new IDList();
 const ANI = 'Wikipedia:管理者伝言板/投稿ブロック';
 const ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット';
 const AN3RR = 'Wikipedia:管理者伝言板/3RR';
+/**
+ * Stores nonexisting useranames. Added by {@link queryLockedUsers}.
+ */
+const nonexistingUsers = new Set<string>();
 
 /**
  * Marks up UserANs on the administrators' noticeboards.
@@ -416,7 +420,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				delete templateMap[key];
 			} else if (user instanceof IP) {
 				ips.add(user.sanitize(true));
-			} else {
+			} else if (!nonexistingUsers.has(user)) {
 				users.add(user);
 			}
 
@@ -1552,6 +1556,8 @@ async function queryLockedUsers(users: Set<string>): Promise<Set<string>> {
 		const username = usersArr[i];
 		if (!resAgusers[0]) {
 			console.warn(`User:${username} doesn't appear to exist.`);
+			console.log(`Excluded from future checks: "${username}".`);
+			nonexistingUsers.add(username);
 			return acc;
 		}
 		if (resAgusers[0].locked === '') {
