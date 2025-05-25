@@ -250,12 +250,11 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 						// Don't increment "len" for empty `2=` parameters
 					}
 				} else if (key === 'bot') {
-					let m;
-					if (value === 'no') {
+					let date;
+					if (value.toLowerCase() === 'no') {
 						return acc;
-					} else if ((m = /20\d{2}-(?:0[1-9]|1[0-2])-(?:[0-2]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(Z)?/.exec(value))) {
-						const timestamp = m[0] + (m[1] || 'Z'); // Ensure UTC
-						bot = new Date(timestamp);
+					} else if ((date = convertTimestampToDateUTC(value))) {
+						bot = date;
 					}
 					// Don't increment "len" for `bot=` parameters
 				} else if (/^(1|[uU]ser)$/.test(key)) {
@@ -838,6 +837,80 @@ interface TemplateInfo extends BlockInfo {
 	 */
 	hasBotTimestamp: boolean;
 	sectionTitle: string;
+}
+
+/**
+ * Parses a timestamp string in various formats and returns a `Date` object
+ * that represents the same moment in time (UTC-based).
+ *
+ * All input formats are assumed to represent UTC time.
+ *
+ * Supported formats:
+ * - ISO 8601: `2025-05-25T10:01:00Z` or without the trailing `Z`
+ * - Japanese Gregorian: `2025年5月25日 (日) 10:01`
+ * - Japanese era-based: `令和7年5月25日 (日) 10:01`, `平成元年12月1日 (月) 08:00`, etc.
+ *
+ * Supported eras: 令和, 平成, 昭和
+ *
+ * Note:
+ * For Japanese formats that omit seconds, one minute is added to the resulting `Date`.
+ * This is to ensure correct comparison logic: e.g., when checking if a block was applied
+ * *after* the given time. Without this, the bot would mistakenly treat a block applied
+ * at the exact time as earlier, due to the absence of seconds in the source string.
+ *
+ * @param str The timestamp string to parse.
+ * @returns A `Date` object in UTC time, or `null` if parsing fails.
+ */
+function convertTimestampToDateUTC(str: string): Date | null {
+	const rTimestamp = {
+		iso: /20\d{2}-(?:0[1-9]|1[0-2])-(?:[0-2]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:Z)?/,
+		japanese: /(?<year>20\d{2})年(?<month>[1-9]|1[0-2])月(?<day>[12]?\d|3[01])日 \([日月火水木金土]\) (?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)/,
+		japaneseEra: /(?<era>令和|平成|昭和)(?<eraYear>元|\d{1,2})年(?<month>[1-9]|1[0-2])月(?<day>[12]?\d|3[01])日 \([日月火水木金土]\) (?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)/,
+	};
+
+	const eraOffsets: Record<string, number> = {
+		令和: 2019,
+		平成: 1989,
+		昭和: 1926,
+	};
+
+	let ret: Date | null = null;
+	let m: RegExpExecArray | null;
+
+	if ((m = rTimestamp.iso.exec(str))) {
+		// Use as-is, trusting that the timestamp represents a UTC time
+		ret = new Date(m[0]);
+
+	} else if ((m = rTimestamp.japanese.exec(str))) {
+		const { year, month, day, hour, minute } = m.groups!;
+		ret = new Date(Date.UTC(
+			Number(year),
+			Number(month) - 1,
+			Number(day),
+			Number(hour),
+			Number(minute)
+		));
+		// Increment 1 minute since the second is truncated
+		// This Date object is used to verify if "the block was applied after this date", so without this
+		// the bot would wrongly mark up for the block applied at the specified date
+		ret.setUTCMinutes(ret.getUTCMinutes() + 1);
+
+	} else if ((m = rTimestamp.japaneseEra.exec(str))) {
+		const { era, eraYear, month, day, hour, minute } = m.groups!;
+		const yearNum = eraYear === '元' ? 1 : Number(eraYear);
+		const gregorianYear = eraOffsets[era] + yearNum - 1;
+		ret = new Date(Date.UTC(
+			gregorianYear,
+			Number(month) - 1,
+			Number(day),
+			Number(hour),
+			Number(minute)
+		));
+		// Same rationale as above
+		ret.setUTCMinutes(ret.getUTCMinutes() + 1);
+	}
+
+	return ret;
 }
 
 let leend = '';
