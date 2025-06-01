@@ -422,6 +422,8 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				ips.add(user.sanitize(true));
 			} else if (!nonexistingUsers.has(user)) {
 				users.add(user);
+			} else {
+				delete templateMap[key];
 			}
 
 		});
