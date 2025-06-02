@@ -4,7 +4,7 @@
  */
 
 import { MwbotError } from 'mwbot-ts';
-import { getMwbot } from './mwbot';
+import { getMwbot, Util } from './mwbot';
 
 /**
  * Performs monthly/yearly updates of RFB-related pages.
@@ -74,6 +74,10 @@ export async function updateRFB(debuggingMode = false): Promise<void> {
 			}
 		} else {
 			console.log('Edit done.');
+			// When WP:RFB is successfully updated, schedule background purge for RFB-related pages
+			if (request === addSubpageLinkToWikipedia) {
+				purge();
+			}
 		}
 	}
 
@@ -243,6 +247,62 @@ async function addSubpageLinkToWikipedia(dates: DateMap, debuggingMode: boolean)
 
 	});
 
+}
+
+/**
+ * Purges the cache for RFB-related pages in the background shortly after 15:00 UTC.
+ *
+ * @returns A Promise that resolves once the purge process has completed.
+ */
+async function purge(): Promise<void> {
+	console.log('Scheduled background purge for RFB-related pages.');
+	await Util.sleep(millisecondsUntilUTC15());
+	getMwbot().purge([
+		'Wikipedia:投稿ブロック依頼',
+		'MediaWiki:Recentchangestext',
+		'Template:意見募集中',
+		'Template:依頼'
+	], {
+		forcerecursivelinkupdate: true
+	}).then(({ purge }) => {
+		console.log('[Background task] Cache purge completed for the following pages:');
+		console.group();
+		console.log(`- Current time: ${new Date().toISOString()}`);
+		purge.forEach(({ title, purged }) => {
+			const result = purged ? 'Success' : 'Failure';
+			console.log(`- ${title}: ${result}`);
+		});
+		console.groupEnd();
+	}).catch((err) => {
+		console.error('[Background task] Cache purge failed for RFB-related pages.');
+		console.dir(err, { depth: 3 });
+	});
+}
+
+/**
+ * Returns the number of milliseconds remaining until the next occurrence of 15:00 UTC **today**.
+ *
+ * If the current time is before 15:00 UTC today, this returns the number of milliseconds
+ * until that time. If the current time is already past 15:00 UTC, it returns `0`.
+ *
+ * @returns The number of milliseconds remaining until 15:00 UTC today, or `0` if already past.
+ */
+function millisecondsUntilUTC15(): number {
+	const now = new Date();
+
+	// Construct a Date object representing today at 15:00 UTC
+	const target = new Date(Date.UTC(
+		now.getUTCFullYear(),
+		now.getUTCMonth(),
+		now.getUTCDate(),
+		15, 0, 0, 0 // 15:00:00.000 UTC
+	));
+
+	// Calculate the difference in milliseconds between now and 15:00 UTC
+	const diff = target.getTime() - now.getTime();
+
+	// If already past 15:00 UTC, return 0
+	return Math.max(diff, 0);
 }
 
 /**
