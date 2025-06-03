@@ -1,6 +1,6 @@
 {
   "name": "dragobot",
-  "version": "7.3.1",
+  "version": "7.3.2",
   "description": "A Node.js bot running on the Japanese Wikipedia.",
   "scripts": {
     "start": "npm ci && npm run build && node logger.mjs dist/entry.js",
