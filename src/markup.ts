@@ -346,19 +346,32 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				return acc;
 			}
 
-			const section = wikitext.identifySection(temp.startIndex, temp.endIndex);
+			// Retrieve a reference date for the report
+			let refDate = bot;
+			if (!refDate) {
+				// If |bot= is not specified, parse the signature timestamp
+				const followingText = wikitext.content.slice(temp.endIndex);
+				const sig = followingText.match(/(\d{4})年(\d{1,2})月(\d{1,2})日 \(.{1}\) (\d{2}):(\d{2}) \(UTC\)/);
+				if (!sig) {
+					return acc;
+				}
+
+				const [, yearStr, monthStr, dayStr, hourStr, minuteStr] = sig;
+				const year = parseInt(yearStr, 10);
+				const month = parseInt(monthStr, 10) - 1; // Month is 0-based in JS Date
+				const day = parseInt(dayStr, 10);
+				const hour = parseInt(hourStr, 10);
+				const minute = parseInt(minuteStr, 10);
+
+				refDate = new Date(Date.UTC(year, month, day, hour, minute));
+				refDate.setMinutes(refDate.getMinutes() + 5);
+			}
+
+			// Identify the section the report belongs to
+			const section = wikitext.identifySection(temp);
 			if (!section) {
 				return acc;
 			}
-
-			// Retrieve a report timestamp
-			const followingText = section.text.slice(section.text.length - (temp.endIndex - section.startIndex)); // Text folllowing the template
-			const sig = /(\d{4})年(\d{1,2})月(\d{1,2})日 \(.{1}\) (\d{2}:\d{2}) \(UTC\)/.exec(followingText);
-			if (!sig) {
-				return acc;
-			}
-			const ts = sig.map((el) => el.padStart(2, '0')); // MM and DD may be of one digit but they must be of two digits
-			const report = new Date(`${ts[1]}-${ts[2]}-${ts[3]}T${ts[4]}:00Z`); // YYYY-MM-DDThh:mm:00Z (hh:mm is one capturing group)
 
 			acc[i] = {
 				temp,
@@ -367,7 +380,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				type: typeVal,
 				logid,
 				diffid,
-				refDate: bot ?? new Date(report.getTime() + 5 * 60 * 1000),
+				refDate,
 				hasBotTimestamp: !!bot,
 				sectionTitle: section.title,
 				// Properties to be added after block status check
