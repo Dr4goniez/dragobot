@@ -346,11 +346,24 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				return acc;
 			}
 
+			// Identify the section the report belongs to
+			const section = wikitext.identifySection(temp);
+			if (!section) {
+				return acc;
+			}
+
 			// Retrieve a reference date for the report
-			let refDate = bot;
-			if (!refDate) {
-				// If |bot= is not specified, parse the signature timestamp
-				const followingText = wikitext.content.slice(temp.endIndex);
+			const refDate: ReferenceDate = {
+				date: bot as Date,
+				type: 'bot'
+			};
+			if (!refDate.date) { // If |bot= is not specified, parse the signature timestamp
+
+				// The signature must be searched WITHIN the section because sections on AN pages
+				// aren't always arranged in chronological order. This means that the first signature
+				// in the next section might be much older than the time this report was submitted,
+				// which would break the logic for determining an accurate reference date here.
+				const followingText = wikitext.content.slice(temp.endIndex, section.endIndex);
 				const sig = followingText.match(/(\d{4})年(\d{1,2})月(\d{1,2})日 \(.{1}\) (\d{2}):(\d{2}) \(UTC\)/);
 				if (!sig) {
 					return acc;
@@ -363,14 +376,8 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				const hour = parseInt(hourStr, 10);
 				const minute = parseInt(minuteStr, 10);
 
-				refDate = new Date(Date.UTC(year, month, day, hour, minute));
-				refDate.setMinutes(refDate.getMinutes() + 5);
-			}
-
-			// Identify the section the report belongs to
-			const section = wikitext.identifySection(temp);
-			if (!section) {
-				return acc;
+				refDate.date = new Date(Date.UTC(year, month, day, hour, minute));
+				refDate.type = 'report';
 			}
 
 			acc[i] = {
@@ -381,7 +388,6 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 				logid,
 				diffid,
 				refDate,
-				hasBotTimestamp: !!bot,
 				sectionTitle: section.title,
 				// Properties to be added after block status check
 				domain: '',
@@ -486,8 +492,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 
 			// Add block information to `templateMap` if the block is new
 			const blockDate = new Date(block.timestamp);
-			const isNewBlock = blockDate.getTime() > temp.refDate.getTime();
-			if (isNewBlock) {
+			if (isTimestampAfterRefDate(blockDate, temp.refDate)) {
 
 				const flags: string[] = [];
 				if (!block.allowusertalk) {
@@ -609,8 +614,8 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 			// Only check users that aren't locally blocked
 			let gUsers = new Set<string>();
 			let gIps = new Set<string>();
-			Object.values(templateMap).forEach(({ user, date, hasBotTimestamp }) => {
-				if (date || hasBotTimestamp) {
+			Object.values(templateMap).forEach(({ user, date, refDate }) => {
+				if (date || refDate.type === 'bot') {
 					// Ignore if locally blocked or has a |bot=TIMESTAMP parameter
 					return;
 				}
@@ -676,8 +681,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 
 				// Add global block information to `templateMap` if the block is new
 				const gblockDate = new Date(gblock.timestamp);
-				const isNewBlock = gblockDate.getTime() > temp.refDate.getTime();
-				if (isNewBlock) {
+				if (isTimestampAfterRefDate(gblockDate, temp.refDate)) {
 
 					const bitLen = !(temp.user instanceof IP) ? '' : (() => {
 						const cidr = IP.newFromText(gblock.target); // This is always an IP instance
@@ -844,18 +848,17 @@ interface TemplateInfo extends BlockInfo {
 	type: string;
 	logid: string;
 	diffid: string;
-	/**
-	 * The reference date for the report, initialized either from the report's timestamp or a `bot=`
-	 * parameter timestamp. The report should only be closed if the reportee was blocked *after* this date.
-	 * If initialized from the report date, it is extended by 5 minutes to account for blocks applied within
-	 * 5 minutes of the report submission.
-	 */
-	refDate: Date;
-	/**
-	 * Whether this UserAN has a `bot=TIMESTAMP` parameter.
-	 */
-	hasBotTimestamp: boolean;
+	refDate: ReferenceDate;
 	sectionTitle: string;
+}
+interface ReferenceDate {
+	/**
+	 * The reference date for the report, initialized either from the report's timestamp or a `|bot=`
+	 * parameter timestamp. The report should only be closed if the reportee was blocked *after* this date.
+	 * See also {@link isTimestampAfterRefDate}.
+	 */
+	date: Date;
+	type: 'bot' | 'report';
 }
 
 /**
@@ -1220,28 +1223,64 @@ async function queryBlockedIps(info: BlockInfoMap, ips: Set<string>): Promise<vo
  * Gets the index of the narrowest block out of an array of IP block information objects.
  *
  * @param blocksArr
- * @param refDate Used to ensure that the selected block entry was generated after this date.
+ * @param referenceDate Used to ensure that the selected block entry was generated after the date
+ * specified by this reference date object.
  * @returns The index as a number, or `null` if none matches.
  */
 function getNarrowestBlockIndex(
 	blocksArr: ApiResponseQueryListBlocksVerified[] | ApiResponseQueryListGlobalblocksVerified[],
-	refDate: Date
+	referenceDate: ReferenceDate
 ): number | null {
 	let idx: number | null = null;
 	let narrowestSubnet;
 	for (let i = 0; i < blocksArr.length; i++) {
 		const block = blocksArr[i];
-		const timestamp = block.timestamp;
+		if (!isTimestampAfterRefDate(block.timestamp, referenceDate)) {
+			continue;
+		}
 		const user = 'user' in block ? block.user : block.target;
-		const isNewBlock = new Date(timestamp).getTime() > refDate.getTime();
 		const m = user.match(/\/(\d{1,3})$/);
 		const subnet = m ? parseInt(m[1]) : user.includes('.') ? 32 : 128;
-		if (isNewBlock && (!narrowestSubnet || narrowestSubnet < subnet)) {
+		if (!narrowestSubnet || narrowestSubnet < subnet) {
 			idx = i;
 			narrowestSubnet = subnet;
 		}
 	}
 	return idx;
+}
+
+/**
+ * Checks if the given timestamp refers to a time after the given reference date.
+ *
+ * If the reference date comes from a regular report signature (not a `|bot=` timestamp),
+ * it is adjusted backward by 5 minutes. This allows reports submitted within 5 minutes
+ * after a block to be treated as if they were submitted before the block was applied.
+ *
+ * @param timestamp One of the following:
+ * - An ISO timestamp string,
+ * - A number representing milliseconds since the UNIX epoch, or
+ * - A Date object.
+ * @param referenceDate The reference date object to compare against.
+ * @returns `true` if `timestamp` refers to a time after the (possibly adjusted) reference date;
+ * otherwise, `false`.
+ */
+function isTimestampAfterRefDate(
+	timestamp: string | number | Date,
+	referenceDate: ReferenceDate
+): boolean {
+	let time;
+	if (typeof timestamp === 'string') {
+		time = Date.parse(timestamp);
+	} else if (typeof timestamp === 'number') {
+		time = timestamp;
+	} else if (timestamp instanceof Date) {
+		time = timestamp.getTime();
+	} else {
+		throw new TypeError('Invalid block timestamp: ' + timestamp);
+	}
+	const { date, type } = referenceDate;
+	const backward = type === 'bot' ? 0 : 5 * 60 * 1000;
+	return time > date.getTime() - backward;
 }
 
 /**
@@ -1359,11 +1398,10 @@ function formatDateToMDinGMT9(date: Date): string {
 }
 
 /**
- * Object mapping from usernames that need a reblock, to a reference date (a 5-min-extended date
- * of the report submission or a date specified by a `bot=` parameter).
+ * Object mapping from usernames that need a reblock to a reference date object.
  */
 interface ReblockMap {
-	[username: string]: Date;
+	[username: string]: ReferenceDate;
 }
 
 /**
@@ -1432,9 +1470,6 @@ async function checkReblocks(reblockMap: ReblockMap): Promise<ReblockInfo | null
 		}
 		const username = users[i];
 		const refDate = reblockMap[username];
-		const isAfterReferenceDate = (timestamp: string): boolean => {
-			return new Date(timestamp).getTime() > refDate.getTime();
-		};
 
 		let newBlock: ApiResponseQueryListLogevents | null = null;
 		let oldBlock: ApiResponseQueryListLogevents | null = null;
@@ -1445,20 +1480,21 @@ async function checkReblocks(reblockMap: ReblockMap): Promise<ReblockInfo | null
 			if (!action || !['block', 'reblock'].includes(action) || !timestamp || !params) {
 				continue;
 			}
+			const unixTimestamp = Date.parse(timestamp); // Should be casted to prevent repetitive conversions
 
 			// Save the first reblock log generated after the report submission to `newBlock`
-			if (action === 'reblock' && !newBlock && isAfterReferenceDate(timestamp)) {
+			if (action === 'reblock' && !newBlock && isTimestampAfterRefDate(unixTimestamp, refDate)) {
 				newBlock = obj;
 			}
 			// Save a (re)block log generated before the report submission to `oldBlock`,
 			// ensuring that the relevant block is still in effect
 			else if (
 				// This is a (re)block log generated before or at the same time as the reference date.
-				// Note that a negated `isAfterReferenceDate` includes "before or at the same time as".
-				newBlock && !oldBlock && !isAfterReferenceDate(timestamp) &&
+				// Note that a negated `isTimestampAfterRefDate` includes "before or at the same time as".
+				newBlock && !oldBlock && !isTimestampAfterRefDate(unixTimestamp, refDate) &&
 				// The block hasn't expired yet (note: `expiry` is missing if `duration` is `'infinity'`,
 				// but if it's not, it's an ISO timestamp)
-				(params.duration === 'infinity' || params.expiry && isAfterReferenceDate(params.expiry))
+				(params.duration === 'infinity' || params.expiry && isTimestampAfterRefDate(params.expiry, refDate))
 			) {
 				oldBlock = obj;
 				break;
