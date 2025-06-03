@@ -72,4 +72,9 @@ try {
 	if (err.code !== 'ENOENT') throw err; // Rethrow unexpected errors
 }
 
-symlinkSync(logFile, latestLink);
+try {
+	symlinkSync(logFile, latestLink);
+	console.log(`Created symlink: ${latestLink} -> ${logFile}`);
+} catch (err) {
+	console.error(`Symlink creation failed (${latestLink} -> ${logFile}):`, err.message);
+}
