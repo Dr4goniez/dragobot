@@ -872,15 +872,15 @@ interface ReferenceDate {
  * - Japanese Gregorian: `2025年5月25日 (日) 10:01`
  * - Japanese era-based: `令和7年5月25日 (日) 10:01`, `平成元年12月1日 (月) 08:00`, etc.
  *
- * Supported eras: 令和, 平成, 昭和
+ * Supported eras: `令和`, `平成`, `昭和`
  *
  * Note:
- * For Japanese formats that omit seconds, the resulting `Date` sets seconds to 59.
+ * For Japanese formats that omit seconds, the resulting `Date` sets seconds to `59`.
  * This is necessary to ensure correct comparison behavior in edge cases such as:
- *   "Was the block applied after the given time?"
+ * "Was the block applied after the given time?"
  * If the stored timestamp is `10:01:00` and the block was applied at `10:01:30`,
  * comparing strictly with `10:01:00` would return `true` even though both refer
- * to the same intended minute. By setting seconds to 59, we ensure the full minute
+ * to the same intended minute. By setting seconds to `59`, we ensure the full minute
  * is encompassed, minimizing false positives in "after" comparisons.
  *
  * @param str The timestamp string to parse.
@@ -1284,6 +1284,63 @@ function isTimestampAfterRefDate(
 }
 
 /**
+ * Duration constants in milliseconds.
+ */
+const millisecondMap = {
+	second: 1000,
+	minute: 60 * 1000,
+	hour: 60 * 60 * 1000,
+	day: 24 * 60 * 60 * 1000,
+	week: 7 * 24 * 60 * 60 * 1000,
+	month: 30 * 24 * 60 * 60 * 1000,
+	year: 365 * 24 * 60 * 60 * 1000,
+};
+
+/**
+ * An object representing a time unit used in formatting durations.
+ */
+interface UnitMap {
+	/**
+	 * The internal key representing the unit (e.g., `'day'`, `'hour'`).
+	 * Used to look up the duration in milliseconds from {@link millisecondMap}.
+	 */
+	key: keyof typeof millisecondMap;
+	/**
+	 * The localized label to display for this unit in the output string.
+	 * Example: `'時間'` for hours, `'日'` for days.
+	 */
+	label: string;
+	/**
+	 * The threshold number of this unit needed to promote it to the next higher unit.
+	 * For example, 60 minutes can be promoted to 1 hour.
+	 *
+	 * Set to `Infinity` for the top-level unit.
+	 */
+	promote: number;
+	/**
+	 * Whether this unit may appear as a secondary (appended) unit in the output.
+	 * For example, '時間' allows appending (e.g., '1日7時間'), but '日' does not.
+	 */
+	append: boolean;
+}
+const unitMap: UnitMap[] = [
+	{ key: 'year', label: '年', promote: Infinity, append: false },
+	{ key: 'month', label: 'か月', promote: 12, append: true },
+	{ key: 'week', label: '週間', promote: 4, append: true },
+	{ key: 'day', label: '日', promote: 7, append: false },
+	{ key: 'hour', label: '時間', promote: 24, append: true },
+	{ key: 'minute', label: '分', promote: 60, append: true },
+	{ key: 'second', label: '秒', promote: 60, append: true },
+];
+
+/**
+ * Typed array used in {@link getBlockDuration} and {@link normalizeDuration}.
+ * * `[0]` - A number representing a time fragment.
+ * * `[1]` - The time unit for the number.
+ */
+type DurationUnit = [number, UnitMap['label']];
+
+/**
  * Gets a human-readable block duration string in Japanese from two timestamps.
  *
  * @param blockTimestamp The block timestamp (ISO string or Date).
@@ -1304,48 +1361,17 @@ function getBlockDuration(
 		throw new Error('"expiryTimestamp" precedes "blockTimestamp".');
 	}
 
-	// Duration constants in milliseconds
-	const MS = {
-		second: 1000,
-		minute: 60 * 1000,
-		hour:   60 * 60 * 1000,
-		day:    24 * 60 * 60 * 1000,
-		week:   7 * 24 * 60 * 60 * 1000,
-		month:  30 * 24 * 60 * 60 * 1000,
-		year:   365 * 24 * 60 * 60 * 1000,
-	};
-
 	// Define units and labels in descending order
-	interface UnitMap {
-		key: keyof typeof MS;
-		label: string;
-		/** The criterion to promote the number unit to the one-level higher unit. */
-		promote: number;
-		/** Whether to append this unit as a second unit. */
-		append: boolean;
-	}
-	const units: UnitMap[] = [
-		{ key: 'year', label: '年', promote: Infinity, append: false },
-		{ key: 'month', label: 'か月', promote: 12, append: true },
-		{ key: 'week', label: '週間', promote: 4, append: true },
-		{ key: 'day', label: '日', promote: 7, append: false },
-		{ key: 'hour', label: '時間', promote: 24, append: true },
-		{ key: 'minute', label: '分', promote: 60, append: true },
-		{ key: 'second', label: '秒', promote: 60, append: true },
-	];
-
 	let remainingMs = diffMs;
-	const parts: [/* value */ number, /* label */ string][] = [];
-	let breakIn: number | null = null;
+	const parts: DurationUnit[] = [];
 
-	for (let i = 0; i < units.length; i++) {
-		const { key, label, promote, append } = units[i];
-		let value = Math.floor(remainingMs / MS[key]);
+	for (let i = 0; i < unitMap.length; i++) {
+		const { key, label, promote, append } = unitMap[i];
+		let value = Math.floor(remainingMs / millisecondMap[key]);
+
 		if (value > 0) {
-
-			// We have already collected a higher unit
+			// Promote to higher unit if applicable
 			if (parts.length) {
-				// Promote the current unit if possible
 				if (value >= promote) {
 					parts[0][0] += Math.floor(value / promote);
 					value %= promote;
@@ -1360,27 +1386,31 @@ function getBlockDuration(
 			}
 
 			parts.push([value, label]);
+			remainingMs -= value * millisecondMap[key];
+
+			// Stop once we have 2 parts
 			if (parts.length === 2) {
 				break;
 			}
-			remainingMs -= value * MS[key];
-			breakIn = i + 1; // Always break in the next iteration to prevent e.g. "1 year 3 seconds"
 		}
-		if (i === breakIn) {
+
+		// Stop if the first part has already been collected and this unit has 0 value:
+		// No further useful info to add, and prevents e.g. "1 year 3 seconds"
+		if (parts.length && value === 0) {
 			break;
 		}
 	}
 
-	// Convert "1 day 7 hours" to "31 hours"
-	if (
-		parts.length === 2 &&
-		parts[0][0] === 1 && parts[0][1] === '日' &&
-		parts[1][0] === 7 && parts[1][1] === '時間'
-	) {
-		return '31時間';
+	// Normalize certain multi-unit durations
+	const ret = parts.length > 0 ? parts.flat().join('') : '0秒';
+	switch (ret) {
+		case '1日7時間': return '31時間';
+		case '6日23時間': return '1週間';
+		case '13日23時間': return '2週間';
+		case '20日23時間': return '3週間';
+		case '27日23時間': return '4週間';
 	}
-
-	return parts.length > 0 ? parts.flat().join('') : '0秒';
+	return ret;
 }
 
 /**
