@@ -29,9 +29,36 @@ interface ApiResponseSearchtranslationsTranslations {
 
 const rContent = /臨時(?:アカウント|利用者)/;
 const rContentGlobal = new RegExp(rContent.source, 'g');
+const rExclude = /^Translations:(?:User:|Tech\/News\/)/;
 const DEFAULT_LIMIT = 50;
 
-init('translatewiki', 'https://translatewiki.net/w/api.php').then(async (mwbot) => {
+const siteinfo = {
+	translatewiki: {
+		id: 'translatewiki_net-bw_',
+		api: 'https://translatewiki.net/w/api.php'
+	},
+	foundationwiki: {
+		id: 'foundationwiki',
+		api: 'https://foundation.wikimedia.org/w/api.php'
+	},
+	mediawikiwiki: {
+		id: 'mediawikiwiki',
+		api: 'https://www.mediawiki.org/w/api.php'
+	},
+	metawiki: {
+		id: 'metawiki',
+		api: 'https://meta.wikimedia.org/w/api.php'
+	}
+};
+
+/**
+ * The `action=searchtranslations` API returns translations from multiple wikis.
+ * Each translation object includes a `wiki` field indicating which wiki it belongs to,
+ * using the wiki's internal ID (e.g., "foundationwiki", "metawiki").
+ */
+const DB: keyof typeof siteinfo = 'metawiki';
+
+init('dragoniez', siteinfo[DB].api).then(async (mwbot) => {
 
 	const pages = new Set<string>();
 	const searchResult = await (function continuedSearch(offset: number): Promise<boolean> {
@@ -45,8 +72,8 @@ init('translatewiki', 'https://translatewiki.net/w/api.php').then(async (mwbot) 
 			formatversion: '2'
 		}).then((response) => {
 			const { search, limits } = response as ExtendedApiResponse;
-			search.translations.forEach(({ localid, language, content }) => {
-				if (language === 'ja' && rContent.test(content)) {
+			search.translations.forEach(({ wiki, localid, language, content }) => {
+				if (wiki === siteinfo[DB].id && language === 'ja' && rContent.test(content) && !rExclude.test(localid)) {
 					pages.add(`${localid}/${language}`);
 				}
 			});
@@ -60,6 +87,7 @@ init('translatewiki', 'https://translatewiki.net/w/api.php').then(async (mwbot) 
 			return false;
 		});
 	})(0);
+	// console.log(pages);
 	if (!searchResult) {
 		console.log('Search failed.');
 		return;
