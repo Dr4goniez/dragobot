@@ -1,88 +1,30 @@
-// npx ts-node src/scripts/massBlock.ts
+// npx ts-node src/scripts/blockProxies.ts
 
 import { init } from '../mwbot';
+import { scrapeWebpage } from '../lib';
+import { IP } from 'ip-wiki';
+import { waitForUserAction } from './interactive';
 
-const ips = [
-    "2.57.241.0/24",
-    "5.144.180.0/24",
-    "5.178.106.0/24",
-    "37.72.141.0/24",
-    "45.135.181.0/24",
-    "45.159.21.0/24",
-    "45.159.22.0/24",
-    "46.253.131.0/24",
-    "62.204.49.0/24",
-    "77.83.24.0/22",
-    "77.83.247.0/24",
-    "77.90.176.0/24",
-    "77.90.187.0/24",
-    "77.243.88.0/22",
-    "80.66.66.0/24",
-    "82.115.220.0/24",
-    "83.97.116.0/22",
-    "88.218.45.0/24",
-    "88.218.47.0/24",
-    "91.132.197.0/24",
-    "91.132.199.0/24",
-    "91.221.66.0/23",
-    "91.233.116.0/23",
-    "91.246.51.0/24",
-    "91.247.163.0/24",
-    "94.154.113.0/24",
-    "103.99.33.0/24",
-    "103.99.34.0/24",
-    "103.101.88.0/22",
-    "109.107.171.0/24",
-    "146.19.39.0/24",
-    "146.19.44.0/24",
-    "176.126.104.0/24",
-    "178.20.28.0/22",
-    "178.20.213.0/24",
-    "178.20.214.0/23",
-    "185.68.152.0/22",
-    "185.77.216.0/22",
-    "185.94.32.0/22",
-    "185.101.20.0/23",
-    "185.103.110.0/24",
-    "185.108.107.0/24",
-    "185.112.82.0/24",
-    "185.117.118.0/24",
-    "185.152.92.0/24",
-    "185.202.108.0/24",
-    "185.204.1.0/24",
-    "185.212.115.0/24",
-    "185.212.149.0/24",
-    "185.217.196.0/24",
-    "185.221.163.0/24",
-    "185.247.141.0/24",
-    "193.31.126.0/24",
-    "193.151.189.0/24",
-    "193.151.190.0/23",
-    "193.161.204.0/24",
-    "193.161.246.0/23",
-    "193.163.89.0/24",
-    "193.163.92.0/24",
-    "193.163.207.0/24",
-    "193.233.23.0/24",
-    "194.26.129.0/24",
-    "194.34.132.0/22",
-    "194.70.234.0/24",
-    "194.99.24.0/24",
-    "194.99.26.0/24",
-    "194.104.128.0/24",
-    "212.18.113.0/24",
-    "212.18.127.0/24",
-    "213.209.132.0/24",
-    "213.209.148.0/24",
-    "217.196.99.0/24"
-];
+blockProxies(
+	4,
+	16509,
+	'5 years',
+	'{{blocked proxy}} <!-- AS51765, Oy Crea Nova Hosting Solution Ltd -->'
+);
 
-init('dragoniez').then(async (mwbot) => {
+async function blockProxies(ipVersion: 4 | 6, asn: number, expiry: string, reason: string): Promise<void> {
+	const ips = await scrape(ipVersion, asn);
+	if (!ips.length) return;
+
+	const input = await waitForUserAction('Do you want to block these IPs? Press Enter to continue, "q" to quit: ');
+	if (input !== 'continue') return;
+
+	const mwbot = await init('dragoniez');
 	const failed: string[] = [];
 	for (const ip of ips) {
 		await mwbot.block(ip, {
-			expiry: '5 years',
-			reason: '{{blocked proxy}} <!-- AS51765, Oy Crea Nova Hosting Solution Ltd -->',
+			expiry,
+			reason,
 			// Hardblock and overwrite existing blocks
 			anononly: false,
 			reblock: true
@@ -90,11 +32,127 @@ init('dragoniez').then(async (mwbot) => {
 			console.log(`Blocked ${ip}.`);
 		}).catch((err) => {
 			console.log(err);
-			console.log(`Failed to block ${ip}.`);
 			failed.push(ip);
 		});
 	}
+
+	console.log('Process complete.');
 	if (failed.length) {
-		console.log(failed);
+		console.log('Failed to block the following IPs:', failed);
 	}
-});
+}
+
+async function scrape(ipVersion: 4 | 6, asn: number): Promise<string[]> {
+	const baseUrl = `https://awebanalysis.com/ja/ipv${ipVersion}-as-number-directory/${asn}/`;
+	const cidrs: string[] = [];
+
+	// Normalize or split IP into proper CIDRs
+	const normalizeIp = (ip: IP): string[] => {
+		let targetLen: number | null = null;
+
+		if (ip.version === 4 && ip.getBitLength() < 16) {
+			targetLen = 16;
+		} else if (ip.version === 6 && ip.getBitLength() < 19) {
+			targetLen = 19;
+		}
+
+		if (targetLen !== null) {
+			return splitCIDR(ip, targetLen).map(ip => ip.sanitize());
+		}
+		return [ip.sanitize()];
+	};
+
+	let page = 1;
+	// eslint-disable-next-line no-constant-condition
+	while (true) {
+		const $ = await scrapeWebpage(`${baseUrl}${page}/`);
+		if (!$) break;
+
+		$('table > tbody tr').each((_, tr) => {
+			const ipStr = $('td', tr).eq(1).text();
+			const ip = IP.newFromText(ipStr);
+			if (!ip) {
+				console.warn(`Skipping unparsable IP: "${ipStr}"`);
+				return;
+			}
+			cidrs.push(...normalizeIp(ip));
+		});
+
+		const nextPageExists = $(`.pagination-container a[href="${baseUrl}${page + 1}/"]`).length > 0;
+		if (!nextPageExists) break;
+		page++;
+	}
+
+	const len = cidrs.length;
+	console.log(
+		`Collected ${len} ${plural(len, 'CIDR', 'CIDRs')} from ${page} ${plural(page, 'page', 'pages')}:`,
+		cidrs
+	);
+
+	return cidrs;
+}
+
+/**
+ * Split an IP CIDR into smaller CIDRs of the given target bit length.
+ *
+ * @param ip - An IP instance representing the CIDR to split
+ * @param targetBitLen - The target prefix length to subdivide into
+ * @returns Array of CIDR strings
+ */
+export function splitCIDR(ip: IP, targetBitLen: number): IP[] {
+	let totalBits: number;
+	let sep: string;
+	if (ip.version === 4) {
+		totalBits = 32;
+		sep = '.';
+	} else {
+		totalBits = 128;
+		sep = ':';
+	}
+
+	const range = ip.getProperties();
+	if (targetBitLen < range.bitLen) {
+		throw new Error(
+			`Target bit length ${targetBitLen} is shorter than current ${range.bitLen}`
+		);
+	}
+	if (targetBitLen === range.bitLen) {
+		return [ip]; // already at target length
+	}
+
+	// Number of addresses per subdivision
+	const blockSize = BigInt(1) << BigInt(totalBits - targetBitLen);
+
+	// Convert first/last arrays into bigint
+	const toBigInt = (parts: number[]) => {
+		return parts.reduce((acc, part) => (acc << BigInt(8)) + BigInt(part), BigInt(0));
+	};
+	const fromBigInt = (value: bigint, length: number): number[] => {
+		const parts: number[] = [];
+		for (let i = 0; i < length; i++) {
+			parts.unshift(Number(value & BigInt(0xff)));
+			value >>= BigInt(8);
+		}
+		return parts;
+	};
+
+	const start = toBigInt(range.first);
+	const end = toBigInt(range.last);
+
+	const result: IP[] = [];
+	for (let addr = start; addr <= end; addr += blockSize) {
+		let ipParts = fromBigInt(addr, range.first.length) as (number | string)[];
+		if (ip.version === 6) {
+			ipParts = ipParts.map(part => part.toString(16));
+		}
+		const cidr = IP.newFromRange(ipParts.join(sep), targetBitLen);
+		if (!cidr) throw new Error();
+		result.push(cidr);
+	}
+
+	return result;
+}
+
+function plural(num: number, single: string, multiple: string): string {
+	return num === 1 ? single : multiple;
+}
