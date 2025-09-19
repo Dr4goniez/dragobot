@@ -57,11 +57,15 @@ async function scrape(ipVersion: 4 | 6, asn: number): Promise<string[]> {
 		return [ip.sanitize()];
 	};
 
+	// FIXME: aWebAnalysis now requires login to navigate through ASN information pages
 	let page = 1;
 	// eslint-disable-next-line no-constant-condition
 	while (true) {
 		const $ = await scrapeWebpage(`${baseUrl}${page}/`);
-		if (!$) break;
+		if (!$) {
+			page--;
+			break;
+		}
 
 		$('table > tbody tr').each((_, tr) => {
 			const ipStr = $('td', tr).eq(1).text();
