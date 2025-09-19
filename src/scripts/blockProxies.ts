@@ -4,12 +4,13 @@ import { init } from '../mwbot';
 import { scrapeWebpage } from '../lib';
 import { IP } from 'ip-wiki';
 import { waitForUserAction } from './interactive';
+import type { Mwbot, MwbotError } from 'mwbot-ts';
 
 blockProxies(
 	4,
-	16509,
-	'5 years',
-	'{{blocked proxy}} <!-- AS51765, Oy Crea Nova Hosting Solution Ltd -->'
+	25369,
+	'3 years',
+	'{{blocked proxy}} <!-- AS25369, Hydra Communications Ltd -->'
 );
 
 async function blockProxies(ipVersion: 4 | 6, asn: number, expiry: string, reason: string): Promise<void> {
@@ -22,18 +23,12 @@ async function blockProxies(ipVersion: 4 | 6, asn: number, expiry: string, reaso
 	const mwbot = await init('dragoniez');
 	const failed: string[] = [];
 	for (const ip of ips) {
-		await mwbot.block(ip, {
-			expiry,
-			reason,
-			// Hardblock and overwrite existing blocks
-			anononly: false,
-			reblock: true
-		}).then(() => {
+		const success = await doBlock(mwbot, ip, expiry, reason);
+		if (success) {
 			console.log(`Blocked ${ip}.`);
-		}).catch((err) => {
-			console.log(err);
+		} else {
 			failed.push(ip);
-		});
+		}
 	}
 
 	console.log('Process complete.');
@@ -155,4 +150,28 @@ export function splitCIDR(ip: IP, targetBitLen: number): IP[] {
 
 function plural(num: number, single: string, multiple: string): string {
 	return num === 1 ? single : multiple;
+}
+
+async function doBlock(mwbot: Mwbot, ip: string, expiry: string, reason: string, reblock = false): Promise<boolean> {
+	try {
+		await mwbot.block(ip, {
+			expiry,
+			reason,
+			// Hardblock and overwrite existing blocks
+			anononly: false,
+			reblock: true
+		});
+		return true;
+	} catch (err) {
+		console.log(err);
+		if (!reblock && (err as MwbotError).code === 'alreadyblocked') {
+			const input = await waitForUserAction(
+				`${ip} is already blocked. Do you want to reblock it? Press Enter to continue, "q" to quit: `
+			);
+			if (input === 'continue') {
+				return doBlock(mwbot, ip, expiry, reason, true);
+			}
+		}
+		return false;
+	}
 }
