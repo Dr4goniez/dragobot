@@ -1,4 +1,4 @@
-// npx ts-node oneoffs/vpngate.ts
+// npx ts-node src/scripts/vpngate.ts
 import * as cheerio from 'cheerio';
 
 interface VpnGateEntry {
