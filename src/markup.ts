@@ -19,37 +19,46 @@ import {
 	ApiParamsActionEdit,
 	PartiallyRequired,
 	MultiValue,
-	ApiResponse,
 	ApiResponseQueryListBlocks,
 	ApiResponseQueryListLogevents,
 	ApiResponseQueryListGlobalblocks
 } from 'mwbot-ts';
 import { getMwbot, Util } from './mwbot';
 import { IP } from 'ip-wiki';
-import { filterSet, scrapeWebpage } from './lib';
+import { filterSet } from './lib';
 
 /**
  * A class to manage the process of converting IDs into usernames.
  * It tracks IDs that are being processed, completed, or determined to be unprocessable.
  */
-class IDList {
+class IDResolver {
 
-	readonly list = new Map<string, string>();
-	readonly processing = new Set<string>();
-	readonly unprocessable = new Set<string>();
+	private readonly type: 'logid' | 'diffid';
+	private readonly list: Map<string, string>;
+	private readonly processing: Set<string>;
+	private readonly unprocessable: Set<string>;
+
+	constructor(type: 'logid' | 'diffid') {
+		this.type = type;
+		this.list = new Map<string, string>();
+		this.processing = new Set<string>();
+		this.unprocessable = new Set<string>();
+	}
 
 	/**
 	 * Evaluates an ID to determine whether it needs processing.
-	 * If the ID already has a corresponding username in `list`, that username is returned.
-	 * Otherwise, if the ID is not unprocessable and not already being processed,
-	 * it is added to the `processing` queue.
+	 *
+	 * * If the ID already has a corresponding username in `list`, that username is returned.
+	 * * Otherwise, the ID is added to the `processing` queue, unless flagged as unprocessable
+	 *   or already in the queue.
 	 *
 	 * @param id The ID to evaluate.
 	 * @returns The username if already resolved, otherwise `null`.
 	 */
 	evaluate(id: string): string | null {
-		if (this.list.has(id)) {
-			return this.list.get(id) as string;
+		const username = this.list.get(id);
+		if (typeof username === 'string') {
+			return username;
 		} else if (!this.isUnprocessable(id)) {
 			this.processing.add(id);
 		}
@@ -61,7 +70,7 @@ class IDList {
 	 *
 	 * @returns An array-cast `processing` Set object.
 	 */
-	getProcessing(): string[] {
+	getProcessingIds(): string[] {
 		return [...this.processing];
 	}
 
@@ -69,7 +78,6 @@ class IDList {
 	 * Registers a new ID-to-username pair in the `list`, and removes the ID
 	 * from the `processing` Set object. IDs marked as unprocessable are skipped.
 	 *
-	 * @param list An object containing ID-username mappings to register.
 	 * @param id The log ID.
 	 * @param username The username corresponding to the ID.
 	 * @returns The current instance (for chaining).
@@ -103,15 +111,18 @@ class IDList {
 	}
 
 	/**
-	 * Marks an ID as unprocessable, removing it from `list` and `processing`.
+	 * Marks IDs as unprocessable, removing them from `list` and `processing`.
 	 *
-	 * @param id The ID to abandon.
+	 * @param ids The ID(s) to abandon.
 	 * @returns The current instance (for chaining).
 	 */
-	abandon(id: string): this {
-		this.list.delete(id);
-		this.processing.delete(id);
-		this.unprocessable.add(id);
+	abandon(ids: string | string[] | Set<string>): this {
+		ids = ids instanceof Set ? ids : new Set(ids);
+		for (const id of ids) {
+			this.list.delete(id);
+			this.processing.delete(id);
+			this.unprocessable.add(id);
+		}
 		return this;
 	}
 
@@ -124,10 +135,135 @@ class IDList {
 	isUnprocessable(id: string): boolean {
 		return this.unprocessable.has(id);
 	}
+
+	/**
+	 * Processes the IDs in `processing` and attempts to convert them to usernames.
+	 * * If the conversion succeeds, the ID is moved from `processing` to `list` with
+	 *   its corresponding username.
+	 * * If the conversion fails, the ID is flagged as unprocessable.
+	 *
+	 * *This method never rejects*.
+	 */
+	process(): Promise<this> {
+		if (!this.processing.size) {
+			return Promise.resolve(this);
+		}
+		return this.type === 'logid' ? this.processLogIds() : this.processDiffIds();
+	}
+
+	/**
+	 * Removes from `set` all IDs that belong to the specified batch of a `mwbot.massRequest` call.
+	 * Each batch contains up to `mwbot.apilimit` IDs, reflecting the API's multivalue limit.
+	 *
+	 * @param ids The full list of IDs sent to `massRequest`.
+	 * @param batchIndex Zero-based index of the batch within the split requests.
+	 * @param set The set from which matching IDs should be removed.
+	 */
+	private static removeBatchIds(ids: string[], batchIndex: number, set: Set<string>): void {
+		const mwbot = getMwbot();
+		const startIndex = mwbot.apilimit * batchIndex;
+		const endIndex = Math.min(startIndex + mwbot.apilimit, ids.length);
+		for (let i = startIndex; i < endIndex; i++) {
+			set.delete(ids[i]);
+		}
+	}
+
+	private async processLogIds(): Promise<this> {
+		const ids = this.getProcessingIds();
+		const response = await getMwbot().massRequest({
+			list: 'logevents',
+			leprop: 'ids|title',
+			letype: 'newusers',
+			leids: ids,
+			lelimit: 'max'
+		}, 'leids');
+
+		const processedMap: Record<string, string> = Object.create(null);
+		const unprocessed = new Set(ids);
+		for (let i = 0; i < response.length; i++) {
+			const res = response[i];
+
+			// On error, exclude this batch from 'unprocessed' so it can be retried in a future call
+			if (res instanceof MwbotError) {
+				console.dir(res, { depth: 3 });
+				if (response.length === 1) {
+					// Single-batch request: keep IDs in `processing` for automatic retry
+					return this;
+				}
+				IDResolver.removeBatchIds(ids, i, unprocessed);
+				continue;
+			}
+
+			const logevents = res.query?.logevents;
+			if (!logevents) {
+				console.warn('Encountered an undefined "logevents" array.');
+				IDResolver.removeBatchIds(ids, i, unprocessed);
+				continue;
+			}
+			for (const { logid, title } of logevents) {
+				if (typeof logid !== 'number' || !title) {
+					continue; // Revdel'd or prop unexpectedly missing; unprocessable
+				}
+				const id = String(logid);
+				processedMap[id] = title.replace(/^利用者:/, '');
+				unprocessed.delete(id);
+			}
+		}
+
+		return this.register(processedMap).abandon(unprocessed);
+	}
+
+	private async processDiffIds(): Promise<this> {
+		const ids = this.getProcessingIds();
+		const response = await getMwbot().massRequest({
+			revids: ids,
+			prop: 'revisions',
+			rvprop: 'ids|user'
+		}, 'revids');
+
+		const processedMap: Record<string, string> = Object.create(null);
+		const unprocessed = new Set(ids);
+		for (let i = 0; i < response.length; i++) {
+			const res = response[i];
+
+			// On error, remove the relevant IDs from `unprocessed` so they can be retried later
+			if (res instanceof MwbotError) {
+				console.dir(res, { depth: 3 });
+				if (response.length === 1) {
+					// Single-batch request: keep IDs in `processing` for automatic retry
+					return this;
+				}
+				IDResolver.removeBatchIds(ids, i, unprocessed);
+				continue;
+			}
+
+			const pages = res.query?.pages;
+			if (!pages) {
+				console.warn('Encountered an undefined "pages" array.');
+				IDResolver.removeBatchIds(ids, i, unprocessed);
+				continue;
+			}
+			for (const { revisions } of pages) {
+				if (!revisions) {
+					continue;
+				}
+				for (const { revid, user } of revisions) {
+					if (typeof revid !== 'number' || !user) {
+						continue; // Revdel'd or prop unexpectedly missing; unprocessable
+					}
+					const id = String(revid);
+					processedMap[id] = user;
+					unprocessed.delete(id);
+				}
+			}
+		}
+
+		return this.register(processedMap).abandon(unprocessed);
+	}
 }
 
-const logidList = new IDList();
-const diffidList = new IDList();
+const logidList = new IDResolver('logid');
+const diffidList = new IDResolver('diffid');
 const ANI = 'Wikipedia:管理者伝言板/投稿ブロック';
 const ANS = 'Wikipedia:管理者伝言板/投稿ブロック/ソックパペット';
 const AN3RR = 'Wikipedia:管理者伝言板/3RR';
@@ -405,8 +541,7 @@ function createTransformationPredicate(page: string, checkGlobal: boolean) {
 		}
 
 		// Convert logids and diffids to usernames
-		await Promise.all([updateLogids(), updateDiffids()]);
-		await processRemainingLogids();
+		await Promise.all([logidList.process(), diffidList.process()]);
 
 		// Sort registered and IP users
 		const users = new Set<string>();
@@ -932,164 +1067,6 @@ function convertTimestampToDateUTC(str: string): Date | null {
 	}
 
 	return ret;
-}
-
-let leend = '';
-
-/**
- * Performs an `list=logevents` API request for new users and update `logidList`.
- *
- * @returns *This function never rejects*.
- */
-async function updateLogids(): Promise<void> {
-
-	if (!logidList.processing.size) {
-		return;
-	}
-
-	const params = {
-		list: 'logevents',
-		leprop: 'ids|title|timestamp',
-		letype: 'newusers',
-		lelimit: 'max'
-	};
-	if (leend) {
-		Object.assign(params, { leend });
-	}
-
-	// With `apihighlimits`, the API returns 5000 entries. So there isn't much need to use continuedRequest() here
-	// const response = await getMwbot().continuedRequest(params, void 0, true);
-	const response = await getMwbot().get(params).catch((err) => {
-		console.dir(err, { depth: 3 });
-		return {} as ApiResponse;
-	});
-	const resLogevents = response.query?.logevents;
-	if (!resLogevents) {
-		return;
-	}
-	let ts = '';
-	for (const { timestamp, logid, title } of resLogevents) {
-		if (!ts && timestamp) {
-			ts = timestamp;
-		}
-		if (typeof logid === 'number' && title) {
-			logidList.register(String(logid), title.replace(/^利用者:/, ''));
-		}
-	}
-
-	if (ts) {
-		leend = ts;
-	}
-
-}
-
-/**
- * Performs an `prop=revisions` API request to identify the editor of `diffid` revisions
- * and updates `diffidList`.
- *
- * @returns *This function never rejects*.
- */
-async function updateDiffids(): Promise<void> {
-
-	if (!diffidList.processing.size) {
-		return;
-	}
-
-	const params = {
-		revids: diffidList.getProcessing(),
-		prop: 'revisions',
-		rvprop: 'ids|user'
-	};
-	const response = await getMwbot().massRequest(params, 'revids');
-
-	for (const res of response) {
-		if (res instanceof Error) {
-			console.dir(res, { depth: 3 });
-			continue;
-		}
-		const resPages = res.query?.pages;
-		if (resPages) {
-			for (const { revisions } of resPages) {
-				if (!revisions) {
-					continue;
-				}
-				for (const { revid, user } of revisions) {
-					if (typeof revid === 'number' && user) {
-						diffidList.register(String(revid), user);
-					}
-				}
-			}
-		}
-		const resBadIds = res.query?.badrevids;
-		if (resBadIds) {
-			for (const badrevid in resBadIds) {
-				diffidList.abandon(badrevid);
-			}
-		}
-	}
-
-}
-
-/**
- * Attempts to convert log IDs that couldn't be converted via a `list=logevents` request
- * to usernames by scraping `[[Special:Log/newusers]]` for each remaining unprocessed log ID.
- * When scraping is done, the fetched usernames are matched with their IDs.
- *
- * @returns *This function never rejects*.
- */
-async function processRemainingLogids(): Promise<void> {
-
-	const logids = logidList.getProcessing();
-	if (!logids.length) {
-		return;
-	}
-
-	const queries = logids.map((id) => {
-		return scrapeUsernameByLogid(id);
-	});
-	const result = await Promise.all(queries);
-	logids.forEach((id, i) => {
-		const username = result[i];
-		if (username) {
-			logidList.register(id, username);
-		}
-	});
-
-}
-
-/**
- * Scrapes `[[Special:Log/newusers]]` to associate the given log ID with an username.
- *
- * @param logid
- * @returns A Promise resolving to a username on success or `null` on failure.
- *
- * *This function never rejects*.
- */
-async function scrapeUsernameByLogid(logid: string): Promise<string | null> {
-
-	const url = 'https://ja.wikipedia.org/w/index.php?title=Special:Log&logid=' + logid;
-	const $ = await scrapeWebpage(url);
-	if (!$) return null;
-
-	let $newusers = $('.mw-logline-newusers');
-	if ($newusers.length === 0) return null;
-	$newusers = $newusers.eq(0);
-
-	let username: string | null = null;
-	switch ($newusers.attr('data-mw-logaction')) {
-		case 'newusers/create':
-		case 'newusers/autocreate':
-		case 'newusers/create2': // Created by an existing user
-		case 'newusers/byemail': // Created by an existing user and password sent off
-			username = $newusers.children('a.mw-userlink').eq(0).text();
-			break;
-		case 'newusers/forcecreatelocal':
-			username = $newusers.children('a').last().text().replace(/^利用者:/, '');
-			break;
-		default:
-	}
-	return username;
-
 }
 
 /**
